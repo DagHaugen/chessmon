@@ -155,6 +155,7 @@ def cmd_shot():
     if kind == "move":
         rb.learn(frame, game.board)            # refine per-square colour samples
         rb.update_bg(frame, game.board)        # refine empty references (vacated squares)
+        s["prev_fen"] = s["fen"]               # remember pre-move position for `fix`
         s["fen"] = game.board.fen()
         s["prev"] = game.prev.tolist()
         save_model(s, rb)
@@ -201,6 +202,54 @@ def cmd_startgame():
     return 0
 
 
+def cmd_fix():
+    """Replace a mis-detected last move: live.py fix <uci>. Rebuilds from the stored
+    pre-move position, re-learns colour samples + reference, re-baselines."""
+    if len(sys.argv) < 3:
+        print("usage: live.py fix <uci>  (e.g. d8d5)")
+        return 1
+    s = load()
+    if "prev_fen" not in s:
+        print("no stored pre-move position to correct from.")
+        return 1
+    board = chess.Board(s["prev_fen"])
+    board.push_uci(sys.argv[2])
+    rb = board_reader()
+    frame = img("live_frame.png")
+    rb.learn(frame, board)
+    rb.update_bg(frame, board)
+    s["fen"] = board.fen()
+    s["prev"] = rb.classify(frame).tolist()
+    save_model(s, rb)
+    save(s)
+    cv2.imwrite(REF, rb.we)
+    print(f"corrected to {sys.argv[2]}; now {'White' if board.turn else 'Black'} to move")
+    return 0
+
+
+def cmd_commit():
+    """Commit a move the detector flagged ambiguous/unclear: live.py commit <uci>.
+    Pushes the move onto the CURRENT position (unlike `fix`, which replaces the last)."""
+    if len(sys.argv) < 3:
+        print("usage: live.py commit <uci>  (e.g. d5e5)")
+        return 1
+    s = load()
+    board = chess.Board(s["fen"])
+    board.push_uci(sys.argv[2])
+    rb = board_reader()
+    frame = img("live_frame.png")
+    rb.learn(frame, board)
+    rb.update_bg(frame, board)
+    s["prev_fen"] = s["fen"]
+    s["fen"] = board.fen()
+    s["prev"] = rb.classify(frame).tolist()
+    save_model(s, rb)
+    save(s)
+    cv2.imwrite(REF, rb.we)
+    print(f"committed {sys.argv[2]}; now {'White' if board.turn else 'Black'} to move")
+    return 0
+
+
 def cmd_gesture():
     """Read the end-of-game gesture: both kings to the centre, result encoded by the
     colour of the squares they stand on (both light=White, both dark=Black, else draw)."""
@@ -232,8 +281,9 @@ def cmd_gesture():
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     return {"calibrate": cmd_calibrate, "empty": cmd_empty, "newgame": cmd_newgame,
-            "startgame": cmd_startgame, "shot": cmd_shot,
-            "gesture": cmd_gesture}.get(cmd, lambda: (print(__doc__), 1)[1])()
+            "startgame": cmd_startgame, "shot": cmd_shot, "fix": cmd_fix,
+            "commit": cmd_commit, "gesture": cmd_gesture}.get(
+                cmd, lambda: (print(__doc__), 1)[1])()
 
 
 if __name__ == "__main__":
