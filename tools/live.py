@@ -167,6 +167,10 @@ def cmd_shot():
         print("no change detected")
     elif kind == "ambiguous":
         print(f"ambiguous between: {', '.join(extra)} - re-shoot")
+    elif kind == "unseen":
+        cands = f"  (plausible: {', '.join(extra)})" if extra else ""
+        print("a move was made but left no visible signal on this set - tell me what it "
+              f"was: live.py commit <uci>.{cands}")
     else:
         print("board unclear - no legal move matches; re-check and re-shoot")
     return 0

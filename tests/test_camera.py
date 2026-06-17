@@ -118,6 +118,40 @@ def test_seen_contrasting_destination_is_used():
     check(kind == "move" and m.uci() == "a7a6", f"got {kind} {san}")
 
 
+def test_castling_preferred_when_landing_unseen():
+    print("castling: O-O with the king's landing unseen still reads O-O, not a 1-sq Kf8")
+    board = chess.Board("rnbqk2r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1")
+    g = CameraGame(board.copy())
+    prev = board_to_grid(board)
+    prev[square_to_rc(chess.H8)] = Cell.EMPTY        # dark rook on dark h8 reads empty (real)
+    g.observe(prev)                                  # baseline
+    obs = prev.copy()
+    obs[square_to_rc(chess.E8)] = Cell.EMPTY         # king seen to leave e8; g8/f8 landing unseen
+    kind, san, m = g.observe(obs)
+    check(kind == "move" and m is not None and m.uci() == "e8g8", f"got {kind} {san}")
+
+
+def test_invisible_move_reports_unseen():
+    print("evidence gate: an invisible move (no visible signal) is 'unseen', not a ghost")
+    board = chess.Board("7k/8/8/8/8/8/8/3QK2R w K - 0 1")    # White Q d1, K e1, R h1
+    g = CameraGame(board.copy())
+    prev = board_to_grid(board)
+    prev[square_to_rc(chess.D1)] = Cell.EMPTY        # the queen on light d1 reads empty
+    g.observe(prev)                                  # baseline
+    obs = prev.copy()
+    obs[square_to_rc(chess.A7)] = Cell.LIGHT         # a stray flicker; no real move signal
+    kind, san, extra = g.observe(obs)
+    check(kind == "unseen", f"got {kind} {san} {extra}")
+
+
+def test_visible_move_still_commits_not_unseen():
+    print("evidence gate: a clearly visible move still commits (gate doesn't over-fire)")
+    g = CameraGame()
+    g.observe(board_to_grid(chess.Board()))
+    kind, san, m = g.observe(after("e2e4"))          # e-pawn change is fully visible
+    check(kind == "move" and m.uci() == "e2e4", f"got {kind} {san}")
+
+
 def test_per_square_colour_sample_beats_glare():
     print("colour: a per-square learned sample classifies a glared dark piece correctly")
     thr, g_light, g_dark = 50.0, 90.0, 15.0
@@ -147,6 +181,9 @@ def main():
               test_stable_misread_cancels, test_sequence_with_capture,
               test_legality_resolves_unseen_dark_destination,
               test_seen_contrasting_destination_is_used,
+              test_castling_preferred_when_landing_unseen,
+              test_invisible_move_reports_unseen,
+              test_visible_move_still_commits_not_unseen,
               test_per_square_colour_sample_beats_glare,
               test_unchanged_frame_is_nochange]:
         t()

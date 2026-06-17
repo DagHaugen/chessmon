@@ -339,7 +339,7 @@ class CameraGame:
     glared square that always reads the wrong colour) cancel out instead of
     breaking the match. Seed with the start frame via the first observe();
     thereafter observe() returns (kind, san, move):
-        "baseline" | "nochange" | "move" | "error" | "ambiguous".
+        "baseline" | "nochange" | "move" | "error" | "ambiguous" | "unseen".
     """
 
     def __init__(self, board: chess.Board | None = None):
@@ -365,16 +365,20 @@ class CameraGame:
             return ("baseline", None, None)
         if np.array_equal(obs, self.prev):
             return ("nochange", None, None)
+        delta = self.prev != obs                 # the squares we actually saw change
         viable = []
         for m in self.board.legal_moves:
+            is_cast = self.board.is_castling(m)
             before = board_to_grid(self.board)
             self.board.push(m)
             after = board_to_grid(self.board)
             self.board.pop()
             changed = before != after
-            hard, soft = False, 0
+            hard, soft, seen = False, 0, 0
             for r, c in zip(*np.where(changed)):
                 want, got = after[r, c], obs[r, c]
+                if delta[r, c]:
+                    seen += 1                    # observed a change exactly where predicted
                 if got == want:
                     continue
                 if want == Cell.EMPTY:           # origin should have vacated but hasn't
@@ -382,8 +386,8 @@ class CameraGame:
                     break
                 if got == Cell.EMPTY:            # piece expected, square reads empty
                     low_contrast = (want == Cell.LIGHT) == _square_is_light(r, c)
-                    if low_contrast:             # same-colour-on-same-colour: forgiven
-                        soft += 1
+                    if low_contrast or is_cast:  # same-colour, or a castle's far landing
+                        soft += 1                # (the king/rook destination is often unseen)
                     else:                        # contrasting: we'd have seen it
                         hard = True
                         break
@@ -391,22 +395,45 @@ class CameraGame:
                     soft += 1                    # occupied but wrong colour (e.g. glare)
             if hard:
                 continue
-            unexplained = int(np.count_nonzero((self.prev != obs) & ~changed))
-            viable.append((soft, unexplained, m))
+            unexplained = int(np.count_nonzero(delta & ~changed))
+            viable.append((soft, unexplained, seen, m))
         if not viable:
             return ("error", None, None)
-        # Rank by FEWEST UNEXPLAINED observed changes first (a vanished captured piece
-        # the move doesn't account for is strong evidence against it), then by fewest
-        # forgiven same-colour squares. So a capture beats a quiet move that ignores
-        # the captured piece disappearing.
-        viable.sort(key=lambda v: (v[1], v[0]))
-        top = viable[0]
-        tied = [v for v in viable if (v[1], v[0]) == (top[1], top[0])]
-        if len({(v[2].from_square, v[2].to_square) for v in tied}) > 1:
-            return ("ambiguous", None, [self.board.san(v[2]) for v in tied])
-        if top[1] > max_noise:                   # too much unexplained change (a hand?)
+        distinct = {(v[3].from_square, v[3].to_square) for v in viable}
+        # Minimum-evidence gate: if the observed change coincides with NONE of any viable
+        # move's predicted squares (every candidate seen == 0), we saw no move-like signal
+        # at all - the delta is noise and the real move was invisible (a light piece
+        # between light squares, e.g. Qc2) or its high-contrast signal drifted away,
+        # leaving only low-contrast GHOSTS that nothing contradicts (c5, g4). The clock's
+        # confirm button already tells us a move happened, so say we can't see it rather
+        # than guess a ghost - unless legality has narrowed the position to one move.
+        if len(distinct) > 1 and max(v[2] for v in viable) == 0:
+            return ("unseen", None, sorted({self.board.san(v[3]) for v in viable})[:8])
+        # PRIMARY signal: fewest UNEXPLAINED observed changes (a vanished captured piece a
+        # move ignores is strong evidence against it). A hand over the board trips max_noise.
+        min_unexp = min(v[1] for v in viable)
+        if min_unexp > max_noise:
             return ("error", None, None)
-        move = next((v[2] for v in tied if v[2].promotion == chess.QUEEN), top[2])
+        best = [v for v in viable if v[1] == min_unexp]
+        # Haugen's rule: a king leaving home with castling available is castling, not a
+        # one-square king move - so among the equally best-explained reads, a castle wins
+        # (its far landing being unseen is forgiven above). Fixes O-O misread as Kf8 and
+        # O-O-O offered as "Rd1 or Rc1". A VISIBLE one-square king move still beats it: it
+        # explains its own destination, so it lands in a strictly better unexplained group.
+        castles = [v for v in best if self.board.is_castling(v[3])]
+        if castles:
+            if len({(v[3].from_square, v[3].to_square) for v in castles}) > 1:
+                return ("ambiguous", None, [self.board.san(v[3]) for v in castles])
+            chosen = castles[0]
+        else:
+            min_soft = min(v[0] for v in best)   # then fewest forgiven same-colour squares
+            group = [v for v in best if v[0] == min_soft]
+            if len({(v[3].from_square, v[3].to_square) for v in group}) > 1:
+                return ("ambiguous", None, [self.board.san(v[3]) for v in group])
+            chosen = next((v for v in group if v[3].promotion == chess.QUEEN), group[0])
+        if chosen[2] == 0 and len(distinct) > 1:  # chosen move itself has no visible support
+            return ("unseen", None, sorted({self.board.san(v[3]) for v in best}))
+        move = chosen[3]
         san = self.board.san(move)
         self.board.push(move)
         self.prev = obs.copy()
