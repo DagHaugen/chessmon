@@ -111,6 +111,15 @@ def dihedral(g, t):
     return np.fliplr(g2) if t >= 4 else g2
 
 
+def _dihedral_inv(t):
+    """The transform that undoes dihedral t: dihedral(dihedral(g, t), inv) == g."""
+    test = np.arange(64).reshape(8, 8)
+    for s in range(8):
+        if np.array_equal(dihedral(dihedral(test, t), s), test):
+            return s
+    return 0
+
+
 def _square_is_light(r, c):
     """Colour of board square (r,c) in inference-grid coords (a1 is dark)."""
     sq = rc_to_square(r, c)
@@ -136,12 +145,10 @@ class RealBoard:
         if self.H is None:
             raise ValueError("could not register board - need a clear EMPTY frame")
         self.we = cv2.warpPerspective(empty_img, self.H, (N, N))
-        self.bg = np.empty((8, 8), object)
         empty_edges = []
         empty_luma = np.zeros((8, 8))
         for r in range(8):
             for c in range(8):
-                self.bg[r, c] = _roi(self.we, r, c, OCC_ROI).astype(np.float32)
                 empty_edges.append(_edge(_roi(self.we, r, c, OCC_ROI)))
                 empty_luma[r, c] = _median_luma(_roi(self.we, r, c, COLOR_ROI))
         # Per-square LIGHTING bias: how much brighter/darker this square's empty
@@ -188,15 +195,11 @@ class RealBoard:
             raise ValueError("could not register from the start position")
         self.H = H
         ws = cv2.warpPerspective(start_frame, H, (N, N))
-        self.we = ws
-        rois = np.empty((8, 8), object)
         edges = np.zeros((8, 8))
         luma = np.zeros((8, 8))
         for r in range(8):
             for c in range(8):
-                roi = _roi(ws, r, c, OCC_ROI)
-                rois[r, c] = roi.astype(np.float32)
-                edges[r, c] = _edge(roi)
+                edges[r, c] = _edge(_roi(ws, r, c, OCC_ROI))
                 luma[r, c] = _median_luma(_roi(ws, r, c, COLOR_ROI))
         # the 32 lowest-edge squares are the empty middle of the start position
         empty = np.zeros((8, 8), bool)
@@ -214,17 +217,17 @@ class RealBoard:
             mean = float(np.mean([luma[r, c] for r, c in es]))
             for r, c in es:
                 self.bias[r, c] = luma[r, c] - mean
-        # backgrounds: real for empties, nearest same-colour empty borrowed for occupied
-        self.bg = np.empty((8, 8), object)
+        # reference image: real empties (the clear middle), with the nearest same-colour
+        # empty square pasted over each occupied one (borrowed until that square is shown)
+        self.we = ws.copy()
         for r in range(8):
             for c in range(8):
-                if empty[r, c]:
-                    self.bg[r, c] = rois[r, c]
-                else:
+                if not empty[r, c]:
                     er, ec = min(((er, ec) for er in range(8) for ec in range(8)
                                   if empty[er, ec] and (er + ec) % 2 == (r + c) % 2),
                                  key=lambda p: abs(p[0] - r) + abs(p[1] - c))
-                    self.bg[r, c] = rois[er, ec]
+                    self.we[r * SQ:(r + 1) * SQ, c * SQ:(c + 1) * SQ] = \
+                        ws[er * SQ:(er + 1) * SQ, ec * SQ:(ec + 1) * SQ]
         self.cdiff_thr = cdiff_thr
         self.edge_thr = float(np.max(edges[empty])) + edge_margin
         self.color_thr = 110.0
@@ -245,11 +248,24 @@ class RealBoard:
         for r in range(8):
             for c in range(8):
                 roi = _roi(w, r, c, OCC_ROI).astype(np.float32)
-                cdiff = float(np.mean(np.abs(roi - self.bg[r, c])))
+                bg = _roi(self.we, r, c, OCC_ROI).astype(np.float32)   # from the live reference
+                cdiff = float(np.mean(np.abs(roi - bg)))
                 edge = _edge(_roi(w, r, c, OCC_ROI))
                 occ[r, c] = (cdiff > self.cdiff_thr) or (edge > self.edge_thr)
                 lum[r, c] = _median_luma(_roi(w, r, c, COLOR_ROI))
         return occ, lum
+
+    def update_bg(self, frame, board):
+        """Refine the empty reference: paste the TRUE empty appearance of every square
+        the believed board says is now empty into `self.we`, replacing borrowed or
+        stale references as pieces move off. Call after each accepted move."""
+        believed_cam = dihedral(board_to_grid(board), _dihedral_inv(self.t))
+        w = self.warp(frame)
+        for r in range(8):
+            for c in range(8):
+                if believed_cam[r, c] == Cell.EMPTY:
+                    self.we[r * SQ:(r + 1) * SQ, c * SQ:(c + 1) * SQ] = \
+                        w[r * SQ:(r + 1) * SQ, c * SQ:(c + 1) * SQ]
 
     def _grid(self, occ, lum, color_thr):
         norm = lum - self.bias                      # lighting-normalised luma
@@ -379,9 +395,13 @@ class CameraGame:
             viable.append((soft, unexplained, m))
         if not viable:
             return ("error", None, None)
-        viable.sort(key=lambda v: (v[0], v[1]))
+        # Rank by FEWEST UNEXPLAINED observed changes first (a vanished captured piece
+        # the move doesn't account for is strong evidence against it), then by fewest
+        # forgiven same-colour squares. So a capture beats a quiet move that ignores
+        # the captured piece disappearing.
+        viable.sort(key=lambda v: (v[1], v[0]))
         top = viable[0]
-        tied = [v for v in viable if (v[0], v[1]) == (top[0], top[1])]
+        tied = [v for v in viable if (v[1], v[0]) == (top[1], top[0])]
         if len({(v[2].from_square, v[2].to_square) for v in tied}) > 1:
             return ("ambiguous", None, [self.board.san(v[2]) for v in tied])
         if top[1] > max_noise:                   # too much unexplained change (a hand?)

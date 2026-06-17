@@ -23,6 +23,7 @@ from chessmon.board_state import grid_str
 
 OUT = os.path.join(ROOT, "out")
 STATE = os.path.join(OUT, "live.json")
+REF = os.path.join(OUT, "live_ref.png")          # evolving empty-board reference
 CAM = 1
 MJPG = cv2.VideoWriter_fourcc(*"MJPG")
 
@@ -80,6 +81,8 @@ def board_reader():
     s = load() if os.path.exists(STATE) else {}
     rb = (RealBoard.from_start(img("live_start.png")) if s.get("from_start")
           else RealBoard(img("empty.png")))
+    if os.path.exists(REF):
+        rb.we = cv2.imread(REF)                  # the refined reference from prior moves
     if s:
         rb.t = s["t"]
         rb.color_thr = s["color_thr"]
@@ -133,6 +136,7 @@ def cmd_newgame():
     s = {"t": int(t), "fen": chess.STARTING_FEN, "prev": grid.tolist()}
     save_model(s, rb)
     save(s)
+    cv2.imwrite(REF, rb.we)
     print(grid_str(grid))
     print(f"a1 is dark OK (orientation t={t}, colour_thr={rb.color_thr:.1f}) - White to move")
     return 0
@@ -150,10 +154,12 @@ def cmd_shot():
     kind, san, extra = game.observe(rb.classify(frame))
     if kind == "move":
         rb.learn(frame, game.board)            # refine per-square colour samples
+        rb.update_bg(frame, game.board)        # refine empty references (vacated squares)
         s["fen"] = game.board.fen()
         s["prev"] = game.prev.tolist()
         save_model(s, rb)
         save(s)
+        cv2.imwrite(REF, rb.we)
         side = "White" if game.board.turn else "Black"
         print(f"MOVE: {san}    (now {side} to move)")
     elif kind == "nochange":
@@ -188,6 +194,7 @@ def cmd_startgame():
     s = {"from_start": True, "t": int(t), "fen": chess.STARTING_FEN, "prev": grid.tolist()}
     save_model(s, rb)
     save(s)
+    cv2.imwrite(REF, rb.we)
     print(grid_str(grid))
     print(f"registered from pieces, a1 dark OK (t={t}). Baseline set - White to move.")
     print("(start occupancy is approximate; legality + refinement should carry it.)")
