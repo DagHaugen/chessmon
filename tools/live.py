@@ -167,7 +167,13 @@ def cmd_shot():
     game = CameraGame(chess.Board(s["fen"]))
     game.prev = np.array(s["prev"], dtype=np.uint8) if s["prev"] is not None else None
     kind, san, extra = game.observe(rb.classify(frame))
-    if kind == "move":
+    if kind == "gesture":
+        # END OF GAME: both kings to the centre. Do NOT update_bg/learn here - the kings
+        # are not part of the position, and pasting them into the reference corrupts it.
+        res = {"1-0": "White wins (1-0)", "0-1": "Black wins (0-1)",
+               "1/2-1/2": "draw (1/2-1/2)"}.get(san, san)
+        print(f"END-GAME GESTURE: both kings to the centre -> {res}")
+    elif kind == "move":
         rb.learn(frame, game.board)            # refine per-square colour samples
         rb.update_bg(frame, game.board)        # refine empty references (vacated squares)
         s["prev_fen"] = s["fen"]               # remember pre-move position for `fix`

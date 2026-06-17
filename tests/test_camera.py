@@ -176,6 +176,31 @@ def test_visible_move_still_commits_not_unseen():
     check(kind == "move" and m.uci() == "e2e4", f"got {kind} {san}")
 
 
+def test_end_gesture_both_kings_to_centre():
+    print("gesture: both kings to the centre (both on light) = White wins, not a legal move")
+    board = chess.Board("4k3/8/8/8/8/8/8/4K3 w - - 0 1")    # Ke1 + ke8, both on contrasting sqs
+    g = CameraGame(board.copy())
+    prev = board_to_grid(board)
+    g.observe(prev)                                  # baseline
+    obs = prev.copy()
+    obs[square_to_rc(chess.E1)] = Cell.EMPTY         # white king leaves e1 (was visible)
+    obs[square_to_rc(chess.E8)] = Cell.EMPTY         # black king leaves e8
+    obs[square_to_rc(chess.D5)] = Cell.DARK          # black king now on light d5 (visible)
+    kind, san, _ = g.observe(obs)                    # white king on light e4 stays invisible
+    check(kind == "gesture" and san == "1-0", f"got {kind} {san}")
+
+
+def test_single_king_move_is_not_gesture():
+    print("gesture: a normal one-king move is NOT mistaken for the end-gesture")
+    board = chess.Board("4k3/8/8/8/8/8/8/4K3 w - - 0 1")
+    g = CameraGame(board.copy())
+    g.observe(board_to_grid(board))
+    after = chess.Board(board.fen())
+    after.push_san("Kd1")                            # only the white king moves
+    kind, san, m = g.observe(board_to_grid(after))
+    check(kind == "move" and m is not None and m.uci() == "e1d1", f"got {kind} {san}")
+
+
 def test_per_square_colour_sample_beats_glare():
     print("colour: a per-square learned sample classifies a glared dark piece correctly")
     thr, g_light, g_dark = 50.0, 90.0, 15.0
@@ -209,6 +234,8 @@ def main():
               test_invisible_move_reports_unseen,
               test_dark_origin_reading_as_its_square_is_forgiven,
               test_contrasting_origin_still_there_is_ruled_out,
+              test_end_gesture_both_kings_to_centre,
+              test_single_king_move_is_not_gesture,
               test_visible_move_still_commits_not_unseen,
               test_per_square_colour_sample_beats_glare,
               test_unchanged_frame_is_nochange]:

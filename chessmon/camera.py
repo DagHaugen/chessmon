@@ -21,7 +21,7 @@ import numpy as np
 import cv2
 import chess
 
-from .board_state import Cell, board_to_grid, empty_grid, rc_to_square
+from .board_state import Cell, board_to_grid, empty_grid, rc_to_square, square_to_rc
 
 SQ, N = 80, 640
 OCC_ROI, COLOR_ROI = 0.45, 0.30
@@ -258,12 +258,18 @@ class RealBoard:
     def update_bg(self, frame, board):
         """Refine the empty reference: paste the TRUE empty appearance of every square
         the believed board says is now empty into `self.we`, replacing borrowed or
-        stale references as pieces move off. Call after each accepted move."""
+        stale references as pieces move off. Call after each accepted move.
+
+        GUARD: only paste a square that ALSO measures empty. If a believed-empty square
+        actually reads occupied (a piece is there - e.g. a mis-tracked move, or both kings
+        dragged to the centre for the end-gesture), skip it, so a piece is never baked into
+        the reference (which would make that square read empty forever after)."""
         believed_cam = dihedral(board_to_grid(board), _dihedral_inv(self.t))
+        occ, _ = self._measure(frame)                # measured occupancy (camera orientation)
         w = self.warp(frame)
         for r in range(8):
             for c in range(8):
-                if believed_cam[r, c] == Cell.EMPTY:
+                if believed_cam[r, c] == Cell.EMPTY and not occ[r, c]:
                     self.we[r * SQ:(r + 1) * SQ, c * SQ:(c + 1) * SQ] = \
                         w[r * SQ:(r + 1) * SQ, c * SQ:(c + 1) * SQ]
 
@@ -365,6 +371,9 @@ class CameraGame:
             return ("baseline", None, None)
         if np.array_equal(obs, self.prev):
             return ("nochange", None, None)
+        gesture = self._gesture_result(obs)      # BOTH kings to the centre = end of game
+        if gesture is not None:                  # (checked before move-matching so it is
+            return ("gesture", gesture, None)    # never squeezed into a bogus king move)
         delta = self.prev != obs                 # the squares we actually saw change
         viable = []
         for m in self.board.legal_moves:
@@ -443,6 +452,40 @@ class CameraGame:
         self.board.push(move)
         self.prev = obs.copy()
         return ("move", san, move)
+
+    @staticmethod
+    def _king_gone(obs, sq, is_white):
+        """True if a king's home square no longer shows the king. Only decidable when the
+        king CONTRASTED its square (it was visible); a king on a same-colour square reads
+        empty whether it is there or not, so we can't confirm it left (return False)."""
+        r, c = square_to_rc(sq)
+        king_cell = Cell.LIGHT if is_white else Cell.DARK
+        if (king_cell == Cell.LIGHT) == _square_is_light(r, c):
+            return False                         # king matched its square -> invisible
+        return obs[r, c] != king_cell            # contrasting king no longer shows -> it left
+
+    def _gesture_result(self, obs):
+        """End-of-game gesture: BOTH kings dragged to the centre. Two kings cannot move in
+        one legal move, so both home squares reading vacated is unmistakable - and catching
+        it here stops the gesture being squeezed into a bogus king move (which then pastes
+        the kings into the empty reference via update_bg). The result is encoded by the
+        colour of the centre squares the kings land on (Haugen's rule): both light = White
+        (1-0), both dark = Black (0-1), mixed = draw. Returns the result string, or None if
+        it isn't a confirmable gesture (then fall through to normal move-matching)."""
+        wk, bk = self.board.king(chess.WHITE), self.board.king(chess.BLACK)
+        if wk is None or bk is None:
+            return None
+        if not (self._king_gone(obs, wk, True) and self._king_gone(obs, bk, False)):
+            return None
+        light = sum(int(obs[square_to_rc(s)] != Cell.EMPTY) for s in (chess.E4, chess.D5))
+        dark = sum(int(obs[square_to_rc(s)] != Cell.EMPTY) for s in (chess.D4, chess.E5))
+        if not (light or dark):
+            return None                          # kings not visible in the centre yet
+        if light and not dark:
+            return "1-0"
+        if dark and not light:
+            return "0-1"
+        return "1/2-1/2"
 
 
 def solve_orientation(start_grid, after_grid, expected_uci, tol=4):
