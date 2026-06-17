@@ -144,6 +144,30 @@ def test_invisible_move_reports_unseen():
     check(kind == "unseen", f"got {kind} {san} {extra}")
 
 
+def test_dark_origin_reading_as_its_square_is_forgiven():
+    print("origin: a knight leaving a dark square (origin still reads dark) commits via the arrival")
+    board = chess.Board("4k3/8/5n2/8/8/8/8/4K3 b - - 0 1")   # black Nf6, Black to move
+    g = CameraGame(board.copy())
+    prev = board_to_grid(board)
+    g.observe(prev)                                  # baseline (f6 reads dark)
+    obs = prev.copy()
+    obs[square_to_rc(chess.G4)] = Cell.DARK          # knight arrives g4 (dark on light = seen);
+    kind, san, m = g.observe(obs)                    # f6 stays dark (empty dark square reads dark)
+    check(kind == "move" and m is not None and m.uci() == "f6g4", f"got {kind} {san}")
+
+
+def test_contrasting_origin_still_there_is_ruled_out():
+    print("origin: a piece CONTRASTING its square that stays put is NOT a vacated origin")
+    board = chess.Board("4k3/8/8/8/8/8/3P4/4K3 w - - 0 1")   # white pawn d2 (light pce, DARK sq)
+    g = CameraGame(board.copy())
+    prev = board_to_grid(board)
+    g.observe(prev)
+    obs = prev.copy()
+    obs[square_to_rc(chess.D4)] = Cell.LIGHT         # d4 shows a piece, but d2 still reads light
+    kind, san, m = g.observe(obs)                    # d2-d4 ruled out: the pawn clearly sits on d2
+    check(kind != "move", f"d2-d4 should be ruled out (d2 still occupied); got {kind} {san}")
+
+
 def test_visible_move_still_commits_not_unseen():
     print("evidence gate: a clearly visible move still commits (gate doesn't over-fire)")
     g = CameraGame()
@@ -183,6 +207,8 @@ def main():
               test_seen_contrasting_destination_is_used,
               test_castling_preferred_when_landing_unseen,
               test_invisible_move_reports_unseen,
+              test_dark_origin_reading_as_its_square_is_forgiven,
+              test_contrasting_origin_still_there_is_ruled_out,
               test_visible_move_still_commits_not_unseen,
               test_per_square_colour_sample_beats_glare,
               test_unchanged_frame_is_nochange]:

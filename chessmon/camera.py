@@ -381,10 +381,15 @@ class CameraGame:
                     seen += 1                    # observed a change exactly where predicted
                 if got == want:
                     continue
-                if want == Cell.EMPTY:           # origin should have vacated but hasn't
-                    hard = True
-                    break
-                if got == Cell.EMPTY:            # piece expected, square reads empty
+                if want == Cell.EMPTY:           # origin should have vacated
+                    if (got == Cell.LIGHT) == _square_is_light(r, c):
+                        soft += 1                # reads as the square's OWN colour: plausibly
+                                                 # just the (bright light / dark) empty square,
+                                                 # a vacate we can't see - forgive it
+                    else:                        # reads a piece CONTRASTING its square -> the
+                        hard = True              # piece is genuinely still sitting there
+                        break
+                elif got == Cell.EMPTY:          # piece expected, square reads empty
                     low_contrast = (want == Cell.LIGHT) == _square_is_light(r, c)
                     if low_contrast or is_cast:  # same-colour, or a castle's far landing
                         soft += 1                # (the king/rook destination is often unseen)
