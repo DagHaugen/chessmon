@@ -19,7 +19,7 @@ import chess
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from chessmon.camera import RealBoard, CameraGame
-from chessmon.board_state import grid_str
+from chessmon.board_state import grid_str, board_to_grid
 
 OUT = os.path.join(ROOT, "out")
 STATE = os.path.join(OUT, "live.json")
@@ -32,11 +32,26 @@ def img(name):
     return cv2.imread(os.path.join(OUT, name))
 
 
+def _lock_cap(cap):
+    """Pin exposure + white balance to the saved values (disable auto) so the BRIO stops
+    re-adjusting mid-game - which silently invalidates the empty reference (the cause of
+    a sudden 'no move matches' with the board untouched)."""
+    s = load() if os.path.exists(STATE) else {}
+    if s.get("exposure") is not None:
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)        # 0.25 = manual (UVC convention)
+        cap.set(cv2.CAP_PROP_EXPOSURE, s["exposure"])
+    wb = s.get("wb_temp")
+    if wb is not None and wb > 0:                        # MSMF returns -1 if WB isn't exposed
+        cap.set(cv2.CAP_PROP_AUTO_WB, 0)
+        cap.set(cv2.CAP_PROP_WB_TEMPERATURE, wb)
+
+
 def capture(idx=CAM):
     cap = cv2.VideoCapture(idx, cv2.CAP_MSMF)
     cap.set(cv2.CAP_PROP_FOURCC, MJPG)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    _lock_cap(cap)
     frame = None
     for _ in range(25):
         cap.grab()
@@ -254,6 +269,53 @@ def cmd_commit():
     return 0
 
 
+def cmd_lock():
+    """Let the BRIO auto-expose/white-balance to the current lighting, read the values it
+    settles on, and pin them in live.json so they stop drifting mid-game."""
+    cap = cv2.VideoCapture(CAM, cv2.CAP_MSMF)
+    cap.set(cv2.CAP_PROP_FOURCC, MJPG)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)            # auto on, let it settle
+    cap.set(cv2.CAP_PROP_AUTO_WB, 1)
+    for _ in range(50):
+        cap.grab()
+        cap.retrieve()
+        time.sleep(0.04)
+    exp = cap.get(cv2.CAP_PROP_EXPOSURE)
+    wb = cap.get(cv2.CAP_PROP_WB_TEMPERATURE)
+    cap.release()
+    s = load()
+    s["exposure"], s["wb_temp"] = exp, wb
+    save(s)
+    print(f"settled + locked: exposure={exp}, wb_temp={wb}")
+    print("now run `relight` (board at the last committed position) to refresh the reference.")
+    return 0
+
+
+def cmd_relight():
+    """Refresh the empty-square references to the CURRENT lighting at the current believed
+    position. Run after `lock`, with the board set to the last committed position."""
+    frame = capture()
+    if frame is None:
+        print("no frame (is the Windows Camera app open?)")
+        return 1
+    s = load()
+    rb = board_reader()
+    board = chess.Board(s["fen"])
+    rb.update_bg(frame, board)
+    rb.learn(frame, board)
+    g = rb.classify(frame)
+    s["prev"] = g.tolist()
+    save_model(s, rb)
+    save(s)
+    cv2.imwrite(REF, rb.we)
+    match = int((g == board_to_grid(board)).sum())
+    print(grid_str(g))
+    print(f"references refreshed; classify matches believed {match}/64 - re-shoot the move.")
+    return 0
+
+
 def cmd_gesture():
     """Read the end-of-game gesture: both kings to the centre, result encoded by the
     colour of the squares they stand on (both light=White, both dark=Black, else draw)."""
@@ -286,8 +348,8 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     return {"calibrate": cmd_calibrate, "empty": cmd_empty, "newgame": cmd_newgame,
             "startgame": cmd_startgame, "shot": cmd_shot, "fix": cmd_fix,
-            "commit": cmd_commit, "gesture": cmd_gesture}.get(
-                cmd, lambda: (print(__doc__), 1)[1])()
+            "commit": cmd_commit, "lock": cmd_lock, "relight": cmd_relight,
+            "gesture": cmd_gesture}.get(cmd, lambda: (print(__doc__), 1)[1])()
 
 
 if __name__ == "__main__":
