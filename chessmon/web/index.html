@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chessmon</title>
+<style>
+  :root{ --bg:#15171c; --panel:#1d2026; --line:#2c313b; --ink:#e8eaed; --mut:#9aa3b2; --accent:#4f8cff; }
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .wrap{max-width:440px;padding:24px;text-align:center}
+  h1{font-size:22px;margin:0 0 6px} p{color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 22px}
+  .cards{display:grid;gap:14px}
+  a.card{display:block;text-decoration:none;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:16px;padding:20px;transition:.12s}
+  a.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .card .t{font-size:18px;font-weight:700;margin-bottom:4px}
+  .card .d{color:var(--mut);font-size:13px}
+  code{background:#11141a;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>chessmon</h1>
+  <p>Two devices share one game. Open each screen where it belongs — on this PC,
+     or on a phone/iPad using the PC's LAN IP.</p>
+  <div class="cards">
+    <a class="card" href="/board">
+      <div class="t">♟ Board screen</div>
+      <div class="d">The board / camera view. Make moves; signal end-of-game.</div>
+    </a>
+    <a class="card" href="/clock">
+      <div class="t">⏱ Clock device</div>
+      <div class="d">The tablet. Tap to confirm each move; pick the promotion piece.</div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

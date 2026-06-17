@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>chessmon · clock</title>
+<style>
+  :root{ --bg:#15171c; --panel:#1d2026; --line:#2c313b; --ink:#e8eaed; --mut:#9aa3b2;
+    --accent:#4f8cff; --good:#3ecf8e; --warn:#ffb454; --bad:#ff6b6b; --whitepc:#f6f6f2; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+  .page{max-width:440px;margin:0 auto;padding:18px;min-height:100vh;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--mut);text-transform:uppercase;margin:0}
+  .side{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;transition:.15s;opacity:.5;flex:1;justify-content:center}
+  .side.active{opacity:1;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .side.flag{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+  .side.win{opacity:1;border-color:var(--good);box-shadow:0 0 0 1px var(--good)}
+  .side.black{transform:rotate(180deg)}            /* face the player across the board */
+  .name{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+  .time{font-variant-numeric:tabular-nums;font-weight:700;font-size:64px;line-height:1}
+  .time.low{color:var(--warn)} .time.flagged{color:var(--bad)}
+  .act{width:100%}
+  .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px 22px;width:100%;
+    cursor:pointer;color:#0b1020;background:var(--good);transition:.12s;letter-spacing:.02em}
+  .btn:active{transform:translateY(1px)}
+  .placeholder{color:var(--mut);font-size:14px;min-height:58px;display:flex;align-items:center;justify-content:center}
+  .promo{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+  .promo .q{grid-column:1 / -1}
+  .pbtn{appearance:none;border:1px solid var(--line);background:#262b34;color:var(--ink);border-radius:12px;
+    cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;font-size:13px;transition:.12s}
+  .pbtn:active{transform:translateY(1px)}
+  .pbtn .g{font-size:30px;line-height:1}
+  .pbtn.q{border-color:var(--accent);background:#2b3550} .pbtn.q .g{font-size:46px}
+  .report{background:#11141a;border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:13px;
+    min-height:18px;text-align:center}
+  .report.over{color:var(--good)}
+  .foot{display:flex;gap:10px}
+  .ghost{flex:1;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:10px;
+    padding:10px;font-size:13px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Clock device</h1>
+  <div class="side black" id="side-black">
+    <div class="name">Black</div><div class="time" id="time-black">5:00</div>
+    <div class="act" id="act-black"></div>
+  </div>
+  <div class="side white" id="side-white">
+    <div class="name">White</div><div class="time" id="time-white">5:00</div>
+    <div class="act" id="act-white"></div>
+  </div>
+  <div class="report" id="report"></div>
+  <div class="foot"><button class="ghost" id="reset">↺ New game</button></div>
+</div>
+
+<script src="/shared.js"></script>
+<script>
+function ph(txt){ const d=document.createElement('div'); d.className='placeholder'; d.textContent=txt; return d; }
+function confirmButton(){ const b=document.createElement('button'); b.className='btn';
+  b.textContent='CONFIRM MOVE'; b.onclick=()=>post('/confirm'); return b; }
+function promoButtons(up){
+  const wrap=document.createElement('div'); wrap.className='promo';
+  for (const [k,label] of [['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']]){
+    const b=document.createElement('button'); b.className='pbtn'+(k==='q'?' q':'');
+    const g=document.createElement('div'); g.className='g';
+    g.textContent=GLYPH[up?k.toUpperCase():k]; g.style.color=up?'#fffef9':'#e8eaed';
+    const t=document.createElement('div'); t.textContent=label;
+    b.appendChild(g); b.appendChild(t); b.onclick=()=>post('/promote',{piece:k}); wrap.appendChild(b);
+  }
+  return wrap;
+}
+function renderSide(color, s){
+  const side=document.getElementById('side-'+color);
+  const isActive = s.active===color && s.mode!=='gameover';
+  side.classList.toggle('active', isActive);
+  side.classList.toggle('flag', s.mode==='gameover' && s.winner && s.winner!==color);
+  side.classList.toggle('win', s.mode==='gameover' && s.winner===color);
+  const t=document.getElementById('time-'+color);
+  const secs=liveTime(color);
+  t.textContent=fmtTime(secs);
+  t.className='time'+(secs<=0?' flagged':(secs<30?' low':''));
+  const act=document.getElementById('act-'+color); act.innerHTML='';
+  if (s.mode==='gameover'){ act.appendChild(ph(s.winner===color?'✔ wins':(s.winner?'':'½ draw'))); return; }
+  if (!isActive){ act.appendChild(ph('waiting…')); return; }
+  if (s.mode==='promotion'){ act.appendChild(promoButtons(color==='white')); return; }
+  act.appendChild(s.staged ? confirmButton() : ph('your move…'));
+}
+
+onState(s => {
+  renderSide('white', s); renderSide('black', s);
+  const rep=document.getElementById('report'); rep.textContent=s.report;
+  rep.className='report'+(s.mode==='gameover'?' over':'');
+});
+document.getElementById('reset').onclick=()=>post('/reset');
+
+// smooth clock between polls
+setInterval(()=>{ if(!STATE) return;
+  for (const c of ['white','black']){
+    const t=document.getElementById('time-'+c); const secs=liveTime(c);
+    t.textContent=fmtTime(secs);
+    t.className='time'+(secs<=0?' flagged':(secs<30?' low':''));
+  }
+}, 100);
+startPolling(500);
+</script>
+</body>
+</html>

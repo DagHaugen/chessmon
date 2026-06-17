@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "clock",
+      "runtimeExecutable": "C:\\Claude\\Projects\\chessmon\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\Claude\\Projects\\chessmon\\run_clock.py", "8770"],
+      "port": 8770
+    }
+  ]
+}

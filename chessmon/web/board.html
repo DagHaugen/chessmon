@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>chessmon · board</title>
+<style>
+  :root{ --bg:#15171c; --panel:#1d2026; --line:#2c313b; --ink:#e8eaed; --mut:#9aa3b2;
+    --accent:#4f8cff; --good:#3ecf8e; --bad:#ff6b6b;
+    --lsq:#e9d6ad; --dsq:#6f9b5f; --whitepc:#f6f6f2; --blackpc:#2a2a2a; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+  .page{max-width:960px;margin:0 auto;padding:18px;display:grid;gap:22px;
+    grid-template-columns:minmax(300px,1fr) 300px}
+  @media(max-width:820px){.page{grid-template-columns:1fr}}
+  h1{font-size:14px;font-weight:600;letter-spacing:.04em;color:var(--mut);text-transform:uppercase;
+    margin:0 0 12px;display:flex;align-items:center;gap:10px}
+  .turn{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);text-transform:none;letter-spacing:0}
+  .dot{width:11px;height:11px;border-radius:50%;border:1px solid #000}
+  .dot.white{background:var(--whitepc)} .dot.black{background:var(--blackpc)}
+  .board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+    border-radius:10px;overflow:hidden;border:1px solid var(--line);touch-action:manipulation}
+  .board.review{outline:2px solid var(--accent);outline-offset:2px}
+  .sq{display:flex;align-items:center;justify-content:center;position:relative;font-size:min(6vw,40px);
+    line-height:1;cursor:default;user-select:none}
+  .sq.play{cursor:pointer}
+  .sq.l{background:var(--lsq)} .sq.d{background:var(--dsq)}
+  .sq .pc{filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+  .sq.sel::after{content:"";position:absolute;inset:0;background:rgba(79,140,255,.45)}
+  .sq.tgt::before{content:"";position:absolute;width:32%;height:32%;border-radius:50%;background:rgba(62,207,142,.7)}
+  .sq.tgt.occ::before{width:84%;height:84%;background:none;border:5px solid rgba(62,207,142,.8);border-radius:8px}
+  .hint{color:var(--mut);font-size:13px;margin:10px 0;min-height:18px}
+  .hint .link{color:var(--accent);cursor:pointer}
+  .cam{display:flex;gap:16px;align-items:center;margin:6px 0 12px}
+  .mini{width:108px;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+    border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .mc{display:flex;align-items:center;justify-content:center}
+  .mc.l{background:#cdbf9c}.mc.d{background:#5f8651}
+  .disc{width:62%;height:62%;border-radius:50%}
+  .disc.w{background:var(--whitepc)} .disc.b{background:var(--blackpc)}
+  .camcap{color:var(--mut);font-size:12px;line-height:1.5}
+  .report{background:#11141a;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;min-height:20px}
+  .report.bad{color:var(--bad)} .report.over{color:var(--good)}
+  .row{display:flex;gap:10px;margin-top:14px}
+  .ghost{flex:1;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:10px;
+    padding:11px;font-size:13px;cursor:pointer} .ghost:active{transform:translateY(1px)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-shrink:0}
+  .seg button{background:transparent;border:none;color:var(--mut);padding:0 12px;font-size:12px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#0b1020;font-weight:600}
+  .vbadge{font-weight:400;color:var(--accent);text-transform:none;letter-spacing:0;font-size:11px;margin-left:6px}
+  .endbox{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .endcap{color:var(--mut);font-size:12px;margin-bottom:10px;line-height:1.5}
+  .endrow{display:flex;gap:8px}
+  .endbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+    border:1px solid var(--line);background:#21252d;color:var(--ink);border-radius:10px;padding:10px 6px;
+    font-size:13px;font-weight:600}
+  .endbtn small{font-weight:400;color:var(--mut);font-size:10px}
+  .endbtn.light{background:#2a2d33;border-color:#4a5160} .endbtn.dark{background:#17191e}
+  .endbtn:active{transform:translateY(1px)}
+  .tip{margin-top:14px;color:var(--mut);font-size:12px}
+  code{background:#11141a;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+
+  /* move list / scoresheet */
+  .movepanel{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;
+    flex-direction:column;max-height:78vh}
+  .mphead{padding:12px 14px;border-bottom:1px solid var(--line);font-size:12px}
+  .mphead .ttl{font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+  .mphead .meta{margin-top:6px;color:var(--mut);font-variant-numeric:tabular-nums;display:flex;
+    justify-content:space-between;gap:10px}
+  .mpscroll{overflow:auto;flex:1}
+  table.mt{width:100%;border-collapse:collapse;font-size:14px}
+  table.mt td{padding:0}
+  td.num{width:34px;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums;
+    padding:0 8px;font-size:12px;user-select:none}
+  td.mv{cursor:pointer;border-left:1px solid transparent}
+  td.mv .in{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 10px;border-radius:6px;margin:1px 4px}
+  td.mv .san{font-weight:600}
+  td.mv .t{color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums}
+  td.mv:hover .in{background:#262b34}
+  td.mv.sel .in{background:#2b3550;outline:1px solid var(--accent)}
+  td.mv.empty{cursor:default}
+  .mpfoot{padding:10px;border-top:1px solid var(--line)}
+  .livebtn{width:100%;border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:8px;
+    padding:9px;font-size:13px;cursor:pointer}
+  .livebtn.reviewing{border-color:var(--accent);color:var(--accent)}
+  .empti{color:var(--mut);font-size:13px;padding:16px 14px}
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- LEFT: board + camera + controls -->
+  <div class="left">
+    <h1>Board · simulated camera view <span class="turn" id="turn"></span></h1>
+    <div class="board" id="board"></div>
+    <div class="hint" id="hint"></div>
+    <div class="cam">
+      <div class="mini" id="mini"></div>
+      <div class="camcap">What the camera reports:<br>occupancy + colour only<br>(no piece identity).</div>
+    </div>
+    <div class="report" id="report"></div>
+    <div class="row">
+      <div class="seg" id="variant">
+        <button data-v="standard" class="on">Standard</button>
+        <button data-v="chess960">Chess960</button>
+      </div>
+      <button class="ghost" id="reset">↺ New game</button>
+    </div>
+    <div class="endbox">
+      <div class="endcap">End game — both kings to the centre, on the square colour that names the winner:</div>
+      <div class="endrow">
+        <button class="endbtn light" data-result="white">♔ White wins<small>kings on light</small></button>
+        <button class="endbtn dark" data-result="black">♚ Black wins<small>kings on dark</small></button>
+        <button class="endbtn" data-result="draw">½ Draw<small>mixed squares</small></button>
+      </div>
+    </div>
+    <div class="tip">Clock device: open <code>/clock</code> on the tablet (same Wi-Fi).</div>
+  </div>
+
+  <!-- RIGHT: move list / scoresheet -->
+  <div class="right">
+    <div class="movepanel">
+      <div class="mphead">
+        <div class="ttl">Moves <span id="vbadge" class="vbadge"></span></div>
+        <div class="meta"><span id="starttime">Start —</span><span id="elapsed">0:00</span></div>
+      </div>
+      <div class="mpscroll" id="mpscroll"></div>
+      <div class="mpfoot"><button class="livebtn" id="livebtn">● Live</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="/shared.js"></script>
+<script>
+let selected = null, movesFrom = {}, viewPly = null;   // viewPly null = follow live
+
+function buildMoves(legal){
+  const m = {};
+  for (const u of legal){ const f=u.slice(0,2), t=u.slice(2,4); (m[f]=m[f]||{})[t]=m[f][t]||u; }
+  for (const u of legal){ if (u.length>4 && u[4]==='q'){ const f=u.slice(0,2),t=u.slice(2,4); m[f][t]=u; } }
+  return m;
+}
+function mmss(s){ s=Math.max(0,Math.round(s)); const m=(s/60)|0, sec=s%60, h=(m/60)|0;
+  return h>0 ? h+':'+String(m%60).padStart(2,'0')+':'+String(sec).padStart(2,'0')
+             : m+':'+String(sec).padStart(2,'0'); }
+function clockTime(w){ if(!w) return '—'; try{ return new Date(w*1000).toLocaleTimeString(); }catch(e){ return '—'; } }
+
+function shownFen(s){
+  return (viewPly !== null && s.positions && s.positions[viewPly] != null) ? s.positions[viewPly] : s.fen;
+}
+function onSquare(name){
+  if (selected && movesFrom[selected] && movesFrom[selected][name]){
+    post('/move', {uci: movesFrom[selected][name]}); selected = null; return;
+  }
+  selected = movesFrom[name] ? name : null;
+  renderBoard(STATE);
+}
+function renderBoard(s){
+  const grid = fenToGrid(shownFen(s));
+  const reviewing = viewPly !== null;
+  const playable = s.mode === 'play' && !s.staged && !reviewing;
+  const board = document.getElementById('board');
+  board.className = 'board' + (reviewing ? ' review' : '');
+  board.innerHTML = '';
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++){
+    const d = document.createElement('div');
+    d.className = 'sq ' + ((r+c)%2===0 ? 'l':'d') + (playable ? ' play' : '');
+    const p = grid[r][c];
+    if (p){ const sp=document.createElement('span'); sp.className='pc'; sp.textContent=GLYPH[p];
+      sp.style.color = (p===p.toUpperCase()) ? '#fffef9' : '#1c1c1c'; d.appendChild(sp); }
+    const name = sqName(r,c);
+    if (playable && selected === name) d.classList.add('sel');
+    if (playable && selected && movesFrom[selected] && movesFrom[selected][name]){
+      d.classList.add('tgt'); if (p) d.classList.add('occ'); }
+    if (playable) d.onclick = () => onSquare(name);
+    board.appendChild(d);
+  }
+}
+function renderMini(s){
+  const mini = document.getElementById('mini'); mini.innerHTML = '';
+  for (let i=0;i<64;i++){ const r=(i/8)|0, c=i%8;
+    const cell=document.createElement('div'); cell.className='mc '+((r+c)%2===0?'l':'d');
+    const v=s.detected[i];
+    if (v){ const disc=document.createElement('div'); disc.className='disc '+(v===1?'w':'b'); cell.appendChild(disc); }
+    mini.appendChild(cell);
+  }
+}
+function moveCell(s, ply){
+  const san = s.history[ply-1];
+  if (san === undefined) return '<td class="mv empty"></td>';
+  const t = (s.move_elapsed && s.move_elapsed[ply-1] != null) ? mmss(s.move_elapsed[ply-1]) : '';
+  const sel = (viewPly === ply) ? ' sel' : '';
+  return `<td class="mv${sel}" data-ply="${ply}"><div class="in"><span class="san">${san}</span><span class="t">${t}</span></div></td>`;
+}
+function renderTable(s){
+  const scroll = document.getElementById('mpscroll');
+  const n = s.history.length;
+  if (!n){ scroll.innerHTML = '<div class="empti">No moves yet. Make a move, then confirm on the clock.</div>'; return; }
+  let rows = '';
+  for (let m=1; m*2-1 <= n; m++){
+    rows += `<tr><td class="num">${m}.</td>${moveCell(s, m*2-1)}${moveCell(s, m*2)}</tr>`;
+  }
+  scroll.innerHTML = `<table class="mt"><tbody>${rows}</tbody></table>`;
+  scroll.querySelectorAll('td.mv[data-ply]').forEach(td =>
+    td.onclick = () => { viewPly = +td.dataset.ply; selected = null; render(STATE); });
+}
+function renderMeta(s){
+  document.getElementById('starttime').textContent = 'Start ' + clockTime(s.start_wall);
+  document.getElementById('elapsed').textContent = mmss(s.elapsed || 0);
+  document.getElementById('vbadge').textContent =
+    s.variant === 'chess960' ? ('· 960 #' + (s.position960 ?? '?')) : '';
+  const turn = document.getElementById('turn');
+  turn.innerHTML = s.mode === 'gameover' ? ('game over' + (s.result ? ' · '+s.result : ''))
+    : '<span class="dot '+s.active+'"></span>'+s.active+' to move';
+  const reviewing = viewPly !== null;
+  const hint = document.getElementById('hint');
+  if (reviewing){
+    hint.innerHTML = `Reviewing move ${viewPly} of ${s.history.length} — <span class="link" id="backlive">back to live</span>`;
+    hint.querySelector('#backlive').onclick = goLive;
+  } else {
+    hint.textContent = s.mode === 'gameover' ? '' :
+      s.staged ? 'Move staged — confirm it on the clock device.' :
+      'Click a piece, then its destination, to make a move.';
+  }
+  const rep = document.getElementById('report'); rep.textContent = s.report;
+  rep.className = 'report' + (/unclear|Illegal|not a legal|sync/.test(s.report) ? ' bad'
+    : (s.mode === 'gameover' ? ' over' : ''));
+  const live = document.getElementById('livebtn');
+  live.classList.toggle('reviewing', reviewing);
+  live.textContent = reviewing ? '● Back to live' : '● Live';
+}
+function goLive(){ viewPly = null; selected = null; render(STATE); }
+
+function render(s){ renderBoard(s); renderMini(s); renderTable(s); renderMeta(s); }
+
+let newVariant = 'standard', segInit = false;
+const seg = document.getElementById('variant');
+function setSeg(v){ newVariant = v;
+  seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v)); }
+seg.querySelectorAll('button').forEach(b => b.onclick = () => setSeg(b.dataset.v));
+
+onState(s => {
+  movesFrom = buildMoves(s.legal || []);
+  if (s.staged || s.mode !== 'play') selected = null;
+  if (viewPly !== null && viewPly > s.history.length) viewPly = null;   // after a reset
+  if (!segInit){ setSeg(s.variant || 'standard'); segInit = true; }      // match current game once
+  render(s);
+});
+
+document.getElementById('reset').onclick = () =>
+  { selected = null; viewPly = null; post('/reset', {variant: newVariant}); };
+document.getElementById('livebtn').onclick = goLive;
+document.querySelectorAll('.endbtn').forEach(b =>
+  b.onclick = () => { viewPly = null; post('/gesture', {result: b.dataset.result}); });
+startPolling(500);
+</script>
+</body>
+</html>

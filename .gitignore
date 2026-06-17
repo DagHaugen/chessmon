@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment (recreate with: python -m venv .venv && pip install -r requirements.txt)
+.venv/
+
+# Generated renders / scratch output
+out/
+
+# OS cruft
+Thumbs.db
+.DS_Store
+
+# Local Claude Code overrides (launch.json is intentionally tracked)
+.claude/settings.local.json
