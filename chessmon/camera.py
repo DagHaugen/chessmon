@@ -70,6 +70,40 @@ def register(empty_img):
     return H
 
 
+def register_from_pieces(frame):
+    """Register the board WITHOUT clearing it (e.g. from the start position). Pieces
+    sit in square centres but inner corners live between squares, so the sector
+    detector still finds the largest clear central band; we anchor a homography on it,
+    then refine ALL 49 inner corners with cornerSubPix (most survive the pieces) and
+    re-fit. Returns the homography, or None if no band is found."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    size = None
+    for k in (5, 4, 3):
+        for cand in ((7, k), (k, 7)):
+            if cv2.findChessboardCornersSB(gray, cand, flags=cv2.CALIB_CB_NORMALIZE_IMAGE)[0]:
+                size = cand
+                break
+        if size:
+            break
+    if size is None:
+        return None
+    _ok, corners = cv2.findChessboardCornersSB(gray, size, flags=cv2.CALIB_CB_NORMALIZE_IMAGE)
+    src = corners.reshape(-1, 2).astype(np.float32)
+    w, h = size
+    coff, roff = (7 - w) // 2, (7 - h) // 2               # centre the band in the 7x7
+    dst = np.array([[((k % w) + coff + 1) * SQ, ((k // w) + roff + 1) * SQ] for k in range(len(src))],
+                   dtype=np.float32)
+    H, _ = cv2.findHomography(src, dst)
+    grid = np.array([[(c + 1) * SQ, (r + 1) * SQ] for r in range(7) for c in range(7)], np.float32)
+    pred = cv2.perspectiveTransform(grid.reshape(-1, 1, 2), np.linalg.inv(H)).astype(np.float32)
+    refined = cv2.cornerSubPix(gray, pred.copy(), (9, 9), (-1, -1),
+                               (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01))
+    keep = np.linalg.norm(refined.reshape(-1, 2) - pred.reshape(-1, 2), axis=1) < 6.0
+    if int(keep.sum()) >= 40:
+        H, _ = cv2.findHomography(refined.reshape(-1, 2)[keep], grid[keep])
+    return H
+
+
 def dihedral(g, t):
     """One of the 8 board orientations. t%4 = number of 90 deg rotations;
     t>=4 adds a left-right flip (the handedness ambiguity)."""
@@ -141,6 +175,65 @@ class RealBoard:
         self.ref_dark = np.full((8, 8), np.nan)
         self.global_light = None
         self.global_dark = None
+
+    @classmethod
+    def from_start(cls, start_frame, cdiff_thr=16.0, edge_margin=8.0):
+        """Build a registered, calibrated board from the START position - no empty
+        frame needed. Registers from the pieces, takes real empty references from the
+        32 clear middle squares, and borrows the nearest same-colour empty square's
+        reference for each occupied square (refined later as pieces move)."""
+        self = cls.__new__(cls)
+        H = register_from_pieces(start_frame)
+        if H is None:
+            raise ValueError("could not register from the start position")
+        self.H = H
+        ws = cv2.warpPerspective(start_frame, H, (N, N))
+        self.we = ws
+        rois = np.empty((8, 8), object)
+        edges = np.zeros((8, 8))
+        luma = np.zeros((8, 8))
+        for r in range(8):
+            for c in range(8):
+                roi = _roi(ws, r, c, OCC_ROI)
+                rois[r, c] = roi.astype(np.float32)
+                edges[r, c] = _edge(roi)
+                luma[r, c] = _median_luma(_roi(ws, r, c, COLOR_ROI))
+        # the 32 lowest-edge squares are the empty middle of the start position
+        empty = np.zeros((8, 8), bool)
+        for idx in np.argsort(edges, axis=None)[:32]:
+            empty[idx // 8, idx % 8] = True
+        # physical square colours from the empty squares' luma checkerboard
+        pe = {p: [luma[r, c] for r in range(8) for c in range(8)
+                  if empty[r, c] and (r + c) % 2 == p] for p in (0, 1)}
+        dark_parity = 0 if np.mean(pe[0]) < np.mean(pe[1]) else 1
+        self.dark_sq = np.array([[(r + c) % 2 == dark_parity for c in range(8)] for r in range(8)])
+        # lighting bias from the empty squares (per parity); 0 where occupied (unknown)
+        self.bias = np.zeros((8, 8))
+        for p in (0, 1):
+            es = [(r, c) for r in range(8) for c in range(8) if empty[r, c] and (r + c) % 2 == p]
+            mean = float(np.mean([luma[r, c] for r, c in es]))
+            for r, c in es:
+                self.bias[r, c] = luma[r, c] - mean
+        # backgrounds: real for empties, nearest same-colour empty borrowed for occupied
+        self.bg = np.empty((8, 8), object)
+        for r in range(8):
+            for c in range(8):
+                if empty[r, c]:
+                    self.bg[r, c] = rois[r, c]
+                else:
+                    er, ec = min(((er, ec) for er in range(8) for ec in range(8)
+                                  if empty[er, ec] and (er + ec) % 2 == (r + c) % 2),
+                                 key=lambda p: abs(p[0] - r) + abs(p[1] - c))
+                    self.bg[r, c] = rois[er, ec]
+        self.cdiff_thr = cdiff_thr
+        self.edge_thr = float(np.max(edges[empty])) + edge_margin
+        self.color_thr = 110.0
+        self.t = 0
+        self.ref_light = np.full((8, 8), np.nan)
+        self.ref_dark = np.full((8, 8), np.nan)
+        self.global_light = None
+        self.global_dark = None
+        return self
 
     def warp(self, frame):
         return cv2.warpPerspective(frame, self.H, (N, N))
@@ -325,8 +418,12 @@ def solve_orientation_by_color(start_grid, dark_sq, tol=4):
     handedness that the symmetric start position can't."""
     target_occ = board_to_grid(chess.Board())
     chess_dark = np.array([[not _square_is_light(r, c) for c in range(8)] for r in range(8)])
-    for t in range(8):
-        if (int((dihedral(start_grid, t) == target_occ).sum()) >= 64 - tol
-                and np.array_equal(dihedral(dark_sq, t), chess_dark)):
-            return t
-    return None
+    # Square colours must align exactly (a1 dark); among those parity-valid
+    # orientations pick the best occupancy match. This tolerates a noisy start grid
+    # (e.g. same-colour pieces missed when references are borrowed, not yet learned).
+    aligned = [(int((dihedral(start_grid, t) == target_occ).sum()), t)
+               for t in range(8) if np.array_equal(dihedral(dark_sq, t), chess_dark)]
+    if not aligned:
+        return None
+    best_occ, best_t = max(aligned)
+    return best_t if best_occ >= 40 else None
