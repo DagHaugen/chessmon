@@ -83,6 +83,19 @@ def _square_is_light(r, c):
     return (chess.square_file(sq) + chess.square_rank(sq)) % 2 == 1
 
 
+def decide_colour(norm, ref_light, ref_dark, g_light, g_dark, thr):
+    """Light/dark for one occupied square. Prefer the per-square learned samples
+    (nearest of ref_light/ref_dark); fall back to the global samples, and finally to
+    the threshold. `norm` and all references are lighting-normalised luma. Per-square
+    references capture local effects a global threshold can't - e.g. specular glare:
+    the glared dark piece's own sample is high, so it still matches 'dark'."""
+    el = g_light if (ref_light is None or np.isnan(ref_light)) else ref_light
+    ed = g_dark if (ref_dark is None or np.isnan(ref_dark)) else ref_dark
+    if el is None or ed is None:
+        return Cell.LIGHT if norm > thr else Cell.DARK
+    return Cell.LIGHT if abs(norm - el) <= abs(norm - ed) else Cell.DARK
+
+
 class RealBoard:
     def __init__(self, empty_img, cdiff_thr=16.0, edge_margin=8.0):
         self.H = register(empty_img)
@@ -121,6 +134,13 @@ class RealBoard:
         self.edge_thr = float(np.max(empty_edges)) + edge_margin
         self.color_thr = 110.0      # set by calibrate_color / calibrate_orientation
         self.t = 0                  # orientation transform index (set by calibrate_orientation)
+        # Adaptive per-square piece-colour samples (inference orientation), learned
+        # from positions we know - seeded at the start, refined as pieces move. NaN
+        # = unseen; classification falls back to the global samples / threshold.
+        self.ref_light = np.full((8, 8), np.nan)
+        self.ref_dark = np.full((8, 8), np.nan)
+        self.global_light = None
+        self.global_dark = None
 
     def warp(self, frame):
         return cv2.warpPerspective(frame, self.H, (N, N))
@@ -149,12 +169,38 @@ class RealBoard:
         occ, lum = self._measure(start_frame)
         norm = (lum - self.bias)[occ]
         self.color_thr = _otsu(norm) if occ.any() else 110.0
+        if occ.any():
+            hi, lo = norm[norm > self.color_thr], norm[norm <= self.color_thr]
+            self.global_light = float(np.median(hi)) if hi.size else self.color_thr + 30
+            self.global_dark = float(np.median(lo)) if lo.size else self.color_thr - 30
         return self.color_thr
 
     def classify(self, frame):
-        """Frame -> three-state grid in inference convention (orientation applied)."""
-        occ, lum = self._measure(frame)
-        return dihedral(self._grid(occ, lum, self.color_thr), self.t)
+        """Frame -> three-state grid in inference convention (orientation applied),
+        using per-square learned colour samples when available."""
+        occ_c, lum_c = self._measure(frame)
+        occ = dihedral(occ_c, self.t)
+        norm = dihedral(lum_c - self.bias, self.t)        # lighting-normalised, inference orient
+        g = empty_grid()
+        for r, c in zip(*np.where(occ)):
+            g[r, c] = decide_colour(norm[r, c], self.ref_light[r, c], self.ref_dark[r, c],
+                                    self.global_light, self.global_dark, self.color_thr)
+        return g
+
+    def learn(self, frame, board):
+        """Record per-square piece-colour samples from a frame whose position we KNOW
+        (the believed board). Only learns squares that read occupied, so a missed
+        piece can't poison a reference. Seed it with chess.Board() at the start, then
+        call it after each accepted move."""
+        truth = board_to_grid(board)
+        occ_c, lum_c = self._measure(frame)
+        occ = dihedral(occ_c, self.t)
+        norm = dihedral(lum_c - self.bias, self.t)
+        for r, c in zip(*np.where(occ)):
+            if truth[r, c] == Cell.LIGHT:
+                self.ref_light[r, c] = norm[r, c]
+            elif truth[r, c] == Cell.DARK:
+                self.ref_dark[r, c] = norm[r, c]
 
     def calibrate_orientation(self, start_frame, after_frame, expected_uci, tol=4):
         """Lock the board orientation from a start frame + one known reference move.

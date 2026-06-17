@@ -60,12 +60,34 @@ def save(s):
         json.dump(s, f)
 
 
+def refs_to_list(a):
+    return [[None if np.isnan(v) else round(float(v), 2) for v in row] for row in a]
+
+
+def refs_from_list(lst):
+    return np.array([[np.nan if v is None else float(v) for v in row] for row in lst])
+
+
+def save_model(s, rb):
+    s["color_thr"] = float(rb.color_thr)
+    s["global_light"] = rb.global_light
+    s["global_dark"] = rb.global_dark
+    s["ref_light"] = refs_to_list(rb.ref_light)
+    s["ref_dark"] = refs_to_list(rb.ref_dark)
+
+
 def board_reader():
     rb = RealBoard(img("empty.png"))
     if os.path.exists(STATE):
         s = load()
         rb.t = s["t"]
         rb.color_thr = s["color_thr"]
+        rb.global_light = s.get("global_light")
+        rb.global_dark = s.get("global_dark")
+        if s.get("ref_light"):
+            rb.ref_light = refs_from_list(s["ref_light"])
+        if s.get("ref_dark"):
+            rb.ref_dark = refs_from_list(s["ref_dark"])
     return rb
 
 
@@ -105,9 +127,11 @@ def cmd_newgame():
     if t is None:
         print("a1 is NOT a dark square - the board looks rotated 90 deg. Fix the setup and retry.")
         return 2
+    rb.learn(frame, chess.Board())                  # seed per-square colour samples from the start
     grid = rb.classify(frame)
-    save({"t": int(t), "color_thr": float(rb.color_thr),
-          "fen": chess.STARTING_FEN, "prev": grid.tolist()})
+    s = {"t": int(t), "fen": chess.STARTING_FEN, "prev": grid.tolist()}
+    save_model(s, rb)
+    save(s)
     print(grid_str(grid))
     print(f"a1 is dark OK (orientation t={t}, colour_thr={rb.color_thr:.1f}) - White to move")
     return 0
@@ -124,8 +148,10 @@ def cmd_shot():
     game.prev = np.array(s["prev"], dtype=np.uint8) if s["prev"] is not None else None
     kind, san, extra = game.observe(rb.classify(frame))
     if kind == "move":
+        rb.learn(frame, game.board)            # refine per-square colour samples
         s["fen"] = game.board.fen()
         s["prev"] = game.prev.tolist()
+        save_model(s, rb)
         save(s)
         side = "White" if game.board.turn else "Black"
         print(f"MOVE: {san}    (now {side} to move)")

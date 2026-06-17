@@ -12,7 +12,7 @@ import chess
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from chessmon.camera import (dihedral, solve_orientation, solve_orientation_by_color,
-                             _square_is_light, CameraGame)
+                             _square_is_light, decide_colour, CameraGame)
 from chessmon.board_state import board_to_grid, square_to_rc, Cell
 
 _FAIL = []
@@ -118,6 +118,21 @@ def test_seen_contrasting_destination_is_used():
     check(kind == "move" and m.uci() == "a7a6", f"got {kind} {san}")
 
 
+def test_per_square_colour_sample_beats_glare():
+    print("colour: a per-square learned sample classifies a glared dark piece correctly")
+    thr, g_light, g_dark = 50.0, 90.0, 15.0
+    nan = float("nan")
+    # a glared dark piece reads high (norm=70) -> the global threshold calls it 'light'
+    check(decide_colour(70, nan, nan, g_light, g_dark, thr) == Cell.LIGHT,
+          "threshold alone mis-reads the glared piece as light")
+    # but with this square's learned dark sample (also high, 72), nearest-match -> dark
+    check(decide_colour(70, nan, 72.0, g_light, g_dark, thr) == Cell.DARK,
+          "per-square dark sample fixes it -> dark")
+    # a genuine light piece on the same square still reads light
+    check(decide_colour(95, nan, 72.0, g_light, g_dark, thr) == Cell.LIGHT,
+          "a light piece there still reads light")
+
+
 def test_unchanged_frame_is_nochange():
     print("CameraGame: an identical frame reports no change")
     g = CameraGame()
@@ -132,6 +147,7 @@ def main():
               test_stable_misread_cancels, test_sequence_with_capture,
               test_legality_resolves_unseen_dark_destination,
               test_seen_contrasting_destination_is_used,
+              test_per_square_colour_sample_beats_glare,
               test_unchanged_frame_is_nochange]:
         t()
     print()
