@@ -10,6 +10,9 @@ __pycache__/
 # Generated renders / scratch output
 out/
 
+# Live-game runtime state
+live.json
+
 # OS cruft
 Thumbs.db
 .DS_Store
