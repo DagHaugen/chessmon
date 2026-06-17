@@ -77,9 +77,10 @@ def save_model(s, rb):
 
 
 def board_reader():
-    rb = RealBoard(img("empty.png"))
-    if os.path.exists(STATE):
-        s = load()
+    s = load() if os.path.exists(STATE) else {}
+    rb = (RealBoard.from_start(img("live_start.png")) if s.get("from_start")
+          else RealBoard(img("empty.png")))
+    if s:
         rb.t = s["t"]
         rb.color_thr = s["color_thr"]
         rb.global_light = s.get("global_light")
@@ -164,6 +165,35 @@ def cmd_shot():
     return 0
 
 
+def cmd_startgame():
+    """Calibrate + baseline from the START position, with NO empty board: register
+    from the pieces, seed colour samples, set the baseline. The start occupancy is
+    approximate (borrowed backgrounds) - legality + refinement are meant to carry it."""
+    frame = capture()
+    if frame is None:
+        print("no frame (is the Windows Camera app open?)")
+        return 1
+    cv2.imwrite(os.path.join(OUT, "live_start.png"), frame)
+    try:
+        rb = RealBoard.from_start(frame)
+    except ValueError as e:
+        print(f"could not register from the pieces ({e}) - make the board fill the frame.")
+        return 2
+    t = rb.calibrate_orientation_auto(frame)
+    if t is None:
+        print("could not orient (a1 not dark?) - check the board is set up correctly.")
+        return 2
+    rb.learn(frame, chess.Board())
+    grid = rb.classify(frame)
+    s = {"from_start": True, "t": int(t), "fen": chess.STARTING_FEN, "prev": grid.tolist()}
+    save_model(s, rb)
+    save(s)
+    print(grid_str(grid))
+    print(f"registered from pieces, a1 dark OK (t={t}). Baseline set - White to move.")
+    print("(start occupancy is approximate; legality + refinement should carry it.)")
+    return 0
+
+
 def cmd_gesture():
     """Read the end-of-game gesture: both kings to the centre, result encoded by the
     colour of the squares they stand on (both light=White, both dark=Black, else draw)."""
@@ -195,7 +225,8 @@ def cmd_gesture():
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     return {"calibrate": cmd_calibrate, "empty": cmd_empty, "newgame": cmd_newgame,
-            "shot": cmd_shot, "gesture": cmd_gesture}.get(cmd, lambda: (print(__doc__), 1)[1])()
+            "startgame": cmd_startgame, "shot": cmd_shot,
+            "gesture": cmd_gesture}.get(cmd, lambda: (print(__doc__), 1)[1])()
 
 
 if __name__ == "__main__":
