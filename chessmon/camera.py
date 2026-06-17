@@ -107,6 +107,13 @@ class RealBoard:
             mean = float(np.mean([empty_luma[r, c] for r, c in idx]))
             for r, c in idx:
                 self.bias[r, c] = empty_luma[r, c] - mean
+        # Physical square colours: the darker checkerboard parity is the red/dark
+        # squares. Used to enforce the "a1 is a dark square" rule when auto-detecting
+        # orientation (a 90 deg board rotation inverts this parity).
+        pm = {p: float(np.mean([empty_luma[r, c] for r in range(8) for c in range(8)
+                                if (r + c) % 2 == p])) for p in (0, 1)}
+        dark_parity = 0 if pm[0] < pm[1] else 1
+        self.dark_sq = np.array([[(r + c) % 2 == dark_parity for c in range(8)] for r in range(8)])
         # Occupancy leans on background subtraction (cdiff); edge is only a backup,
         # set ABOVE the empty board's worst square (the fold seam) so it can never
         # fire on an empty square - only genuinely high-texture squares clear it.
@@ -158,6 +165,17 @@ class RealBoard:
         ga = self._grid(*self._measure(after_frame), self.color_thr)
         self.t = solve_orientation(gs, ga, expected_uci, tol)
         return self.t
+
+    def calibrate_orientation_auto(self, start_frame, tol=4):
+        """Lock orientation from the start position + the 'a1 is a dark square' rule -
+        no reference move needed. Sets self.t and returns it, or returns None if no
+        orientation makes a1 dark (the board is mis-set / rotated 90 deg)."""
+        self.calibrate_color(start_frame)
+        gs = self._grid(*self._measure(start_frame), self.color_thr)
+        t = solve_orientation_by_color(gs, self.dark_sq, tol)
+        if t is not None:
+            self.t = t
+        return t
 
 
 class CameraGame:
@@ -250,3 +268,19 @@ def solve_orientation(start_grid, after_grid, expected_uci, tol=4):
         if kind == "move" and move is not None and move.uci() == expected_uci:
             return t
     return cands[0] if cands else 0
+
+
+def solve_orientation_by_color(start_grid, dark_sq, tol=4):
+    """Determine orientation with NO reference move, using the rule that a1 is a DARK
+    square. Pick the transform t under which the start occupancy matches the standard
+    start AND the physical square colours line up with the chessboard (so a1 is dark).
+    Returns t, or None if no orientation makes a1 dark (board mis-set / rotated 90deg).
+    Occupancy fixes which side is White (the rank axis); the colours fix the remaining
+    handedness that the symmetric start position can't."""
+    target_occ = board_to_grid(chess.Board())
+    chess_dark = np.array([[not _square_is_light(r, c) for c in range(8)] for r in range(8)])
+    for t in range(8):
+        if (int((dihedral(start_grid, t) == target_occ).sum()) >= 64 - tol
+                and np.array_equal(dihedral(dark_sq, t), chess_dark)):
+            return t
+    return None

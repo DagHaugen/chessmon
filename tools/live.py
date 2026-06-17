@@ -96,20 +96,20 @@ def cmd_empty():
 
 
 def cmd_newgame():
-    rb = board_reader()
     frame = capture()
     if frame is None:
         print("no frame (is the Windows Camera app open?)")
         return 1
-    rb.calibrate_color(frame)                       # refresh colour split for current light
+    rb = RealBoard(img("empty.png"))
+    t = rb.calibrate_orientation_auto(frame)        # orientation from colours; a1 must be dark
+    if t is None:
+        print("a1 is NOT a dark square - the board looks rotated 90 deg. Fix the setup and retry.")
+        return 2
     grid = rb.classify(frame)
-    s = load()
-    s["color_thr"] = float(rb.color_thr)
-    s["fen"] = chess.STARTING_FEN
-    s["prev"] = grid.tolist()
-    save(s)
+    save({"t": int(t), "color_thr": float(rb.color_thr),
+          "fen": chess.STARTING_FEN, "prev": grid.tolist()})
     print(grid_str(grid))
-    print(f"baseline set (colour_thr={rb.color_thr:.1f}) - White to move")
+    print(f"a1 is dark OK (orientation t={t}, colour_thr={rb.color_thr:.1f}) - White to move")
     return 0
 
 
@@ -138,10 +138,38 @@ def cmd_shot():
     return 0
 
 
+def cmd_gesture():
+    """Read the end-of-game gesture: both kings to the centre, result encoded by the
+    colour of the squares they stand on (both light=White, both dark=Black, else draw)."""
+    s = load()
+    rb = board_reader()
+    frame = capture()
+    if frame is None:
+        print("no frame (is the Windows Camera app open?)")
+        return 1
+    grid = rb.classify(frame)
+    print(grid_str(grid))
+    # centre squares in inference-grid coords, and their physical colour
+    centre = {chess.D4: (4, 3), chess.E4: (4, 4), chess.D5: (3, 3), chess.E5: (3, 4)}
+    light_sq = {chess.E4, chess.D5}     # the cream centre squares
+    occ_light = sum(grid[rc] != 0 for sq, rc in centre.items() if sq in light_sq)
+    occ_dark = sum(grid[rc] != 0 for sq, rc in centre.items() if sq not in light_sq)
+    print(f"centre: {occ_light} light-square king(s), {occ_dark} dark-square king(s)")
+    if occ_light and not occ_dark:
+        print("RESULT: White wins (1-0)")
+    elif occ_dark and not occ_light:
+        print("RESULT: Black wins (0-1)")
+    elif occ_light and occ_dark:
+        print("RESULT: draw (1/2-1/2)")
+    else:
+        print("no kings detected in the centre")
+    return 0
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     return {"calibrate": cmd_calibrate, "empty": cmd_empty, "newgame": cmd_newgame,
-            "shot": cmd_shot}.get(cmd, lambda: (print(__doc__), 1)[1])()
+            "shot": cmd_shot, "gesture": cmd_gesture}.get(cmd, lambda: (print(__doc__), 1)[1])()
 
 
 if __name__ == "__main__":

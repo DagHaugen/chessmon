@@ -11,7 +11,8 @@ import chess
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chessmon.camera import dihedral, solve_orientation, CameraGame
+from chessmon.camera import (dihedral, solve_orientation, solve_orientation_by_color,
+                             _square_is_light, CameraGame)
 from chessmon.board_state import board_to_grid, square_to_rc, Cell
 
 _FAIL = []
@@ -42,6 +43,19 @@ def test_orientation_all_eight():
         label = ["0", "90", "180", "270", "0'", "90'", "180'", "270'"][k]
         check(kind == "move" and m is not None and m.uci() == "b2b4",
               f"camera at {label} -> reads b2b4 (got {kind} {san})")
+
+
+def test_orientation_from_colours():
+    print("orientation: square colours (a1 dark) fix orientation, no reference move")
+    start = board_to_grid(chess.Board())
+    chess_dark = np.array([[not _square_is_light(r, c) for c in range(8)] for r in range(8)])
+    for k in range(4):                                  # the 4 physical board rotations
+        cam_start, cam_dark = dihedral(start, k), dihedral(chess_dark, k)
+        t = solve_orientation_by_color(cam_start, cam_dark)
+        ok = (t is not None
+              and np.array_equal(dihedral(cam_dark, t), chess_dark)     # a1 ends up dark
+              and np.array_equal(dihedral(cam_start, t), start))        # white side correct
+        check(ok, f"board rotated {k * 90} deg -> a1 dark + occupancy aligned (t={t})")
 
 
 def test_ninety_degree_specifically():
@@ -113,7 +127,8 @@ def test_unchanged_frame_is_nochange():
 
 
 def main():
-    for t in [test_orientation_all_eight, test_ninety_degree_specifically,
+    for t in [test_orientation_all_eight, test_orientation_from_colours,
+              test_ninety_degree_specifically,
               test_stable_misread_cancels, test_sequence_with_capture,
               test_legality_resolves_unseen_dark_destination,
               test_seen_contrasting_destination_is_used,
