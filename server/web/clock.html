@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#15171c">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>chessmon clock</title>
 <style>
   :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
@@ -27,11 +28,12 @@
   .nm{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
   .tm{font-variant-numeric:tabular-nums;font-weight:700;font-size:42px;line-height:1}
   .tm.low{color:var(--warn)} .tm.flag{color:var(--bad)}
-  .board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border-radius:12px;
-    overflow:hidden;border:1px solid var(--line)}
-  .sq{display:flex;align-items:center;justify-content:center;font-size:min(7vw,30px);line-height:1}
-  .sq.l{background:var(--lt)} .sq.d{background:var(--dk)}
-  .sq.wp{color:#fffef9;text-shadow:0 1px 1px #0006} .sq.bp{color:#15171c}
+  .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+    aspect-ratio:1;width:100%;border-radius:10px;overflow:hidden}
+  .sq{display:flex;align-items:center;justify-content:center;font-size:min(8vw,34px);line-height:1}
+  .sq.l{background:#e9e6dc} .sq.d{background:#3a3f47}
+  .sq.wp{color:#fafafa;-webkit-text-stroke:1.4px #2a2d33}
+  .sq.bp{color:#16181d;-webkit-text-stroke:1.1px #c9cdd4}
   .act{min-height:66px;display:flex;flex-direction:column;gap:8px;justify-content:center}
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
@@ -82,8 +84,7 @@
 
 <script src="qrcode.min.js"></script>
 <script>
-const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',
-             k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};  // filled glyphs, coloured by side
 const params=new URLSearchParams(location.search);
 const table=params.get('table');
 let ws,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
@@ -100,7 +101,7 @@ function renderBoard(fen){
     else{b.appendChild(mkSq(r,c++,ch))}}});
 }
 function mkSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
-  if(ch){d.textContent=GLYPH[ch];d.classList.add(ch===ch.toUpperCase()?'wp':'bp')}return d}
+  if(ch){d.textContent=GLYPH[ch.toLowerCase()];d.classList.add(ch===ch.toUpperCase()?'wp':'bp')}return d}
 
 function renderClocks(){
   for(const c of ['white','black']){const t=$('t-'+c),ms=clk[c];t.textContent=fmt(ms);

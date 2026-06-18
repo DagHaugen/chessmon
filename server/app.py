@@ -74,6 +74,11 @@ async def root():
     return RedirectResponse("/app/clock.html")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return RedirectResponse("/app/icon.svg")
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
