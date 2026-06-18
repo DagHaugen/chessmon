@@ -127,6 +127,8 @@ async def ws_endpoint(ws: WebSocket):
                     continue
                 hub(s.table_token)["clock"] = ws
                 await send(ws, {"type": "session.ready", "pairToken": s.pair_token,
+                                "calibrated": s.board_reader is not None,
+                                "cameraLinked": hub(s.table_token)["camera"] is not None,
                                 **s.session_info()})
                 await send(ws, {"type": "state", **s.snapshot()})  # restore view on reconnect
             elif t == "pair.join":

@@ -253,4 +253,5 @@ class Session:
                 "white": self.white, "black": self.black,
                 "fen": self.game.board.fen(),
                 "turn": "White" if self.game.board.turn else "Black",
+                "calibrated": self.board_reader is not None,
                 "moves": self.moves, "result": self.result, "pgn": self.pgn()}

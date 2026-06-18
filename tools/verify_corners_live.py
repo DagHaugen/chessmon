@@ -47,5 +47,14 @@ async def main():
         assert b1["type"] == "session.baselined" and b2["type"] == "session.baselined", (b1, b2)
         print(f"orient.pick right -> session.baselined (t={b1.get('t')})  ONE-STEP PASSED", flush=True)
 
+        # clock RESTART while the camera stays connected -> continuation: no QR, resume calibrated
+        async with websockets.connect(WS) as clock2:
+            await clock2.send(json.dumps({"type": "table.join", "tableToken": tok}))
+            ready = json.loads(await clock2.recv())
+            state = json.loads(await clock2.recv())
+            assert ready.get("calibrated") is True and ready.get("cameraLinked") is True, ready
+            assert state.get("calibrated") is True, state
+            print("clock restart -> calibrated=True cameraLinked=True + state resumes  CONTINUATION PASSED", flush=True)
+
 
 asyncio.run(main())

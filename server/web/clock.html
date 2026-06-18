@@ -119,8 +119,9 @@
 <script>
 const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const params=new URLSearchParams(location.search);
-const table=params.get('table');
-let ws,started=false,wakeLock=null,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let table=params.get('table')||localStorage.getItem('cm_table');
+if(table)localStorage.setItem('cm_table',table);     // reopen rejoins the last table — no new QR/scan
+let ws,started=false,wakeLock=null,camLinked=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
@@ -219,8 +220,11 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
+      camLinked=m.cameraLinked;
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
-      if(m.pairToken&&!started){show('pairbtn',true);show('pair',true);$('paircode').textContent=m.pairToken;
+      show('pairbtn',true);                                     // always available to (re-)pair a camera
+      if(m.pairToken&&!started&&!m.calibrated){                 // first pairing only — a calibrated session continues
+        show('pair',true);$('paircode').textContent=m.pairToken;
         const qr=$('qr');qr.innerHTML='';                       // clear so reconnects don't stack QRs
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
@@ -228,9 +232,12 @@ function handle(m){
     case 'state':                                               // refresh/reconnect -> restore the view
       renderBoard(m.fen);
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
-      else if(m.moves&&m.moves.length){started=true;show('pair',false);show('refreshbtn',true);
+      else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume the game (skip QR / recalibration)
+        started=true;show('pair',false);show('calib',false);show('refreshbtn',true);
+        const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
+        if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
-        $('report').textContent=m.turn+' to move';setAction(confirmBtn());}
+        $('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';setAction(confirmBtn());}
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
@@ -251,7 +258,10 @@ function handle(m){
       clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);
       if(win)$('s-'+win).classList.add('win');setAction(ph('result '+m.result));break;
-    case 'error': $('report').textContent='error: '+m.reason; break;
+    case 'error':
+      if(/unknown table/.test(m.reason||'')){            // remembered table is gone (server restarted)
+        localStorage.removeItem('cm_table');show('game',false);show('setup',true);$('tid').textContent='no table — start a new one';}
+      else $('report').textContent='error: '+m.reason; break;
   }
 }
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
