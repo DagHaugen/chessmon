@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from .manager import SessionManager
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -93,8 +94,17 @@ async def ws_endpoint(ws: WebSocket):
                 if s is not None and role == "camera":
                     frame = cv2.imdecode(np.frombuffer(msg["bytes"], np.uint8),
                                          cv2.IMREAD_COLOR)
+                    step = s._calib_step or "move"
+                    if frame is not None:                          # save for debugging
+                        try:
+                            os.makedirs(OUT, exist_ok=True)
+                            cv2.imwrite(os.path.join(OUT, f"cam_{step}.png"), frame)
+                        except Exception:
+                            pass
                     verdict = (s.on_frame(frame) if frame is not None
                                else {"type": "calib.failed", "reason": "undecodable frame"})
+                    shape = "x".join(map(str, frame.shape)) if frame is not None else "decode-fail"
+                    print(f"[frame] {step} {shape} -> {verdict.get('type')}: {verdict.get('reason', '')}")
                     await send(hub(s.table_token)["clock"], verdict)
                     await send(ws, verdict)                         # echo to the camera operator
                     await broadcast_state(s)
