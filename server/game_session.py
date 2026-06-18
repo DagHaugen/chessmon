@@ -98,6 +98,8 @@ class Session:
                 return {"type": "calib.ok", "step": "empty"}
             if step == "start":
                 return {"type": "session.baselined", **self.calibrate_start(frame)}
+            if step == "refresh":
+                return self.resnap(frame)
             if self.board_reader is None:
                 return {"type": "calib.failed", "reason": "camera not calibrated"}
             return self.ingest_frame(frame)
@@ -109,6 +111,19 @@ class Session:
         self.game.prev = None
         self.game.observe(grid)            # first observe just stores the baseline
         self._last_grid = grid
+
+    def resnap(self, frame):
+        """Re-anchor the detector to the CURRENT believed position WITHOUT making a move — for when a
+        piece was nudged or the board / lighting drifted. Re-learns the colour + background references
+        (learn skips invisible same-colour pieces and update_bg never bakes in an occupied square, so
+        this is safe even on a low-contrast set) and re-seeds the baseline, so the next move's delta is
+        measured from the board exactly as it sits now."""
+        if self.board_reader is None:
+            return {"type": "calib.failed", "reason": "camera not calibrated"}
+        self.board_reader.learn(frame, self.game.board)
+        self.board_reader.update_bg(frame, self.game.board)
+        self.seed_baseline(self.board_reader.classify(frame))
+        return {"type": "refreshed", "fen": self.game.board.fen()}
 
     # --- move loop ---
     def confirm(self, side, clock_white=None, clock_black=None):

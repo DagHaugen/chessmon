@@ -18,7 +18,8 @@
   .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
   .dot.on{background:var(--good)}
   .top .id{font-variant-numeric:tabular-nums;letter-spacing:.02em}
-  .top button{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--mut);
+  .top .topbtns{margin-left:auto;display:flex;gap:6px}
+  .top button{background:transparent;border:1px solid var(--line);color:var(--mut);
     border-radius:9px;padding:6px 10px;font-size:12px;cursor:pointer}
   .side{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
     display:flex;align-items:center;justify-content:space-between;transition:.15s;opacity:.5}
@@ -70,7 +71,7 @@
 <body>
 <div class="page">
   <div class="top"><span class="dot" id="dot"></span><span class="id" id="tid">not connected</span>
-    <button id="pairbtn" class="hidden">Pair camera</button></div>
+    <span class="topbtns"><button id="refreshbtn" class="hidden">↻ Resnap</button><button id="pairbtn" class="hidden">Pair camera</button></span></div>
 
   <div class="pair hidden" id="pair">
     <h2>Scan with the camera phone</h2>
@@ -173,6 +174,7 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
   send({type:'calib.corners',corners});show('calib',false);$('report').textContent='registering…';}
 
 function handle(m){
+  if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
@@ -184,7 +186,7 @@ function handle(m){
     case 'state':                                               // refresh/reconnect -> restore the view
       renderBoard(m.fen);
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
-      else if(m.moves&&m.moves.length){started=true;show('pair',false);
+      else if(m.moves&&m.moves.length){started=true;show('pair',false);show('refreshbtn',true);
         clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
         $('report').textContent=m.turn+' to move';setAction(confirmBtn());}
       else{$('report').textContent=m.turn+' to move';}
@@ -194,6 +196,7 @@ function handle(m){
     case 'calib.image': showCalib(m.image); break;
     case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
     case 'calib.failed': show('calib',false);$('report').textContent='calibration: '+m.reason; break;
+    case 'refreshed': $('report').textContent='board refreshed ✓ · '+(clk.active==='white'?'White':'Black')+' to move'; break;
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       $('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
@@ -218,6 +221,7 @@ function connect(){
 }
 
 $('cdone').onclick=sendCorners;
+$('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('pairbtn').onclick=()=>show('pair',$('pair').classList.contains('hidden'));
 $('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({white:'White',black:'Black'})});const j=await r.json();location.search='?table='+j.tableToken};

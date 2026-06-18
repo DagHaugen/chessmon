@@ -174,6 +174,9 @@ async def ws_endpoint(ws: WebSocket):
                 result = "1-0" if data.get("side") == "black" else "0-1"
                 await send(hub(s.table_token)["clock"], s.end(result))
                 await broadcast_state(s)
+            elif t == "refresh":                                  # clock wants a fresh read (board moved?)
+                s.set_calib_step("refresh")
+                await send(hub(s.table_token)["camera"], {"type": "capture.req"})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)

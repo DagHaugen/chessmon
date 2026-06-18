@@ -41,5 +41,14 @@ async def main():
         assert ok1["type"] == "calib.ok" and ok2["type"] == "calib.ok", (ok1, ok2)
         print("corners -> calib.ok to both clock & camera  LIVE CORNER-CALIB PASSED", flush=True)
 
+        # refresh: clock asks for a fresh read -> camera gets capture.req -> frame -> clock 'refreshed'
+        await clock.send(json.dumps({"type": "refresh"}))
+        req = json.loads(await cam.recv())
+        assert req["type"] == "capture.req", req
+        await cam.send(jpg)
+        refreshed = json.loads(await clock.recv())
+        assert refreshed["type"] == "refreshed", refreshed
+        print("refresh -> capture.req -> frame -> clock 'refreshed'  REFRESH PASSED", flush=True)
+
 
 asyncio.run(main())
