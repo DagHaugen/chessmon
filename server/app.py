@@ -119,6 +119,7 @@ async def ws_endpoint(ws: WebSocket):
                 hub(s.table_token)["clock"] = ws
                 await send(ws, {"type": "session.ready", "pairToken": s.pair_token,
                                 **s.session_info()})
+                await send(ws, {"type": "state", **s.snapshot()})  # restore view on reconnect
             elif t == "pair.join":
                 s, role = mgr.by_pair(data["pairToken"]), "camera"
                 if s is None:
@@ -133,6 +134,8 @@ async def ws_endpoint(ws: WebSocket):
                     continue
                 hub(s.table_token)["spectators"].add(ws)
                 await send(ws, {"type": "state", **s.snapshot()})
+            elif t == "ping":                                     # heartbeat — keep the socket alive
+                pass
             elif s is None:
                 await send(ws, {"type": "error", "reason": "join a table first"})
             elif t == "calib":                                    # next camera frame is this step

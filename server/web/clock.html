@@ -87,7 +87,7 @@
 const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};  // filled glyphs, coloured by side
 const params=new URLSearchParams(location.search);
 const table=params.get('table');
-let ws,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let ws,started=false,wakeLock=null,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
@@ -127,17 +127,25 @@ function handle(m){
   switch(m.type){
     case 'session.ready':
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
-      if(m.pairToken){show('pairbtn',true);show('pair',true);$('paircode').textContent=m.pairToken;
+      if(m.pairToken&&!started){show('pairbtn',true);show('pair',true);$('paircode').textContent=m.pairToken;
+        const qr=$('qr');qr.innerHTML='';                       // clear so reconnects don't stack QRs
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
-        if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:link,width:144,height:144});}
+        if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
       break;
-    case 'state': renderBoard(m.fen); $('report').textContent=m.result?('result '+m.result):(m.turn+' to move'); break;
+    case 'state':                                               // refresh/reconnect -> restore the view
+      renderBoard(m.fen);
+      if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
+      else if(m.moves&&m.moves.length){started=true;show('pair',false);
+        clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
+        $('report').textContent=m.turn+' to move';setAction(confirmBtn());}
+      else{$('report').textContent=m.turn+' to move';}
+      break;
     case 'session.baselined':
-      show('pair',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
+      started=true;show('pair',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
     case 'calib.ok': $('report').textContent='calibrated (empty board) — now the start position'; break;
     case 'calib.failed': $('report').textContent='calibration: '+m.reason; break;
     case 'move.result':
-      clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
+      started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       $('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
     case 'move.ambiguous': setAction(promptUI("Couldn't read it — tap your move",m.candidates));break;
     case 'move.unseen': setAction(promptUI('Move not visible — tap what you played',m.candidates));break;
@@ -154,7 +162,7 @@ function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');send({type:'table.join',tableToken:table})};
+  ws.onopen=()=>{$('dot').classList.add('on');keepAwake();send({type:'table.join',tableToken:table})};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
@@ -166,6 +174,11 @@ $('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',hea
 if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');connect();}
 else{show('setup',true);$('tid').textContent='no table';}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+async function keepAwake(){try{if('wakeLock'in navigator)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(table&&(!ws||ws.readyState>1))connect()}});
+document.addEventListener('click',keepAwake);
+setInterval(()=>send({type:'ping'}),20000);            // heartbeat keeps the socket alive when idle
 </script>
 </body>
 </html>
