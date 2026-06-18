@@ -200,13 +200,13 @@ class RealBoard:
         self.global_dark = None
 
     @classmethod
-    def from_start(cls, start_frame, cdiff_thr=16.0, edge_margin=8.0):
-        """Build a registered, calibrated board from the START position - no empty
-        frame needed. Registers from the pieces, takes real empty references from the
-        32 clear middle squares, and borrows the nearest same-colour empty square's
-        reference for each occupied square (refined later as pieces move)."""
+    def from_start(cls, start_frame, cdiff_thr=16.0, edge_margin=8.0, corners=None):
+        """Build a registered, calibrated board from the START position - no empty frame
+        needed. Registers from the pieces (or from 4 manually-tapped `corners`), takes real
+        empty references from the 32 clear middle squares, and borrows the nearest same-colour
+        empty square's reference for each occupied square (refined later as pieces move)."""
         self = cls.__new__(cls)
-        H = register_from_pieces(start_frame)
+        H = register_from_corners(corners) if corners is not None else register_from_pieces(start_frame)
         if H is None:
             raise ValueError("could not register from the start position")
         self.H = H

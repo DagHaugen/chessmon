@@ -19,11 +19,12 @@ from __future__ import annotations
 
 import secrets
 
+import numpy as np
 import chess
 import chess.pgn
 
-from chessmon.camera import CameraGame, RealBoard
-from chessmon.board_state import board_to_grid
+from chessmon.camera import CameraGame, RealBoard, solve_orientation_by_color
+from chessmon.board_state import Cell, board_to_grid, empty_grid
 
 
 class Session:
@@ -73,6 +74,47 @@ class Session:
         order. Used by the clock's drag-the-corners UI -> works on any board / lighting."""
         self.board_reader = RealBoard(frame, corners=corners)
         return {"type": "calib.ok", "step": "corners"}
+
+    def calibrate_oneshot(self, frame, corners):
+        """ONE-STEP calibration on the SET-UP start position: register from the 4 tapped corners,
+        borrow references from the clear centre (from_start), then orient. If colour can pick
+        White automatically it baselines; otherwise the start is symmetric, so it returns
+        `orient.ask` and the clock asks the operator which side White is on."""
+        rb = RealBoard.from_start(frame, corners=corners)
+        self.board_reader = rb
+        self._calib_frame = frame
+        t = rb.calibrate_orientation_auto(frame)
+        if t is not None:
+            rb.learn(frame, self.game.board)
+            self.seed_baseline(rb.classify(frame))
+            return {"type": "session.baselined", "t": int(t)}
+        return {"type": "orient.ask"}
+
+    def resolve_orientation(self, side):
+        """Finish one-step calibration once the clock says which IMAGE side White's pieces are on
+        ('top'/'bottom'/'left'/'right'). Colour is now user-asserted (not detected), so the solve
+        is reliable. Locks orientation and seeds the baseline."""
+        rb = self.board_reader
+        if rb is None or self._calib_frame is None:
+            return {"type": "calib.failed", "reason": "calibrate first"}
+        t = solve_orientation_by_color(self._asserted_start(side), rb.dark_sq)
+        if t is None:
+            return {"type": "calib.failed", "reason": "couldn't orient - is it a standard start position?"}
+        rb.t = t
+        rb.learn(self._calib_frame, self.game.board)
+        self.seed_baseline(rb.classify(self._calib_frame))
+        return {"type": "session.baselined", "t": int(t)}
+
+    def _asserted_start(self, side):
+        """Idealised start grid in CANONICAL (warp) orientation: White's 16 pieces (LIGHT) on the
+        chosen image side, Black's (DARK) opposite, centre empty. Feeds the colour solver."""
+        g = empty_grid()
+        near, far = (slice(0, 2), slice(6, 8)) if side in ("top", "left") else (slice(6, 8), slice(0, 2))
+        if side in ("left", "right"):
+            g[:, near], g[:, far] = Cell.LIGHT, Cell.DARK
+        else:
+            g[near, :], g[far, :] = Cell.LIGHT, Cell.DARK
+        return g
 
     def calibrate_start(self, frame):
         """Step 2: with pieces at the start, lock orientation (a1 dark), seed per-square

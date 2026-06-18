@@ -154,16 +154,24 @@ async def ws_endpoint(ws: WebSocket):
                 fr = s._calib_frame
                 if fr is None:
                     await send(ws, {"type": "calib.failed",
-                                    "reason": "no empty frame yet — capture it on the camera"})
+                                    "reason": "no frame yet — tap Calibrate on the camera"})
                 else:
                     h, w = fr.shape[:2]
                     px = [[c[0] * w, c[1] * h] for c in data["corners"]]   # fractions -> pixels
                     try:
-                        verdict = s.calibrate_empty_corners(fr, px)
+                        verdict = s.calibrate_oneshot(fr, px)          # one-step on the set-up board
                     except Exception as e:
                         verdict = {"type": "calib.failed", "reason": str(e)}
                     await send(hub(s.table_token)["clock"], verdict)
                     await send(hub(s.table_token)["camera"], verdict)
+                    if verdict.get("type") == "session.baselined":
+                        await broadcast_state(s)
+            elif t == "orient.pick":                              # clock picked which side White is on
+                verdict = s.resolve_orientation(data.get("side"))
+                await send(hub(s.table_token)["clock"], verdict)
+                await send(hub(s.table_token)["camera"], verdict)
+                if verdict.get("type") == "session.baselined":
+                    await broadcast_state(s)
             elif t == "move.confirm":
                 s.confirm(data["side"], data.get("clockWhite"), data.get("clockBlack"))
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})

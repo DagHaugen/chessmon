@@ -65,6 +65,11 @@
   .cmark.sel{border-color:#ffd23f;background:rgba(255,210,63,.22);box-shadow:0 0 0 3px rgba(255,210,63,.3)}
   .cmark.sel::before,.cmark.sel::after{background:#ffd23f}
   .calib .btn{margin-top:12px}
+  .calib.orienting .cmark{display:none}
+  .oside{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .obtn{background:#262b34;border:1px solid var(--accent);color:var(--ink);border-radius:11px;
+    padding:14px 8px;font-size:15px;font-weight:600;cursor:pointer}
+  .obtn:active{transform:translateY(1px)}
   .hidden{display:none}
   .setup{margin:auto;text-align:center}
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
@@ -82,13 +87,17 @@
   </div>
 
   <div class="calib hidden" id="calib">
-    <h2>Mark the board corners</h2>
-    <p>Tap a corner (turns yellow), then drag anywhere on the image to nudge it — your finger stays off the corner. Tap again to lock.</p>
+    <h2 id="ctitle">Mark the board corners</h2>
+    <p id="chint">Tap a corner (turns yellow), then drag anywhere on the image to nudge it — your finger stays off the corner. Tap again to lock.</p>
     <div class="cwrap" id="cwrap">
       <img id="cimg" alt="board from the camera">
       <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div>
     </div>
     <button class="btn" id="cdone">Use these corners</button>
+    <div class="oside hidden" id="oside">
+      <button class="obtn" data-side="top">▲ Top</button><button class="obtn" data-side="bottom">▼ Bottom</button>
+      <button class="obtn" data-side="left">◀ Left</button><button class="obtn" data-side="right">Right ▶</button>
+    </div>
   </div>
 
   <div class="setup hidden" id="setup">
@@ -160,9 +169,17 @@ let selMark=null;
 function selectMark(m){if(selMark)selMark.classList.remove('sel');selMark=m;if(m)m.classList.add('sel')}
 function showCalib(durl){
   const img=$('cimg');selectMark(null);
+  $('calib').classList.remove('orienting');show('oside',false);show('cdone',true);   // back to corner mode
+  $('ctitle').textContent='Mark the board corners';
+  $('chint').textContent='Tap a corner (turns yellow), then drag anywhere on the image to nudge it. Tap again to lock.';
   img.onload=()=>{const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];   // TL,TR,BR,BL insets to start
     document.querySelectorAll('.cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'});};
   img.src=durl;show('pair',false);show('calib',true);$('report').textContent='tap a corner, then drag to place it';
+}
+function showOrient(){                                       // corners done, start is symmetric -> ask White's side
+  $('calib').classList.add('orienting');show('cdone',false);show('oside',true);
+  $('ctitle').textContent='Which side is White on?';
+  $('chint').textContent='Tap the side of the image where the white pieces are.';
 }
 (function(){                                                   // tap a marker -> select (yellow); then a drag
   let active=false,down=null,dragM=null,sx=0,sy=0,lx=0,ly=0,moved=false;  // ANYWHERE on the image nudges it
@@ -217,8 +234,9 @@ function handle(m){
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
-      started=true;show('pair',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
+      started=true;show('pair',false);show('calib',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
     case 'calib.image': showCalib(m.image); break;
+    case 'orient.ask': showOrient(); break;
     case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
     case 'calib.failed': show('calib',false);$('report').textContent='calibration: '+m.reason; break;
     case 'refreshed': $('report').textContent='board refreshed ✓ · '+(clk.active==='white'?'White':'Black')+' to move'; break;
@@ -246,6 +264,8 @@ function connect(){
 }
 
 $('cdone').onclick=sendCorners;
+document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-step: White's side -> orient
+  send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('pairbtn').onclick=()=>show('pair',$('pair').classList.contains('hidden'));
 $('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',headers:{'Content-Type':'application/json'},
