@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 
 from .manager import SessionManager
@@ -71,6 +71,8 @@ async def ws_endpoint(ws: WebSocket):
     try:
         while True:
             msg = await ws.receive()
+            if msg["type"] == "websocket.disconnect":
+                break
             if msg.get("bytes") is not None:                       # a capture.frame
                 if s is not None and role == "camera":
                     verdict = s.ingest_frame(msg["bytes"])
@@ -112,7 +114,7 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)
-    except WebSocketDisconnect:
+    finally:
         if s is not None:
             h = hub(s.table_token)
             if role == "spectator":
