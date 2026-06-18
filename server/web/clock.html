@@ -49,6 +49,18 @@
   #qr{display:flex;justify-content:center;margin:0 auto;width:160px;height:160px;background:#fff;
     border-radius:10px;padding:8px}
   .pair code{display:block;margin-top:10px;color:var(--accent);font-size:13px;word-break:break-all}
+  .calib{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
+  .calib h2{font-size:13px;color:var(--mut);margin:0;text-transform:uppercase;letter-spacing:.08em}
+  .calib p{font-size:12px;color:var(--mut);margin:4px 0 10px}
+  .cwrap{position:relative;display:inline-block;max-width:100%;line-height:0;
+    touch-action:none;user-select:none;-webkit-user-select:none}
+  .cwrap img{display:block;max-width:100%;border-radius:8px}
+  .cmark{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
+    border:2px solid var(--accent);background:rgba(79,140,255,.14);cursor:grab;touch-action:none}
+  .cmark::before,.cmark::after{content:'';position:absolute;background:var(--accent)}
+  .cmark::before{left:50%;top:5px;bottom:5px;width:2px;margin-left:-1px}
+  .cmark::after{top:50%;left:5px;right:5px;height:2px;margin-top:-1px}
+  .calib .btn{margin-top:12px}
   .hidden{display:none}
   .setup{margin:auto;text-align:center}
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
@@ -63,6 +75,16 @@
     <h2>Scan with the camera phone</h2>
     <div id="qr"></div>
     <code id="paircode"></code>
+  </div>
+
+  <div class="calib hidden" id="calib">
+    <h2>Mark the board corners</h2>
+    <p>Drag the four markers onto the corners of the playing area.</p>
+    <div class="cwrap" id="cwrap">
+      <img id="cimg" alt="board from the camera">
+      <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div>
+    </div>
+    <button class="btn" id="cdone">Use these corners</button>
   </div>
 
   <div class="setup hidden" id="setup">
@@ -128,6 +150,25 @@ function promptUI(title,cands){const w=document.createElement('div');w.className
     b.onclick=()=>{if(c.uci){send({type:'move.resolve',uci:c.uci});setAction(ph('committing…'))}};g.appendChild(b)});
   w.appendChild(g);return w}
 
+function showCalib(durl){
+  const img=$('cimg');
+  img.onload=()=>{const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];   // TL,TR,BR,BL insets to start
+    document.querySelectorAll('.cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'});};
+  img.src=durl;show('pair',false);show('calib',true);$('report').textContent='mark the four board corners';
+}
+(function(){let drag=null;const at=e=>e.touches?e.touches[0]:e;            // draggable corner markers
+  document.addEventListener('pointerdown',e=>{const m=e.target.closest('.cmark');
+    if(!m||$('calib').classList.contains('hidden'))return;drag=m;m.style.cursor='grabbing';e.preventDefault()});
+  document.addEventListener('pointermove',e=>{if(!drag)return;const r=$('cimg').getBoundingClientRect();const p=at(e);
+    const x=Math.max(0,Math.min(1,(p.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(p.clientY-r.top)/r.height));
+    drag.style.left=(x*100)+'%';drag.style.top=(y*100)+'%';e.preventDefault()},{passive:false});
+  document.addEventListener('pointerup',()=>{if(drag)drag.style.cursor='grab';drag=null});
+})();
+function sendCorners(){const r=$('cimg').getBoundingClientRect();
+  const corners=[...document.querySelectorAll('.cmark')].map(m=>{const b=m.getBoundingClientRect();
+    return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
+  send({type:'calib.corners',corners});show('calib',false);$('report').textContent='registering…';}
+
 function handle(m){
   switch(m.type){
     case 'session.ready':
@@ -147,8 +188,9 @@ function handle(m){
       break;
     case 'session.baselined':
       started=true;show('pair',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
-    case 'calib.ok': $('report').textContent='calibrated (empty board) — now the start position'; break;
-    case 'calib.failed': $('report').textContent='calibration: '+m.reason; break;
+    case 'calib.image': showCalib(m.image); break;
+    case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
+    case 'calib.failed': show('calib',false);$('report').textContent='calibration: '+m.reason; break;
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       $('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
@@ -172,6 +214,7 @@ function connect(){
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 
+$('cdone').onclick=sendCorners;
 $('pairbtn').onclick=()=>show('pair',$('pair').classList.contains('hidden'));
 $('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({white:'White',black:'Black'})});const j=await r.json();location.search='?table='+j.tableToken};

@@ -43,6 +43,7 @@ class Session:
         self._pending = None               # clocks from move.confirm, applied on next accept
         self._last_grid = None             # grid that produced the last verdict (for resolve)
         self._calib_step = None            # next binary frame is this calibration step
+        self._calib_frame = None           # empty-board frame relayed to the clock for corner-tap
 
     def session_info(self):
         return {"white": self.white, "black": self.black, "variant": self.variant}
@@ -65,6 +66,13 @@ class Session:
         """Step 1 (robust, empty-board): register the bare board -> true references for
         every square. Mirrors `tools/live.py empty`."""
         self.board_reader = RealBoard(frame)
+
+    def calibrate_empty_corners(self, frame, corners):
+        """Step 1 (manual, glare-proof): register the empty board from 4 tapped OUTER corners
+        instead of detecting the checkerboard. `corners` are pixel (x, y) in the frame, any
+        order. Used by the clock's drag-the-corners UI -> works on any board / lighting."""
+        self.board_reader = RealBoard(frame, corners=corners)
+        return {"type": "calib.ok", "step": "corners"}
 
     def calibrate_start(self, frame):
         """Step 2: with pieces at the start, lock orientation (a1 dark), seed per-square

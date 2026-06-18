@@ -70,6 +70,22 @@ def register(empty_img):
     return H
 
 
+def _order_corners(pts):
+    """Order 4 points as top-left, top-right, bottom-right, bottom-left by image position,
+    so the corners can be tapped in any order."""
+    p = np.asarray(pts, np.float32).reshape(4, 2)
+    s, d = p.sum(1), p[:, 1] - p[:, 0]          # x+y (TL min, BR max); y-x (TR min, BL max)
+    return np.array([p[s.argmin()], p[d.argmin()], p[s.argmax()], p[d.argmax()]], np.float32)
+
+
+def register_from_corners(corners):
+    """Homography from the 4 OUTER board corners (image coords, any order) to the canonical
+    NxN board. No checkerboard detection -> immune to glare / low contrast (manual calibration)."""
+    src = _order_corners(corners)
+    dst = np.array([[0, 0], [N, 0], [N, N], [0, N]], np.float32)
+    return cv2.getPerspectiveTransform(src, dst)
+
+
 def register_from_pieces(frame):
     """Register the board WITHOUT clearing it (e.g. from the start position). Pieces
     sit in square centres but inner corners live between squares, so the sector
@@ -140,8 +156,8 @@ def decide_colour(norm, ref_light, ref_dark, g_light, g_dark, thr):
 
 
 class RealBoard:
-    def __init__(self, empty_img, cdiff_thr=16.0, edge_margin=8.0):
-        self.H = register(empty_img)
+    def __init__(self, empty_img, cdiff_thr=16.0, edge_margin=8.0, corners=None):
+        self.H = register_from_corners(corners) if corners is not None else register(empty_img)
         if self.H is None:
             raise ValueError("could not register board - need a clear EMPTY frame")
         self.we = cv2.warpPerspective(empty_img, self.H, (N, N))

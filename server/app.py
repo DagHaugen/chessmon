@@ -19,6 +19,7 @@ Run:  uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 
@@ -101,6 +102,14 @@ async def ws_endpoint(ws: WebSocket):
                             cv2.imwrite(os.path.join(OUT, f"cam_{step}.png"), frame)
                         except Exception:
                             pass
+                    if step == "corners" and frame is not None:    # relay to the clock for the corner-tap UI
+                        s._calib_step, s._calib_frame = None, frame
+                        _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+                        durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
+                        await send(hub(s.table_token)["clock"], {"type": "calib.image", "image": durl})
+                        await send(ws, {"type": "calib.relayed"})
+                        print(f"[frame] corners {frame.shape} -> relayed to clock")
+                        continue
                     verdict = (s.on_frame(frame) if frame is not None
                                else {"type": "calib.failed", "reason": "undecodable frame"})
                     shape = "x".join(map(str, frame.shape)) if frame is not None else "decode-fail"
@@ -141,6 +150,20 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "error", "reason": "join a table first"})
             elif t == "calib":                                    # next camera frame is this step
                 s.set_calib_step(data.get("step"))
+            elif t == "calib.corners":                            # clock returned the 4 tapped corners
+                fr = s._calib_frame
+                if fr is None:
+                    await send(ws, {"type": "calib.failed",
+                                    "reason": "no empty frame yet — capture it on the camera"})
+                else:
+                    h, w = fr.shape[:2]
+                    px = [[c[0] * w, c[1] * h] for c in data["corners"]]   # fractions -> pixels
+                    try:
+                        verdict = s.calibrate_empty_corners(fr, px)
+                    except Exception as e:
+                        verdict = {"type": "calib.failed", "reason": str(e)}
+                    await send(hub(s.table_token)["clock"], verdict)
+                    await send(hub(s.table_token)["camera"], verdict)
             elif t == "move.confirm":
                 s.confirm(data["side"], data.get("clockWhite"), data.get("clockBlack"))
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})

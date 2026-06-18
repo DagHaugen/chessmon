@@ -1,4 +1,4 @@
-const C = 'chessmon-clock-v7';
+const C = 'chessmon-clock-v8';
 const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'qrcode.min.js'];
 
 self.addEventListener('install', e =>

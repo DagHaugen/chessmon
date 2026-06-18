@@ -30,7 +30,7 @@
   <div class="top"><span class="dot" id="dot"></span><span id="hdr">camera unit</span></div>
   <video id="v" playsinline muted></video>
   <div class="steps">
-    <button class="btn" id="b-empty">1 · Capture empty board</button>
+    <button class="btn" id="b-empty">1 · Send empty board to clock</button>
     <button class="btn" id="b-start" disabled>2 · Capture start</button>
   </div>
   <div class="status" id="status">starting…</div>
@@ -59,7 +59,7 @@ function grab(){return new Promise(res=>{cv.width=v.videoWidth||1280;cv.height=v
   cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);cv.toBlob(res,'image/jpeg',0.85)})}
 async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type:'calib',step}));ws.send(b);log('sent '+step+' frame')}
 
-$('b-empty').onclick=()=>sendCalib('empty');
+$('b-empty').onclick=()=>sendCalib('corners');         // relay to the clock for the drag-corners UI
 $('b-start').onclick=()=>sendCalib('start');
 
 function connect(){
@@ -70,7 +70,8 @@ function connect(){
     if(typeof e.data!=='string')return;
     const m=JSON.parse(e.data);
     if(m.type==='capture.req'){grab().then(b=>ws.send(b));log('move → frame sent');return}
-    if(m.type==='calib.ok'){$('b-start').disabled=false;status('empty captured — set up the start position, then tap 2')}
+    if(m.type==='calib.relayed'){status('empty board sent — mark the corners on the clock','ok')}
+    else if(m.type==='calib.ok'){$('b-start').disabled=false;status('board registered — set up the start, then tap 2','ok')}
     else if(m.type==='session.baselined'){status('calibrated · armed — a frame is sent on every move','ok')}
     else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
       status('already calibrated · armed — a frame is sent on every move','ok')}
