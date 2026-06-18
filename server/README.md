@@ -26,14 +26,13 @@ Served at `/app/` by the server.
   frame on every `capture.req`.
 
 **HTTPS is required for the camera PWA** — browsers only allow `getUserMedia` on a secure origin
-(https or localhost), so over plain `http://<LAN-ip>` the camera is blocked. For a venue/dev run,
-serve TLS with a self-signed cert (phones accept the warning once):
+(https or localhost), so over plain `http://<LAN-ip>` the camera is blocked. One command serves
+TLS with an auto-generated self-signed cert (no openssl needed; phones accept the warning once):
 ```
-openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj "/CN=chessmon"
-python -m uvicorn --app-dir <repo> server.app:app --host 0.0.0.0 --port 8000 \
-  --ssl-keyfile key.pem --ssl-certfile cert.pem
+.venv\Scripts\python server\serve_https.py          # prints the https://<lan-ip>:8000 URL
 ```
-The clock auto-uses `wss` when loaded over https. (The CLI `camera_client.py` needs no HTTPS.)
+It writes `cert.pem`/`key.pem` (covering localhost + this machine's LAN IP) on first run — pass
+`new` to regenerate. The clock auto-uses `wss` over https. (The CLI `camera_client.py` needs no HTTPS.)
 
 ## Wire protocol
 HTTP:
