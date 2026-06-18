@@ -42,6 +42,7 @@ class Session:
         self.result: str | None = None
         self._pending = None               # clocks from move.confirm, applied on next accept
         self._last_grid = None             # grid that produced the last verdict (for resolve)
+        self._calib_step = None            # next binary frame is this calibration step
 
     def session_info(self):
         return {"white": self.white, "black": self.black, "variant": self.variant}
@@ -59,6 +60,41 @@ class Session:
         self.board_reader = rb
         self.seed_baseline(rb.classify(frame))
         return {"t": int(t)}
+
+    def calibrate_empty(self, frame):
+        """Step 1 (robust, empty-board): register the bare board -> true references for
+        every square. Mirrors `tools/live.py empty`."""
+        self.board_reader = RealBoard(frame)
+
+    def calibrate_start(self, frame):
+        """Step 2: with pieces at the start, lock orientation (a1 dark), seed per-square
+        colour samples and the baseline reference. Mirrors `tools/live.py newgame`."""
+        if self.board_reader is None:
+            raise ValueError("send the empty-board frame first")
+        t = self.board_reader.calibrate_orientation_auto(frame)
+        if t is None:
+            raise ValueError("a1 is not a dark square (board rotated 90 deg?)")
+        self.board_reader.learn(frame, chess.Board())
+        self.seed_baseline(self.board_reader.classify(frame))
+        return {"t": int(t)}
+
+    def set_calib_step(self, step):
+        self._calib_step = step
+
+    def on_frame(self, frame):
+        """Dispatch one decoded camera frame: a calibration step, or a move."""
+        step, self._calib_step = self._calib_step, None
+        try:
+            if step == "empty":
+                self.calibrate_empty(frame)
+                return {"type": "calib.ok", "step": "empty"}
+            if step == "start":
+                return {"type": "session.baselined", **self.calibrate_start(frame)}
+            if self.board_reader is None:
+                return {"type": "calib.failed", "reason": "camera not calibrated"}
+            return self.ingest_frame(frame)
+        except Exception as e:
+            return {"type": "calib.failed", "reason": str(e)}
 
     def seed_baseline(self, grid):
         """Set the detector's reference grid (the observed start position)."""

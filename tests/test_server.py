@@ -55,6 +55,30 @@ def test_resolve_commits_player_choice():
     check(s.snapshot()["fen"].split()[0].endswith("3P4/8/PPP1PPPP/RNBQKBNR"), "board advanced")
 
 
+def test_ingest_frame_wires_through_the_board_reader():
+    print("session: ingest_frame classifies via the board_reader, then infers the move")
+
+    class FakeReader:                                   # stands in for a calibrated RealBoard
+        def __init__(self, grid):
+            self.grid = grid
+
+        def classify(self, frame):
+            return self.grid
+
+        def learn(self, frame, board):
+            pass
+
+        def update_bg(self, frame, board):
+            pass
+
+    s = Session("tok")
+    s.board_reader = FakeReader(board_to_grid(chess.Board()))
+    s.seed_baseline(board_to_grid(chess.Board()))
+    s.board_reader.grid = grid_after("g1f3")            # the frame the camera "sees" next
+    v = s.ingest_frame(object())                        # frame is opaque to the fake reader
+    check(v["type"] == "move.result" and v["san"] == "Nf3", f"frame -> {v}")
+
+
 def test_kings_to_centre_ends_game():
     print("session: both kings to the centre ends the game with the decoded result")
     s = Session("tok", start_fen="4k3/8/8/8/8/8/8/4K3 w - - 0 1")
@@ -72,6 +96,7 @@ def test_kings_to_centre_ends_game():
 def main():
     for t in [test_move_loop_records_pgn_and_clocks,
               test_resolve_commits_player_choice,
+              test_ingest_frame_wires_through_the_board_reader,
               test_kings_to_centre_ends_game]:
         t()
     print()

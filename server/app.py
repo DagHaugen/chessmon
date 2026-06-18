@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 
+import cv2
+import numpy as np
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 
@@ -73,10 +75,14 @@ async def ws_endpoint(ws: WebSocket):
             msg = await ws.receive()
             if msg["type"] == "websocket.disconnect":
                 break
-            if msg.get("bytes") is not None:                       # a capture.frame
+            if msg.get("bytes") is not None:                       # a camera frame (calib or move)
                 if s is not None and role == "camera":
-                    verdict = s.ingest_frame(msg["bytes"])
+                    frame = cv2.imdecode(np.frombuffer(msg["bytes"], np.uint8),
+                                         cv2.IMREAD_COLOR)
+                    verdict = (s.on_frame(frame) if frame is not None
+                               else {"type": "calib.failed", "reason": "undecodable frame"})
                     await send(hub(s.table_token)["clock"], verdict)
+                    await send(ws, verdict)                         # echo to the camera operator
                     await broadcast_state(s)
                 continue
             data = json.loads(msg["text"])
@@ -105,6 +111,8 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "state", **s.snapshot()})
             elif s is None:
                 await send(ws, {"type": "error", "reason": "join a table first"})
+            elif t == "calib":                                    # next camera frame is this step
+                s.set_calib_step(data.get("step"))
             elif t == "move.confirm":
                 s.confirm(data["side"], data.get("clockWhite"), data.get("clockBlack"))
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
