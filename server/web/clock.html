@@ -32,6 +32,7 @@
     aspect-ratio:1;width:100%;border-radius:6px;overflow:hidden}
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
+  .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
   .act{min-height:66px;display:flex;flex-direction:column;gap:8px;justify-content:center}
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
@@ -121,7 +122,9 @@ function renderBoard(fen){
     else{b.appendChild(mkSq(r,c++,ch))}}});
 }
 function mkSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
-  if(ch)d.textContent=GLYPH[ch];return d}
+  if(ch){const i=document.createElement('img');i.className='pc';i.alt=ch;
+    i.onerror=()=>{i.remove();d.textContent=GLYPH[ch]};                  // fall back to the glyph
+    i.src='pieces/'+(ch<'a'?'w':'b')+ch.toUpperCase()+'.svg';d.appendChild(i)}return d}
 
 function renderClocks(){
   for(const c of ['white','black']){const t=$('t-'+c),ms=clk[c];t.textContent=fmt(ms);
