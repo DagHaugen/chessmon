@@ -14,7 +14,12 @@
   .page{max-width:480px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px}
   .top{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
-  video{width:100%;height:auto;display:block;border-radius:12px;background:#000}
+  .vwrap{position:relative;overflow:hidden;border-radius:12px;background:#000}
+  video{width:100%;height:auto;display:block;transform-origin:center}
+  .zoom{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut)}
+  .zoom input[type=range]{flex:1}
+  .zoom .zv{min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+  .hidden{display:none}
   .steps{display:flex;gap:8px}
   .btn{flex:1;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
     border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer}
@@ -28,7 +33,10 @@
 <body>
 <div class="page">
   <div class="top"><span class="dot" id="dot"></span><span id="hdr">camera unit</span></div>
-  <video id="v" playsinline muted></video>
+  <div class="vwrap"><video id="v" playsinline muted></video></div>
+  <div class="zoom hidden" id="zoomrow"><span>Zoom</span>
+    <input type="range" id="zoom" min="1" max="3" step="0.1" value="1">
+    <span class="zv" id="zoomval">1.0×</span></div>
   <div class="steps">
     <button class="btn" id="b-empty">1 · Send empty board to clock</button>
     <button class="btn" id="b-start" disabled>2 · Capture start</button>
@@ -52,11 +60,29 @@ async function startCam(){
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},
       width:{ideal:1280},height:{ideal:960}},audio:false});
-    v.srcObject=s;await v.play();status('camera ready — mount it straight down over the board')
+    v.srcObject=s;await v.play();setupZoom(s.getVideoTracks()[0]);
+    status('camera ready — mount it straight down over the board')
   }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
 }
-function grab(){return new Promise(res=>{cv.width=v.videoWidth||1280;cv.height=v.videoHeight||960;
-  cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);cv.toBlob(res,'image/jpeg',0.85)})}
+let zoom=1;                                              // digital-zoom factor (stays 1 for hardware zoom)
+function setupZoom(track){
+  const caps=track.getCapabilities?track.getCapabilities():{},sl=$('zoom');
+  if(caps.zoom){                                         // real camera zoom (newer iOS Safari exposes it)
+    sl.min=caps.zoom.min;sl.max=caps.zoom.max;sl.step=caps.zoom.step||1;
+    sl.value=(track.getSettings&&track.getSettings().zoom)||caps.zoom.min;
+    sl.oninput=()=>{track.applyConstraints({advanced:[{zoom:+sl.value}]});$('zoomval').textContent=(+sl.value).toFixed(1)+'×'};
+    log('zoom: hardware '+caps.zoom.min+'-'+caps.zoom.max);
+  }else{                                                 // digital fallback: crop + scale (always works)
+    sl.min=1;sl.max=3;sl.step=0.1;sl.value=1;
+    sl.oninput=()=>{zoom=+sl.value;v.style.transform='scale('+zoom+')';$('zoomval').textContent=zoom.toFixed(1)+'×'};
+    log('zoom: digital (camera exposes no zoom control)');
+  }
+  $('zoomval').textContent=(+sl.value).toFixed(1)+'×';$('zoomrow').classList.remove('hidden');
+}
+function grab(){return new Promise(res=>{const vw=v.videoWidth||1280,vh=v.videoHeight||960;
+  cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;                       // central crop for digital zoom
+  cv.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,cv.width,cv.height);
+  cv.toBlob(res,'image/jpeg',0.85)})}
 async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type:'calib',step}));ws.send(b);log('sent '+step+' frame')}
 
 $('b-empty').onclick=()=>sendCalib('corners');         // relay to the clock for the drag-corners UI
