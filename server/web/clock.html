@@ -62,7 +62,7 @@
     <button id="pairbtn" class="hidden">Pair camera</button></div>
 
   <div class="pair hidden" id="pair">
-    <h2>Scan with the camera unit</h2>
+    <h2>Scan with the camera phone</h2>
     <div id="qr"></div>
     <code id="paircode"></code>
   </div>
@@ -128,7 +128,8 @@ function handle(m){
     case 'session.ready':
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
       if(m.pairToken){show('pairbtn',true);show('pair',true);$('paircode').textContent=m.pairToken;
-        if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:m.pairToken,width:144,height:144});}
+        const link=location.origin+'/app/camera.html?pair='+m.pairToken;
+        if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:link,width:144,height:144});}
       break;
     case 'state': renderBoard(m.fen); $('report').textContent=m.result?('result '+m.result):(m.turn+' to move'); break;
     case 'session.baselined':

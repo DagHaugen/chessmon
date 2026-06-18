@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#15171c">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>chessmon camera</title>
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;--accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transparent;
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .page{max-width:480px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+  .top{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
+  video{width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;object-fit:cover}
+  .steps{display:flex;gap:8px}
+  .btn{flex:1;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer}
+  .btn[disabled]{opacity:.4}
+  .status{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:13px;text-align:center}
+  .status.err{color:var(--bad)} .status.ok{color:var(--good)}
+  .log{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;max-height:130px;overflow:auto;
+    white-space:pre-wrap;background:#11141a;border:1px solid var(--line);border-radius:10px;padding:8px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top"><span class="dot" id="dot"></span><span id="hdr">camera unit</span></div>
+  <video id="v" playsinline muted></video>
+  <div class="steps">
+    <button class="btn" id="b-empty">1 · Capture empty board</button>
+    <button class="btn" id="b-start" disabled>2 · Capture start</button>
+  </div>
+  <div class="status" id="status">starting…</div>
+  <div class="log" id="log"></div>
+</div>
+<canvas id="cv" style="display:none"></canvas>
+<script>
+const pair=new URLSearchParams(location.search).get('pair');
+const v=document.getElementById('v'),cv=document.getElementById('cv');
+let ws;
+function $(id){return document.getElementById(id)}
+function status(t,cls){const s=$('status');s.textContent=t;s.className='status'+(cls?' '+cls:'')}
+function log(t){const l=$('log');l.textContent=(new Date().toLocaleTimeString()+'  '+t+'\n')+l.textContent}
+
+async function startCam(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    status('this browser blocks the camera here — open the page over HTTPS',  'err');return}
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},
+      width:{ideal:1280},height:{ideal:960}},audio:false});
+    v.srcObject=s;await v.play();status('camera ready — mount it straight down over the board')
+  }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
+}
+function grab(){return new Promise(res=>{cv.width=v.videoWidth||1280;cv.height=v.videoHeight||960;
+  cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);cv.toBlob(res,'image/jpeg',0.85)})}
+async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type:'calib',step}));ws.send(b);log('sent '+step+' frame')}
+
+$('b-empty').onclick=()=>sendCalib('empty');
+$('b-start').onclick=()=>sendCalib('start');
+
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws.onopen=()=>{$('dot').classList.add('on');ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')};
+  ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
+  ws.onmessage=e=>{
+    if(typeof e.data!=='string')return;
+    const m=JSON.parse(e.data);
+    if(m.type==='capture.req'){grab().then(b=>ws.send(b));log('move → frame sent');return}
+    if(m.type==='calib.ok'){$('b-start').disabled=false;status('empty captured — set up the start position, then tap 2')}
+    else if(m.type==='session.baselined'){status('calibrated · armed — a frame is sent on every move','ok')}
+    else if(m.type==='calib.failed'){status('calibration failed: '+m.reason,'err')}
+    else if(m.type==='move.result'){log('move: '+m.san)}
+    else{log(m.type+(m.reason?': '+m.reason:''))}
+  };
+}
+
+if(!pair){status('no pair token — scan the QR shown on the clock','err')}
+else{startCam();connect()}
+</script>
+</body>
+</html>

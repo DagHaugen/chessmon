@@ -16,6 +16,25 @@ through the `chessmon` vision engine. This is the option‑1 MVP / the spine of 
 .venv\Scripts\python -m uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## Devices (the two PWAs)
+Served at `/app/` by the server.
+- **Clock** — `http://<server-ip>:8000/` → "New table" → shows a pairing **QR** (encodes a deep
+  link to the camera page) + the raw token. Confirm button, board, and the ambiguity prompt.
+- **Camera** — `tools/camera_client.py --pair <token>` on a laptop+BRIO, **or** the camera PWA
+  at `/app/camera.html?pair=<token>`: scan the clock's QR with phone #2's camera → it opens the
+  page, asks for the camera, you capture the empty board + start position, then it streams a
+  frame on every `capture.req`.
+
+**HTTPS is required for the camera PWA** — browsers only allow `getUserMedia` on a secure origin
+(https or localhost), so over plain `http://<LAN-ip>` the camera is blocked. For a venue/dev run,
+serve TLS with a self-signed cert (phones accept the warning once):
+```
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj "/CN=chessmon"
+python -m uvicorn --app-dir <repo> server.app:app --host 0.0.0.0 --port 8000 \
+  --ssl-keyfile key.pem --ssl-certfile cert.pem
+```
+The clock auto-uses `wss` when loaded over https. (The CLI `camera_client.py` needs no HTTPS.)
+
 ## Wire protocol
 HTTP:
 - `POST /tables {white, black, variant}` → `{tableToken, pairToken, qr}`
