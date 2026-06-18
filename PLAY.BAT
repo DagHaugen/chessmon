@@ -1,6 +1,5 @@
-rem C:\Claude\Projects\chessmon\.venv\Scripts\uvicorn --app-dir C:\Claude\Projects\chessmon server.app:app --host 0.0.0.0 --port 8000
-openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj "/CN=chessmon"
-python -m uvicorn --app-dir C:\Claude\Projects\chessmon server.app:app --host 0.0.0.0 --port 8000 ^
-  --ssl-keyfile key.pem --ssl-certfile cert.pem
-
+@echo off
+rem Serve the chessmon clock + camera over HTTPS (needed for the camera PWA's getUserMedia).
+rem Generates a self-signed cert on first run (no openssl) and prints the https://<lan-ip>:8000 URL.
+C:\Claude\Projects\chessmon\.venv\Scripts\python.exe C:\Claude\Projects\chessmon\server\serve_https.py 8000
 pause
