@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Claude\\Projects\\chessmon\\.venv\\Scripts\\python.exe",
       "runtimeArgs": ["C:\\Claude\\Projects\\chessmon\\run_clock.py", "8770"],
       "port": 8770
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "C:\\Claude\\Projects\\chessmon\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "server.app:app", "--port", "8780"],
+      "port": 8780
     }
   ]
 }

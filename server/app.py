@@ -20,13 +20,17 @@ Run:  uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 from __future__ import annotations
 
 import json
+import os
 
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from .manager import SessionManager
+
+WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -63,6 +67,11 @@ async def table_state(token: str):
     if not s:
         return JSONResponse({"error": "unknown table"}, status_code=404)
     return s.snapshot()
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse("/app/clock.html")
 
 
 @app.websocket("/ws")
@@ -129,3 +138,6 @@ async def ws_endpoint(ws: WebSocket):
                 h["spectators"].discard(ws)
             elif h.get(role) is ws:
                 h[role] = None
+
+
+app.mount("/app", StaticFiles(directory=WEB, html=True), name="app")    # the clock PWA

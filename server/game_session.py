@@ -126,14 +126,24 @@ class Session:
             self.result = san
             return {"type": "game.end", "result": san, "pgn": self.pgn()}
         if kind == "ambiguous":
-            return {"type": "move.ambiguous", "candidates": extra or []}
+            return {"type": "move.ambiguous", "candidates": self._cands(extra)}
         if kind == "unseen":
-            return {"type": "move.unseen", "candidates": extra or []}
+            return {"type": "move.unseen", "candidates": self._cands(extra)}
         if kind == "nochange":
             return {"type": "move.nochange"}
         if kind == "baseline":
             return {"type": "session.baselined"}
         return {"type": "move.unclear", "reason": "no legal move matches"}
+
+    def _cands(self, sans):
+        """Attach the UCI to each SAN candidate so the clock can resolve by tapping one."""
+        out = []
+        for s in sans or []:
+            try:
+                out.append({"san": s, "uci": self.game.board.parse_san(s).uci()})
+            except Exception:
+                out.append({"san": s, "uci": None})
+        return out
 
     def resolve(self, uci):
         """Commit a move the detector flagged ambiguous/unseen (the player tapped it on

@@ -1,0 +1,13 @@
+{
+  "name": "chessmon clock",
+  "short_name": "Clock",
+  "start_url": "clock.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15171c",
+  "theme_color": "#15171c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
