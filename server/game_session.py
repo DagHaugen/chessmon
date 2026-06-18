@@ -81,6 +81,11 @@ class Session:
             raise ValueError("send the empty-board frame first")
         t = self.board_reader.calibrate_orientation_auto(frame)
         if t is None:
+            occ = int((self.board_reader.classify(frame) != 0).sum())
+            if occ < 8:                      # board reads ~empty -> the 'empty' reference had pieces
+                raise ValueError("the board reads as empty - the empty-board step was done with the "
+                                 "pieces still on it. Clear the board, re-tap the corners, then "
+                                 "capture the start position.")
             raise ValueError("a1 is not a dark square (board rotated 90 deg?)")
         self.board_reader.learn(frame, chess.Board())
         self.seed_baseline(self.board_reader.classify(frame))
