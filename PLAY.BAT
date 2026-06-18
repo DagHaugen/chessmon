@@ -1,3 +1,2 @@
-.\.venv\Scripts\python.exe tests\test_suite.py
-.\.venv\Scripts\python.exe -m chessmon.app selftest
+C:\Claude\Projects\chessmon\.venv\Scripts\uvicorn --app-dir C:\Claude\Projects\chessmon server.app:app --host 0.0.0.0 --port 8000
 pause

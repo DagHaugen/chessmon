@@ -59,6 +59,12 @@
   <div class="top"><span class="dot" id="dot"></span><span class="id" id="tid">not connected</span>
     <button id="pairbtn" class="hidden">Pair camera</button></div>
 
+  <div class="pair hidden" id="pair">
+    <h2>Scan with the camera unit</h2>
+    <div id="qr"></div>
+    <code id="paircode"></code>
+  </div>
+
   <div class="setup hidden" id="setup">
     <p class="ph">No table. Start one to get going.</p>
     <button class="btn" id="newtable">New table</button>
@@ -72,14 +78,9 @@
     <div class="report" id="report">setting up…</div>
   </div>
 
-  <div class="pair hidden" id="pair">
-    <h2>Scan with the camera unit</h2>
-    <div id="qr"></div>
-    <code id="paircode"></code>
-  </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="qrcode.min.js"></script>
 <script>
 const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',
              k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
@@ -125,12 +126,12 @@ function handle(m){
   switch(m.type){
     case 'session.ready':
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
-      if(m.pairToken){show('pairbtn',true);$('paircode').textContent=m.pairToken;
+      if(m.pairToken){show('pairbtn',true);show('pair',true);$('paircode').textContent=m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:m.pairToken,width:144,height:144});}
       break;
     case 'state': renderBoard(m.fen); $('report').textContent=m.result?('result '+m.result):(m.turn+' to move'); break;
     case 'session.baselined':
-      clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
+      show('pair',false);clk.active='white';clk.running=true;clk.last=Date.now();$('report').textContent='White to move';setAction(confirmBtn());break;
     case 'calib.ok': $('report').textContent='calibrated (empty board) — now the start position'; break;
     case 'calib.failed': $('report').textContent='calibration: '+m.reason; break;
     case 'move.result':

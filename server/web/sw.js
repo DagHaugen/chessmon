@@ -1,10 +1,13 @@
-const C = 'chessmon-clock-v1';
-const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg'];
+const C = 'chessmon-clock-v2';
+const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'qrcode.min.js'];
 
 self.addEventListener('install', e =>
   e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
 
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', e => e.waitUntil(
+  caches.keys()
+    .then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k))))
+    .then(() => self.clients.claim())));
 
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
