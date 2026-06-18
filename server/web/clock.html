@@ -58,10 +58,12 @@
     touch-action:none;user-select:none;-webkit-user-select:none}
   .cwrap img{display:block;max-width:100%;border-radius:8px}
   .cmark{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
-    border:2px solid var(--accent);background:rgba(79,140,255,.14);cursor:grab;touch-action:none}
-  .cmark::before,.cmark::after{content:'';position:absolute;background:var(--accent)}
-  .cmark::before{left:50%;top:5px;bottom:5px;width:2px;margin-left:-1px}
-  .cmark::after{top:50%;left:5px;right:5px;height:2px;margin-top:-1px}
+    border:2px solid #46d369;background:rgba(70,211,105,.12);cursor:pointer;touch-action:none}
+  .cmark::before,.cmark::after{content:'';position:absolute;background:#46d369}
+  .cmark::before{left:50%;top:4px;bottom:4px;width:2px;margin-left:-1px}
+  .cmark::after{top:50%;left:4px;right:4px;height:2px;margin-top:-1px}
+  .cmark.sel{border-color:#ffd23f;background:rgba(255,210,63,.22);box-shadow:0 0 0 3px rgba(255,210,63,.3)}
+  .cmark.sel::before,.cmark.sel::after{background:#ffd23f}
   .calib .btn{margin-top:12px}
   .hidden{display:none}
   .setup{margin:auto;text-align:center}
@@ -81,7 +83,7 @@
 
   <div class="calib hidden" id="calib">
     <h2>Mark the board corners</h2>
-    <p>Drag the four markers onto the corners of the playing area.</p>
+    <p>Tap a corner (turns yellow), then drag anywhere on the image to nudge it — your finger stays off the corner. Tap again to lock.</p>
     <div class="cwrap" id="cwrap">
       <img id="cimg" alt="board from the camera">
       <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div>
@@ -154,19 +156,42 @@ function promptUI(title,cands){const w=document.createElement('div');w.className
     b.onclick=()=>{if(c.uci){send({type:'move.resolve',uci:c.uci});setAction(ph('committing…'))}};g.appendChild(b)});
   w.appendChild(g);return w}
 
+let selMark=null;
+function selectMark(m){if(selMark)selMark.classList.remove('sel');selMark=m;if(m)m.classList.add('sel')}
 function showCalib(durl){
-  const img=$('cimg');
+  const img=$('cimg');selectMark(null);
   img.onload=()=>{const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];   // TL,TR,BR,BL insets to start
     document.querySelectorAll('.cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'});};
-  img.src=durl;show('pair',false);show('calib',true);$('report').textContent='mark the four board corners';
+  img.src=durl;show('pair',false);show('calib',true);$('report').textContent='tap a corner, then drag to place it';
 }
-(function(){let drag=null;const at=e=>e.touches?e.touches[0]:e;            // draggable corner markers
-  document.addEventListener('pointerdown',e=>{const m=e.target.closest('.cmark');
-    if(!m||$('calib').classList.contains('hidden'))return;drag=m;m.style.cursor='grabbing';e.preventDefault()});
-  document.addEventListener('pointermove',e=>{if(!drag)return;const r=$('cimg').getBoundingClientRect();const p=at(e);
-    const x=Math.max(0,Math.min(1,(p.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(p.clientY-r.top)/r.height));
-    drag.style.left=(x*100)+'%';drag.style.top=(y*100)+'%';e.preventDefault()},{passive:false});
-  document.addEventListener('pointerup',()=>{if(drag)drag.style.cursor='grab';drag=null});
+(function(){                                                   // tap a marker -> select (yellow); then a drag
+  let active=false,down=null,dragM=null,sx=0,sy=0,lx=0,ly=0,moved=false;  // ANYWHERE on the image nudges it
+  const pt=e=>e.touches?e.touches[0]:e;                        // (relative move -> finger never covers the corner)
+  function onDown(e){
+    if($('calib').classList.contains('hidden')||!e.target.closest('#cwrap'))return;
+    const p=pt(e);active=true;sx=lx=p.clientX;sy=ly=p.clientY;moved=false;
+    down=e.target.closest('.cmark');dragM=down||selMark;      // touched marker, else the selected one
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(!active)return;const p=pt(e);const dx=p.clientX-lx,dy=p.clientY-ly;lx=p.clientX;ly=p.clientY;
+    if(Math.abs(p.clientX-sx)>4||Math.abs(p.clientY-sy)>4)moved=true;
+    if(moved&&dragM){
+      if(dragM!==selMark)selectMark(dragM);
+      const r=$('cimg').getBoundingClientRect(),b=dragM.getBoundingClientRect();
+      const cx=Math.max(0,Math.min(r.width,b.left+b.width/2-r.left+dx)),
+            cy=Math.max(0,Math.min(r.height,b.top+b.height/2-r.top+dy));
+      dragM.style.left=(cx/r.width*100)+'%';dragM.style.top=(cy/r.height*100)+'%';
+    }
+    e.preventDefault();
+  }
+  function onUp(){
+    if(active&&!moved)selectMark(down?(down===selMark?null:down):null);   // tap: toggle / switch / lock
+    active=false;down=null;dragM=null;
+  }
+  document.addEventListener('pointerdown',onDown,{passive:false});
+  document.addEventListener('pointermove',onMove,{passive:false});
+  document.addEventListener('pointerup',onUp);
 })();
 function sendCorners(){const r=$('cimg').getBoundingClientRect();
   const corners=[...document.querySelectorAll('.cmark')].map(m=>{const b=m.getBoundingClientRect();
