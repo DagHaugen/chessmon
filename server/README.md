@@ -31,8 +31,17 @@ TLS with an auto-generated self-signed cert (no openssl needed; phones accept th
 ```
 .venv\Scripts\python server\serve_https.py          # prints the https://<lan-ip>:8000 URL
 ```
-It writes `cert.pem`/`key.pem` (covering localhost + this machine's LAN IP) on first run — pass
+It writes `cert.pem`/`key.pem` (covering localhost + this machine's LAN IPs) on first run — pass
 `new` to regenerate. The clock auto-uses `wss` over https. (The CLI `camera_client.py` needs no HTTPS.)
+
+**Phone times out connecting?** Two usual causes:
+- **Wrong IP** — use the **Wi-Fi** address the helper prints first (usually `192.168.*` / `10.*`),
+  not a virtual adapter (`172.*` Hyper-V/WSL) that the phone can't route to.
+- **Firewall** — Windows blocks inbound by default. Allow the port once, from an **admin** PowerShell:
+  ```
+  New-NetFirewallRule -DisplayName "chessmon 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+  ```
+  (Both phones must be on the **same Wi-Fi** as this machine.)
 
 ## Wire protocol
 HTTP:
