@@ -38,7 +38,8 @@
 </div>
 <canvas id="cv" style="display:none"></canvas>
 <script>
-const pair=new URLSearchParams(location.search).get('pair');
+let pair=new URLSearchParams(location.search).get('pair')||localStorage.getItem('cm_pair');
+if(pair)localStorage.setItem('cm_pair',pair);            // reuse the last table on reopen — no rescan
 const v=document.getElementById('v'),cv=document.getElementById('cv');
 let ws;
 function $(id){return document.getElementById(id)}
@@ -71,6 +72,9 @@ function connect(){
     if(m.type==='capture.req'){grab().then(b=>ws.send(b));log('move → frame sent');return}
     if(m.type==='calib.ok'){$('b-start').disabled=false;status('empty captured — set up the start position, then tap 2')}
     else if(m.type==='session.baselined'){status('calibrated · armed — a frame is sent on every move','ok')}
+    else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
+      status('already calibrated · armed — a frame is sent on every move','ok')}
+      else{status('camera ready — capture the empty board, then the start position')}}
     else if(m.type==='calib.failed'){status('calibration failed: '+m.reason,'err')}
     else if(m.type==='move.result'){log('move: '+m.san)}
     else{log(m.type+(m.reason?': '+m.reason:''))}

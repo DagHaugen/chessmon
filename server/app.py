@@ -126,7 +126,8 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown pairing"})
                     continue
                 hub(s.table_token)["camera"] = ws
-                await send(ws, {"type": "session.ready", "role": "camera"})
+                await send(ws, {"type": "session.ready", "role": "camera",
+                                "calibrated": s.board_reader is not None})
             elif t == "spectate":
                 s, role = mgr.by_table(data["tableToken"]), "spectator"
                 if s is None:
@@ -145,6 +146,10 @@ async def ws_endpoint(ws: WebSocket):
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
             elif t == "move.resolve":
                 await send(hub(s.table_token)["clock"], s.resolve(data["uci"]))
+                await broadcast_state(s)
+            elif t == "flag":                                     # a clock hit 0 -> loss on time
+                result = "1-0" if data.get("side") == "black" else "0-1"
+                await send(hub(s.table_token)["clock"], s.end(result))
                 await broadcast_state(s)
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))

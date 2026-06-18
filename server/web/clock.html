@@ -107,7 +107,14 @@ function renderClocks(){
   $('s-white').classList.toggle('active',clk.active==='white'&&clk.running);
   $('s-black').classList.toggle('active',clk.active==='black'&&clk.running);
 }
-setInterval(()=>{const now=Date.now();if(clk.running){clk[clk.active]-=now-clk.last}clk.last=now;renderClocks()},100);
+setInterval(()=>{const now=Date.now();
+  if(clk.running){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
+  clk.last=now;renderClocks()},100);
+function onFlag(){clk.running=false;const loser=clk.active,winner=loser==='white'?'black':'white';
+  $('s-'+winner).classList.add('win');$('report').className='report over';
+  $('report').textContent='flag — '+winner+' wins on time';
+  setAction(ph(winner.charAt(0).toUpperCase()+winner.slice(1)+' wins on time'));
+  send({type:'flag',side:loser});}                       // loss on time -> server ends the game
 
 function setAction(node){const a=$('act');a.innerHTML='';if(node)a.appendChild(node)}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
