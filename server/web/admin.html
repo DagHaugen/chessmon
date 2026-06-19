@@ -114,7 +114,11 @@ function pick(role,id){                                   // a device can't be b
   else{pendCamera=pendCamera===id?null:id; if(pendCamera===pendClock)pendClock=null;}
   $('pmsg').classList.add('hidden');updatePair();render();
 }
+let renderPending=false;
 function render(){
+  const a=document.activeElement;                         // don't rebuild the list out from under a name being typed
+  if(a&&a.tagName==='INPUT'&&$('list').contains(a)){renderPending=true;return}
+  renderPending=false;
   const L=$('list');
   $('sub').textContent=devs.filter(d=>d.online).length+' online · '+devs.length+' known';
   if(!devs.length){L.innerHTML='<div class="empty">No devices yet.<br>Open the clock or camera page on a phone/tablet — it shows up here automatically.</div>';return}
@@ -128,6 +132,7 @@ function render(){
     const id=document.createElement('div');id.className='id';id.textContent=(d.id||'').slice(0,8);
     const inp=document.createElement('input');inp.placeholder='your name — e.g. “Table 1 clock”';inp.value=d.userName||'';
     inp.onchange=()=>send({type:'device.rename',devId:d.id,userName:inp.value.trim()});
+    inp.onblur=()=>{if(renderPending)render()};            // refresh once they're done typing
     meta.append(nm,id,inp);
     const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
     const acts=document.createElement('div');acts.className='acts';

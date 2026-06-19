@@ -33,6 +33,7 @@ from .manager import SessionManager
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
+DEVICES_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json")
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -62,9 +63,34 @@ def dev_public(d):
 
 
 async def broadcast_devices():
+    save_devices()
     lst = [dev_public(d) for d in devices.values()]
     for ws in list(admins):
         await send(ws, {"type": "devices", "devices": lst})
+
+
+def save_devices():
+    """Persist device identities (id, auto name, user-defined name, role) so a server restart
+    doesn't lose the names the operator typed in the console."""
+    try:
+        recs = [{"id": d["id"], "name": d.get("name", ""), "userName": d.get("userName", ""),
+                 "role": d.get("role", "")} for d in devices.values()]
+        with open(DEVICES_FILE, "w") as f:
+            json.dump(recs, f)
+    except Exception:
+        pass
+
+
+def load_devices():
+    try:
+        with open(DEVICES_FILE) as f:
+            for d in json.load(f):
+                devices[d["id"]] = {**d, "online": False, "ws": None, "table": None}
+    except Exception:
+        pass
+
+
+load_devices()
 
 
 async def to_clock_admins(sess, obj):
