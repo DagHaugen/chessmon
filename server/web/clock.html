@@ -222,7 +222,7 @@ function renderClocks(){
 setInterval(()=>{const now=Date.now();
   if(clk.running){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
   clk.last=now;renderClocks()},100);
-function onFlag(){phase='over';clk.running=false;showCtrls(false);const loser=clk.active,winner=loser==='white'?'black':'white';
+function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');$('report').className='report over';
   $('report').textContent='flag — '+winner+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
@@ -253,6 +253,7 @@ function togglePause(){
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
+  $('s-white').classList.remove('win');$('s-black').classList.remove('win');
   showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();
   $('report').className='report';$('report').textContent='Ready — press START'}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
@@ -334,7 +335,10 @@ function handle(m){
       {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);
       showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
-      if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
+      if(m.result){phase='over';clk.running=false;show('pair',false);show('calib',false);show('startov',false);
+        showCtrls(false);show('resetbtn',true);showUndo(false);paint();           // resumed game-over -> Reset stays available
+        $('report').textContent='game over · '+m.result;$('report').className='report over';
+        const w=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);if(w)$('s-'+w).classList.add('win');}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
         started=true;show('pair',false);show('calib',false);show('refreshbtn',true);
         const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
@@ -371,7 +375,7 @@ function handle(m){
         $('report').className='report warn';$('report').textContent='⚠ '+(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
-      phase='over';clk.running=false;showCtrls(false);clearCands();paint();
+      phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);clearCands();paint();
       $('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);
       if(win)$('s-'+win).classList.add('win');break;
