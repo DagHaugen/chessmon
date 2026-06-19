@@ -38,14 +38,19 @@
   .zone{flex:1;display:flex;flex-direction:column;min-height:0;gap:6px}
   .zone.black{transform:rotate(180deg)}
   .zone .act{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;min-height:0}
-  .zone .act > .btn{flex:1 1 auto;min-height:54px}
+  .cbtn{flex:1 1 auto;min-height:54px;appearance:none;border:2px solid transparent;border-radius:14px;
+    font-size:19px;font-weight:700;width:100%;cursor:pointer;color:#0b1020;background:var(--good);transition:.12s}
+  .cbtn.go{background:var(--good);border-color:var(--good);color:#0b1020}
+  .cbtn.off{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
+  .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad);font-size:15px}
+  .cbtn:not(:disabled):active{transform:translateY(1px)}
   .boardwrap{position:relative;flex:0 0 auto;width:min(100%,54dvh);aspect-ratio:1;margin:0 auto}
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(21,23,28,.6);border:none;border-radius:8px;cursor:pointer;z-index:4}
   .startov span{transform:rotate(-90deg);font-size:min(13vw,64px);font-weight:800;color:var(--good);letter-spacing:.14em}
-  .sidectrl{position:absolute;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;z-index:5}
-  .sidectrl button{writing-mode:vertical-rl;background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
-    border-radius:8px;padding:14px 5px;font-size:11px;font-weight:600;letter-spacing:.08em;cursor:pointer}
+  .rail{position:fixed;left:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;z-index:6;align-items:flex-start}
+  .rail button{writing-mode:vertical-rl;background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
+    border-radius:0 9px 9px 0;padding:14px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
   .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.4}
@@ -89,8 +94,13 @@
 </head>
 <body>
 <div class="page">
-  <div class="top"><span class="dot" id="dot"></span><span class="id" id="tid">not connected</span>
-    <span class="topbtns"><button id="refreshbtn" class="hidden">↻ Resnap</button><button id="pairbtn" class="hidden">Pair camera</button></span></div>
+  <div class="top"><span class="dot" id="dot"></span><span class="id" id="tid">not connected</span></div>
+  <div class="rail" id="rail">
+    <button id="refreshbtn" class="hidden">↻ Resnap</button>
+    <button id="pausebtn" class="hidden">Pause</button>
+    <button id="resetbtn" class="hidden">Reset</button>
+    <button id="pairbtn" class="hidden">Pair</button>
+  </div>
 
   <div class="pair hidden" id="pair">
     <h2>Scan with the camera phone</h2>
@@ -120,7 +130,7 @@
   <div id="game" class="hidden">
     <div class="zone black" id="z-black">
       <div class="side" id="s-black"><span class="nm">Black</span><span class="tm" id="t-black">5:00</span></div>
-      <div class="act" id="act-black"></div>
+      <div class="act" id="act-black"><button class="cbtn off" id="cb-black" disabled></button><div class="cands" id="cands-black"></div></div>
     </div>
     <div class="boardwrap">
       <div class="board" id="board"></div>
@@ -128,10 +138,7 @@
     </div>
     <div class="zone white" id="z-white">
       <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
-      <div class="act" id="act-white"></div>
-    </div>
-    <div class="sidectrl hidden" id="sidectrl">
-      <button id="pausebtn">Pause</button><button id="resetbtn">Reset</button>
+      <div class="act" id="act-white"><button class="cbtn off" id="cb-white" disabled></button><div class="cands" id="cands-white"></div></div>
     </div>
     <div class="report" id="report"></div>
   </div>
@@ -183,34 +190,43 @@ function renderClocks(){
 setInterval(()=>{const now=Date.now();
   if(clk.running){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
   clk.last=now;renderClocks()},100);
-function onFlag(){phase='over';clk.running=false;show('sidectrl',false);const loser=clk.active,winner=loser==='white'?'black':'white';
+function onFlag(){phase='over';clk.running=false;showCtrls(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');$('report').className='report over';
-  $('report').textContent='flag — '+winner+' wins on time';
-  setAction(ph(winner.charAt(0).toUpperCase()+winner.slice(1)+' wins on time'));
+  $('report').textContent='flag — '+winner+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
 
-function setAction(node){const aw=$('act-white'),ab=$('act-black');aw.innerHTML='';ab.innerHTML='';
-  if(node)(clk.active==='white'?aw:ab).appendChild(node)}
-function enterReady(){phase='ready';clk.running=false;show('startov',true);show('sidectrl',false);setAction(null);renderClocks()}
-function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();
-  show('startov',false);show('sidectrl',true);$('pausebtn').textContent='Pause';setAction(confirmBtn());goFullscreen()}
+let reading=false, warnMsg=null;
+function paint(){                                          // both confirm buttons, always visible
+  for(const side of ['white','black']){
+    const b=$('cb-'+side),active=clk.active===side&&phase==='run';let cls='cbtn',txt='',dis=true;
+    if(phase==='paused'){txt='⏸ Paused'}
+    else if(phase==='run'&&!active){cls='cbtn off';txt='opponent to move'}
+    else if(phase==='run'&&warnMsg){cls='cbtn warn';txt=warnMsg;dis=false}
+    else if(phase==='run'&&reading){cls='cbtn off';txt='reading the board…'}
+    else if(phase==='run'){cls='cbtn go';txt='Confirm move';dis=false}
+    else{cls='cbtn off';txt=''}                            // setup / ready / over
+    b.className=cls;b.textContent=txt;b.disabled=dis;}
+}
+function clearCands(){$('cands-white').innerHTML='';$('cands-black').innerHTML=''}
+function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';
+  (cands||[]).forEach(x=>{const b=document.createElement('button');b.className='cand';b.textContent=x.san;
+    b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};c.appendChild(b)})}
+function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
+function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);showCtrls(false);clearCands();paint();renderClocks()}
+function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
+  show('startov',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
-  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';setAction(ph('⏸ Paused'))}
-  else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';setAction(confirmBtn())}}
-function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;
-  show('sidectrl',false);show('startov',true);setAction(null);renderClocks();
+  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
+  else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
+function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
+  showCtrls(false);show('startov',true);clearCands();paint();renderClocks();
   $('report').className='report';$('report').textContent='Ready — press START'}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
-function confirmBtn(){const b=document.createElement('button');b.className='btn';b.textContent='Confirm move';
-  b.onclick=()=>{send({type:'move.confirm',side:clk.active,clockWhite:Math.round(clk.white),clockBlack:Math.round(clk.black)});
-    clk.running=false;setAction(ph('reading the board…'))};return b}
-function promptUI(title,cands){const w=document.createElement('div');w.className='prompt';
-  const t=document.createElement('div');t.className='t';t.textContent=title;w.appendChild(t);
-  const g=document.createElement('div');g.className='cands';
-  (cands||[]).forEach(c=>{const b=document.createElement('button');b.className='cand';b.textContent=c.san;
-    b.onclick=()=>{if(c.uci){send({type:'move.resolve',uci:c.uci});setAction(ph('committing…'))}};g.appendChild(b)});
-  w.appendChild(g);return w}
+['white','black'].forEach(side=>$('cb-'+side).onclick=()=>{   // confirm, or retry after a warning
+  if(clk.active!==side||phase!=='run')return;
+  warnMsg=null;reading=true;clk.running=false;clearCands();
+  send({type:'move.confirm',side,clockWhite:Math.round(clk.white),clockBlack:Math.round(clk.black)});paint()});
 
 let selMark=null;
 function selectMark(m){if(selMark)selMark.classList.remove('sel');selMark=m;if(m)m.classList.add('sel')}
@@ -291,9 +307,9 @@ function handle(m){
         const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
         if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();
-        if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();
-          show('startov',false);show('sidectrl',true);$('pausebtn').textContent='Pause';
-          $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';setAction(confirmBtn());}
+        if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
+          show('startov',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();
+          $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
         else{enterReady();$('report').className='report';$('report').textContent='Ready — press START';}}
       else{$('report').textContent=m.turn+' to move';}
       break;
@@ -309,19 +325,18 @@ function handle(m){
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
       if(m.fen)renderBoard(m.fen);
-      $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
-    case 'move.ambiguous': setAction(promptUI("⚠ Couldn't read the move clearly — tap the move you played:",m.candidates));break;
-    case 'move.unseen': setAction(promptUI('⚠ No board change detected — tap the move you played:',m.candidates));break;
+      $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
+      reading=false;warnMsg=null;clearCands();paint();break;
+    case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
+    case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
-      clk.running=true;clk.last=Date.now();
-      $('report').className='report warn';
-      $('report').textContent='⚠ '+(m.reason||'move not recognized')+' — check the board, then Confirm again';
-      setAction(confirmBtn());break;
+      clk.running=true;clk.last=Date.now();reading=false;
+      warnMsg='⚠ '+(m.reason||'not recognized')+' — check & Confirm';paint();break;
     case 'game.end':
-      phase='over';clk.running=false;show('sidectrl',false);
+      phase='over';clk.running=false;showCtrls(false);clearCands();paint();
       $('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);
-      if(win)$('s-'+win).classList.add('win');setAction(ph('result '+m.result));break;
+      if(win)$('s-'+win).classList.add('win');break;
     case 'error':
       if(/unknown table/.test(m.reason||'')){            // remembered table is gone (server restarted)
         localStorage.removeItem('cm_table');show('game',false);show('setup',true);$('tid').textContent='no table — start a new one';}
