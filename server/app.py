@@ -187,6 +187,9 @@ async def ws_endpoint(ws: WebSocket):
             if t == "table.join":
                 s, role = mgr.by_table(data["tableToken"]), "clock"
                 if s is None:
+                    if dev_id in devices and devices[dev_id].get("table") == data["tableToken"]:
+                        devices[dev_id]["table"] = None              # table was pruned -> free the device
+                        await broadcast_devices()
                     await send(ws, {"type": "error", "reason": "unknown table"})
                     continue
                 hub(s.table_token)["clock"] = ws

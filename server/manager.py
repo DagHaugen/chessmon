@@ -40,6 +40,12 @@ class SessionManager:
         try:
             with open(path, "rb") as f:
                 self._by_table = pickle.load(f)
-            self._by_pair = {s.pair_token: s for s in self._by_table.values()}
         except Exception:
-            pass
+            return
+        empties = [tok for tok, s in self._by_table.items()          # prune stale empty pairings:
+                   if s.board_reader is None and not s.moves and not s.result]  # never calibrated, no game
+        for tok in empties:
+            del self._by_table[tok]
+        if empties:
+            print(f"[sessions] pruned {len(empties)} empty table(s) on load")
+        self._by_pair = {s.pair_token: s for s in self._by_table.values()}
