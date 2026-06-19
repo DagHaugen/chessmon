@@ -119,9 +119,47 @@ async def test_ws():
     await dev.close()
 
 
+async def test_landing():
+    print("landing page: a new device waits in Unused; an already-configured one is bounced to its role")
+    admin = await websockets.connect(URL)
+    await admin.send(json.dumps({"type": "admin.join"}))
+    await next_devices(admin)
+
+    new = await websockets.connect(URL)
+    await new.send(json.dumps({"type": "hello", "devId": "land-new", "landing": True,
+                               "name": "iPad", "plat": "iPad", "screen": {"w": 820, "h": 1180, "dpr": 2}}))
+    m = await next_devices(admin)
+    d = next((x for x in m["devices"] if x["id"] == "land-new"), None)
+    check(d is not None and not d.get("table"), "a new landing device shows up unconfigured (Unused)")
+    try:
+        await asyncio.wait_for(new.recv(), 0.6)
+        check(False, "a new landing device must NOT be auto-assigned")
+    except asyncio.TimeoutError:
+        check(True, "a new landing device is left waiting (no bounce)")
+
+    await admin.send(json.dumps({"type": "table.create", "name": "Land Table"}))
+    m = await next_devices(admin)
+    tok = next(x["token"] for x in m["tables"] if x["name"] == "Land Table")
+    await admin.send(json.dumps({"type": "table.assign", "table": tok, "role": "camera", "devId": "land-new"}))
+    await asyncio.wait_for(new.recv(), 3)                       # the assign that table.assign pushes to the unit
+    await next_devices(admin)
+
+    reopen = await websockets.connect(URL)
+    await reopen.send(json.dumps({"type": "hello", "devId": "land-new", "landing": True, "name": "iPad"}))
+    asg = json.loads(await asyncio.wait_for(reopen.recv(), 3))
+    check(asg.get("type") == "assign" and asg.get("role") == "camera" and asg.get("pair"),
+          "reopening the landing on a configured device bounces it to its camera role")
+
+    await admin.send(json.dumps({"type": "table.remove", "table": tok}))
+    await admin.close()
+    await new.close()
+    await reopen.close()
+
+
 test_persistence()
 try:
     asyncio.run(test_ws())
+    asyncio.run(test_landing())
 except Exception as e:                                          # noqa: BLE001
     check(False, f"WS flow raised: {e!r}")
 print("\n" + ("CONSOLE TESTS FAILED: " + "; ".join(_FAIL) if _FAIL else "ALL CONSOLE TESTS OK"))

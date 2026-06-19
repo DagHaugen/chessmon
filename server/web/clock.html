@@ -338,6 +338,8 @@ function handle(m){
         send({type:'table.join',tableToken:table});}
       else if(m.role==='camera'){location.href='camera.html?pair='+m.pair;}
       break;
+    case 'unassigned':                                          // console pulled this unit off its table -> back to the landing
+      localStorage.removeItem('cm_table');location.href='index.html';break;
     case 'state':                                               // refresh/reconnect -> restore the view
       {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);

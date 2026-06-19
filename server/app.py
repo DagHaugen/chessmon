@@ -153,7 +153,7 @@ async def table_state(token: str):
 
 @app.get("/")
 async def root():
-    return RedirectResponse("/app/clock.html")
+    return RedirectResponse("/app/")            # the device landing page (index.html); it routes to clock/camera once assigned
 
 
 @app.get("/favicon.ico")
@@ -239,16 +239,25 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "state", **s.snapshot()})
             elif t == "ping":                                     # heartbeat — keep the socket alive
                 pass
-            elif t == "hello":                                    # device registers itself (clock/camera)
+            elif t == "hello":                                    # device registers itself (landing / clock / camera)
                 dev_id = data.get("devId")
                 if dev_id:
+                    landing = bool(data.get("landing"))           # the /app landing page is role-agnostic
                     d = devices.setdefault(dev_id, {"id": dev_id, "userName": "", "table": None})
-                    d.update({"name": data.get("name", "device"), "role": data.get("role", "?"),
-                              "online": True, "ws": ws})
+                    d.update({"name": data.get("name", d.get("name", "device")), "online": True, "ws": ws})
+                    if not landing:                               # a clock/camera page declares its role; the landing must not clobber it
+                        d["role"] = data.get("role", "?")
                     for k in ("screen", "plat"):
                         if data.get(k):
                             d[k] = data[k]
                     await broadcast_devices()
+                    if landing:                                   # already configured? bounce it straight to its role page
+                        sess = next((s for s in mgr._by_table.values()
+                                     if s.clock_dev == dev_id or s.camera_dev == dev_id), None)
+                        if sess is not None and sess.clock_dev == dev_id:
+                            await send(ws, {"type": "assign", "role": "clock", "table": sess.table_token})
+                        elif sess is not None:
+                            await send(ws, {"type": "assign", "role": "camera", "pair": sess.pair_token})
             elif t == "device.meta":                              # extra device info (e.g. camera capture res)
                 if dev_id in devices:
                     for k in ("screen", "cam"):

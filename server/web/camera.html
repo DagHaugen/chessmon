@@ -114,6 +114,7 @@ function connect(){
     else if(m.type==='assign'){if(m.role==='camera'){pair=m.pair;localStorage.setItem('cm_pair',pair);
       ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));status('paired from the console','ok')}
       else if(m.role==='clock'){location.href='clock.html?table='+m.table}}
+    else if(m.type==='unassigned'){localStorage.removeItem('cm_pair');location.href='index.html'}  // pulled off its table -> back to landing
     else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
       status('already calibrated · armed — a frame is sent on every move','ok')}
       else{status('camera ready — capture the empty board, then the start position')}}
