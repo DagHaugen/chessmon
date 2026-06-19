@@ -33,6 +33,7 @@
     aspect-ratio:1;width:100%;border-radius:6px;overflow:hidden}
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
+  .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
   .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
   .act{min-height:66px;display:flex;flex-direction:column;gap:8px;justify-content:center}
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
@@ -46,6 +47,7 @@
   .cand:active{transform:translateY(1px)}
   .report{background:#11141a;border:1px solid var(--line);border-radius:11px;padding:10px;font-size:13px;
     text-align:center;color:var(--mut)} .report.over{color:var(--good);font-weight:600}
+  .report.warn{color:var(--warn);border-color:var(--warn);font-weight:600}
   .pair{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
   .pair h2{font-size:13px;color:var(--mut);margin:0 0 10px;text-transform:uppercase;letter-spacing:.1em}
   #qr{display:flex;justify-content:center;margin:0 auto;width:160px;height:160px;background:#fff;
@@ -129,7 +131,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
-let ws,started=false,wakeLock=null,camLinked=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let ws,started=false,wakeLock=null,camLinked=false,lastMove=null,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
@@ -142,7 +144,11 @@ function renderBoard(fen){
     if(/\d/.test(ch)){for(let i=0;i<+ch;i++){b.appendChild(mkSq(r,c++,''))}}
     else{b.appendChild(mkSq(r,c++,ch))}}});
 }
+function sqRC(s){return [8-(+s[1]),s.charCodeAt(0)-97]}     // 'e2' -> [row,col] (row 0 = rank 8)
+function isLast(r,c){if(!lastMove)return false;const f=sqRC(lastMove.from),t=sqRC(lastMove.to);
+  return (r===f[0]&&c===f[1])||(r===t[0]&&c===t[1])}
 function mkSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
+  if(isLast(r,c))d.classList.add('last');
   if(ch){const i=document.createElement('img');i.className='pc';i.alt=ch;
     i.onerror=()=>{i.remove();d.textContent=GLYPH[ch]};                  // fall back to the glyph
     i.src='pieces/'+(ch<'a'?'w':'b')+ch.toUpperCase()+'.svg';d.appendChild(i)}return d}
@@ -244,6 +250,7 @@ function handle(m){
       else if(m.role==='camera'){location.href='camera.html?pair='+m.pair;}
       break;
     case 'state':                                               // refresh/reconnect -> restore the view
+      {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume the game (skip QR / recalibration)
@@ -263,11 +270,16 @@ function handle(m){
     case 'refreshed': $('report').textContent='board refreshed ✓ · '+(clk.active==='white'?'White':'Black')+' to move'; break;
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
-      $('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
-    case 'move.ambiguous': setAction(promptUI("Couldn't read it — tap your move",m.candidates));break;
-    case 'move.unseen': setAction(promptUI('Move not visible — tap what you played',m.candidates));break;
+      if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
+      if(m.fen)renderBoard(m.fen);
+      $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';setAction(confirmBtn());break;
+    case 'move.ambiguous': setAction(promptUI("⚠ Couldn't read the move clearly — tap the move you played:",m.candidates));break;
+    case 'move.unseen': setAction(promptUI('⚠ No board change detected — tap the move you played:',m.candidates));break;
     case 'move.unclear': case 'move.nochange':
-      clk.running=true;clk.last=Date.now();$('report').textContent=(m.reason||'no change')+' — try again';setAction(confirmBtn());break;
+      clk.running=true;clk.last=Date.now();
+      $('report').className='report warn';
+      $('report').textContent='⚠ '+(m.reason||'move not recognized')+' — check the board, then Confirm again';
+      setAction(confirmBtn());break;
     case 'game.end':
       clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);

@@ -233,6 +233,7 @@ class Session:
         cw, cb = self._pending or (None, None)
         self._pending = None
         rec = {"ply": len(self.moves) + 1, "san": san, "fen": self.game.board.fen(),
+               "uci": self.game.board.peek().uci() if self.game.board.move_stack else None,
                "clock_white": cw, "clock_black": cb}
         self.moves.append(rec)
         if self.game.board.is_game_over():
