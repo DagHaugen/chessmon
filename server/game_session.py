@@ -29,9 +29,10 @@ from chessmon.board_state import Cell, board_to_grid, empty_grid
 
 class Session:
     def __init__(self, table_token, white="White", black="Black", variant="standard",
-                 start_fen=None):
+                 start_fen=None, name=""):
         self.table_token = table_token
         self.pair_token = secrets.token_urlsafe(8)
+        self.name = name                   # user-friendly table name from the console ("Table 1")
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -52,7 +53,7 @@ class Session:
         return d
 
     def session_info(self):
-        return {"white": self.white, "black": self.black, "variant": self.variant}
+        return {"name": self.name, "white": self.white, "black": self.black, "variant": self.variant}
 
     # --- calibration: the real-camera path, reusing chessmon's no-empty-board flow ---
     def calibrate_from_frame(self, frame):
@@ -255,7 +256,7 @@ class Session:
         return g.accept(exporter).strip()
 
     def snapshot(self):
-        return {"table": self.table_token, "variant": self.variant,
+        return {"table": self.table_token, "variant": self.variant, "name": self.name,
                 "white": self.white, "black": self.black,
                 "fen": self.game.board.fen(),
                 "turn": "White" if self.game.board.turn else "Black",

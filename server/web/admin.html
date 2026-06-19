@@ -20,6 +20,8 @@
   .pairbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);
     border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
   .pairbar .slot{font-size:13px;color:var(--mut)}.pairbar .slot b{color:var(--ink)}
+  .pairbar input{background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:8px;
+    padding:7px 10px;font-size:13px;min-width:150px}
   .pairbar .msg{color:var(--good);font-size:13px}
   .pairbar button{margin-left:auto;background:var(--good);color:#0b1020;border:none;border-radius:10px;
     padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
@@ -79,6 +81,7 @@
     <span class="slot">Clock: <b id="pc">—</b></span>
     <span class="slot">Camera: <b id="pcam">—</b></span>
     <span class="msg hidden" id="pmsg">Paired ✓</span>
+    <input id="tname" placeholder="Table name (e.g. Table 1)" autocomplete="off" maxlength="24">
     <button id="pairbtn" disabled>Pair into a table</button>
   </div>
 
@@ -158,7 +161,7 @@ function render(){
     L.appendChild(row);
   });
 }
-$('pairbtn').onclick=()=>send({type:'pair.devices',clock:pendClock,camera:pendCamera});
+$('pairbtn').onclick=()=>send({type:'pair.devices',clock:pendClock,camera:pendCamera,name:$('tname').value.trim()});
 function showQR(m){
   let url='';
   if(!m.cameraOnline)url=location.origin+'/app/camera.html?pair='+m.pair;
@@ -172,7 +175,7 @@ function showQR(m){
 function flash(t){$('pmsg').textContent=t;$('pmsg').classList.remove('hidden');setTimeout(()=>$('pmsg').classList.add('hidden'),4000)}
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];render();updatePair();}
-  else if(m.type==='paired'){pendClock=pendCamera=null;updatePair();render();
+  else if(m.type==='paired'){pendClock=pendCamera=null;$('tname').value='';updatePair();render();
     if(m.clockOnline&&m.cameraOnline){$('qrwrap').classList.add('hidden');flash('Paired ✓')}else showQR(m);}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}

@@ -120,7 +120,7 @@ async def to_units_admins(sess, obj):
 @app.post("/tables")
 async def create_table(body: dict):
     s = mgr.create_table(body.get("white", "White"), body.get("black", "Black"),
-                         body.get("variant", "standard"))
+                         body.get("variant", "standard"), name=body.get("name", ""))
     mgr.save(SESSIONS_FILE)
     return {"tableToken": s.table_token, "pairToken": s.pair_token,
             "qr": f"/join/{s.table_token}"}
@@ -250,7 +250,7 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "pair.devices":                             # console pairs two devices into a new table
                 clock_dev = devices.get(data.get("clock"))
                 cam_dev = devices.get(data.get("camera"))
-                sess = mgr.create_table("White", "Black", "standard")
+                sess = mgr.create_table("White", "Black", "standard", name=data.get("name", ""))
                 mgr.save(SESSIONS_FILE)
                 if clock_dev and clock_dev.get("ws"):             # push the role + token; the unit auto-joins
                     await send(clock_dev["ws"], {"type": "assign", "role": "clock",

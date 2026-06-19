@@ -14,9 +14,9 @@ class SessionManager:
         self._by_table: dict[str, Session] = {}
         self._by_pair: dict[str, Session] = {}
 
-    def create_table(self, white="White", black="Black", variant="standard"):
+    def create_table(self, white="White", black="Black", variant="standard", name=""):
         token = secrets.token_urlsafe(8)
-        s = Session(token, white, black, variant)
+        s = Session(token, white, black, variant, name=name)
         self._by_table[token] = s
         self._by_pair[s.pair_token] = s
         return s
