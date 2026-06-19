@@ -18,6 +18,7 @@ The clock resolves ambiguous/unseen by sending move.resolve {uci} -> resolve().
 from __future__ import annotations
 
 import secrets
+import time
 
 import numpy as np
 import chess
@@ -33,6 +34,9 @@ class Session:
         self.table_token = table_token
         self.pair_token = secrets.token_urlsafe(8)
         self.name = name                   # user-friendly table name from the console ("Table 1")
+        self.clock_dev = None              # devId of the assigned clock / camera unit (the table config,
+        self.camera_dev = None             # persisted so it survives the units going offline)
+        self.started_at = None             # epoch seconds of the first move (a "running game")
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -51,6 +55,12 @@ class Session:
         d = self.__dict__.copy()
         d["_calib_frame"] = None
         return d
+
+    def __setstate__(self, d):             # tolerate older pickles that predate newer fields
+        self.__dict__.update(d)
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", "")):
+            if not hasattr(self, k):
+                setattr(self, k, v)
 
     def session_info(self):
         return {"name": self.name, "white": self.white, "black": self.black, "variant": self.variant}
@@ -185,6 +195,7 @@ class Session:
         self.game = CameraGame(chess.Board(chess960=(self.variant == "chess960")))
         self.moves = []
         self.result = None
+        self.started_at = None
         self._pending = None
 
     def undo_move(self):
@@ -267,6 +278,8 @@ class Session:
         return {"type": "game.end", "result": result, "pgn": self.pgn()}
 
     def _record(self, san):
+        if self.started_at is None:
+            self.started_at = time.time()      # first move -> the game is now "running"
         cw, cb = self._pending or (None, None)
         self._pending = None
         rec = {"ply": len(self.moves) + 1, "san": san, "fen": self.game.board.fen(),

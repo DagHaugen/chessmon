@@ -100,7 +100,7 @@ $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the se
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');
-    ws.send(JSON.stringify({type:'hello',devId,devName,role:'camera',screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
+    ws.send(JSON.stringify({type:'hello',devId,name:devName,role:'camera',plat:navigator.platform,screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
     if(camRes)ws.send(JSON.stringify({type:'device.meta',cam:camRes}));
     if(pair){ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')}else log('registered — waiting to be paired')};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};

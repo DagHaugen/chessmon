@@ -12,48 +12,68 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:780px;margin:0 auto;padding:22px}
-  .top{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .wrap{max-width:820px;margin:0 auto;padding:22px}
+  .top{display:flex;align-items:center;gap:10px;margin-bottom:18px}
   .top h1{font-size:18px;margin:0;font-weight:700}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
   .sub{color:var(--mut);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
-  .pairbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);
-    border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
-  .pairbar .slot{font-size:13px;color:var(--mut)}.pairbar .slot b{color:var(--ink)}
-  .pairbar input{background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:8px;
-    padding:7px 10px;font-size:13px;min-width:150px}
-  .pairbar .msg{color:var(--good);font-size:13px}
-  .pairbar button{margin-left:auto;background:var(--good);color:#0b1020;border:none;border-radius:10px;
-    padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
-  .pairbar button:disabled{background:var(--line);color:var(--mut);cursor:default}
-  .qrwrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;text-align:center}
-  .qrwrap h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600}
-  #qr{display:inline-flex;background:#fff;padding:8px;border-radius:10px}
-  .qrwrap code{display:block;margin-top:9px;color:var(--accent);font-size:12px;word-break:break-all}
-  .empty{color:var(--mut);background:var(--panel);border:1px solid var(--line);
-    border-radius:14px;padding:30px;text-align:center;line-height:1.5}
-  .dev{display:grid;grid-template-columns:auto auto 1fr auto auto;gap:14px;align-items:center;
-    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
-  .dev.off{opacity:.55}
-  .st{width:10px;height:10px;border-radius:50%;background:var(--mut)}.st.on{background:var(--good)}
-  .badge{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-    padding:4px 9px;border-radius:8px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
-  .badge.clock{color:var(--accent);border-color:var(--accent)}
-  .badge.camera{color:var(--cam);border-color:var(--cam)}
-  .meta{min-width:0}.meta .nm{font-weight:600}
-  .meta .id{font-size:11px;color:var(--mut);font-family:ui-monospace,monospace}
-  .meta .spec{font-size:11px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
-  .meta input{margin-top:7px;width:100%;max-width:280px;background:#11141a;border:1px solid var(--line);
-    color:var(--ink);border-radius:9px;padding:8px 11px;font-size:14px}
-  .meta input:focus{outline:none;border-color:var(--accent)}
-  .tbl{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;text-align:right;white-space:nowrap}
-  .acts{display:flex;gap:6px}
-  .acts button{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:8px;
-    padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer}
-  .acts button.clk.on{background:var(--accent);border-color:var(--accent);color:#0b1020}
-  .acts button.cam.on{background:var(--cam);border-color:var(--cam);color:#0b1020}
-  .acts button.cal{border-color:var(--good);color:var(--good)}
-  .acts button.forget{border-color:var(--line);color:var(--mut);padding:7px 10px}
+
+  .section{margin-bottom:24px}
+  .section h2{font-size:13px;color:var(--mut);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    margin:0 0 11px;display:flex;align-items:center;gap:10px}
+  .section h2 .cnt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--mut)}
+  .add{margin-left:auto;background:var(--accent);color:#0b1020;border:none;border-radius:9px;
+    padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer}
+  .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);
+    border-radius:12px;padding:22px;text-align:center;line-height:1.5;font-size:13px}
+  .st{width:9px;height:9px;border-radius:50%;background:var(--mut);flex:none}.st.on{background:var(--good)}
+
+  /* unused devices */
+  .urow{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:8px}
+  .urow.off{opacity:.5}
+  .uname input{width:100%;max-width:230px;background:#11141a;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:8px 11px;font-size:14px}
+  .uname input:focus{outline:none;border-color:var(--accent)}
+  .uspec{font-size:11px;color:var(--mut);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.5}
+  .uspec .os{color:var(--ink)}
+  .mini{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:8px;
+    padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .mini:hover{border-color:var(--mut)}
+
+  /* configured tables */
+  .tcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:10px}
+  .thead{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+  .thead input{flex:1;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:8px 11px;font-size:15px;font-weight:600}
+  .thead input:focus{outline:none;border-color:var(--accent)}
+  .pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+  .pill.ok{color:var(--good);border-color:var(--good)}
+  .cal{background:transparent;border:1px solid var(--good);color:var(--good);border-radius:8px;
+    padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .cal:disabled{border-color:var(--line);color:var(--mut);cursor:default}
+  .slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.slots{grid-template-columns:1fr}}
+  .slot{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:62px;
+    display:flex;align-items:center;gap:9px}
+  .slot.clock{border-left:3px solid var(--accent)}.slot.camera{border-left:3px solid var(--cam)}
+  .slot .role{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);
+    writing-mode:vertical-rl;transform:rotate(180deg);flex:none}
+  .slot .body{min-width:0;flex:1}
+  .slot .snm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .slot .ssp{font-size:11px;color:var(--mut);margin-top:2px;font-variant-numeric:tabular-nums}
+  .slot select{width:100%;background:#11141a;border:1px solid var(--line);color:var(--mut);
+    border-radius:8px;padding:8px 9px;font-size:13px}
+  .slot select:focus{outline:none;border-color:var(--accent)}
+
+  /* running games */
+  .grow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-bottom:8px}
+  .grow .gnm{font-weight:600}
+  .grow .gsub{font-size:12px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
+  .grow .gres{font-size:12px;font-weight:700;color:var(--cam)}
+
+  /* calibration modal (unchanged behaviour) */
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
   .modal .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:560px;width:100%;text-align:center}
   .modal h2{font-size:15px;margin:0 0 4px}
@@ -76,19 +96,20 @@
   <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
     <span class="sub" id="sub">connecting…</span></div>
 
-  <div class="pairbar">
-    <span class="slot">Clock: <b id="pc">—</b></span>
-    <span class="slot">Camera: <b id="pcam">—</b></span>
-    <span class="msg hidden" id="pmsg">Paired ✓</span>
-    <input id="tname" placeholder="Table name (e.g. Table 1)" autocomplete="off" maxlength="24">
-    <button id="pairbtn" disabled>Pair into a table</button>
+  <div class="section">
+    <h2>Unused devices <span class="cnt" id="ucnt"></span></h2>
+    <div id="unused"></div>
   </div>
 
-  <div class="qrwrap hidden" id="qrwrap">
-    <h3 id="qrlabel"></h3><div id="qr"></div><code id="qrtext"></code>
+  <div class="section">
+    <h2>Configured tables <button class="add" id="newtable">+ New table</button></h2>
+    <div id="tables"></div>
   </div>
 
-  <div id="list"></div>
+  <div class="section">
+    <h2>Running games <span class="cnt" id="rcnt"></span></h2>
+    <div id="running"></div>
+  </div>
 
   <div class="modal hidden" id="calmodal"><div class="card">
     <h2 id="caltitle">Mark the board corners</h2>
@@ -101,84 +122,135 @@
       <button data-side="left">◀ Left</button><button data-side="right">Right ▶</button></div>
   </div></div>
 </div>
-<script src="qrcode.min.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
-let ws, devs=[], pendClock=null, pendCamera=null, calibTable=null;
-function nameOf(id){const d=devs.find(x=>x.id===id);return d?(d.userName||d.name||'device'):'—'}
+let ws, devs=[], tabs=[], calibTable=null;
+
+function devById(id){return devs.find(d=>d.id===id)}
+function usedIds(){const s=new Set();tabs.forEach(t=>{if(t.clock)s.add(t.clock);if(t.camera)s.add(t.camera)});return s}
+function nameOf(d){return d?(d.userName||d.name||'device'):'device'}
 function specText(d){const p=[];
-  if(d.screen)p.push('screen '+d.screen.w+'×'+d.screen.h+(d.screen.dpr&&d.screen.dpr!==1?' @'+d.screen.dpr:''));
-  if(d.cam)p.push('cam '+d.cam.w+'×'+d.cam.h);
+  if(d.screen)p.push(d.screen.w+'×'+d.screen.h+(d.screen.dpr&&d.screen.dpr!==1?' @'+d.screen.dpr:'')+' screen');
+  if(d.cam)p.push(d.cam.w+'×'+d.cam.h+' cam');
   return p.join('  ·  ');}
-function updatePair(){
-  $('pc').textContent=pendClock?nameOf(pendClock):'—';
-  $('pcam').textContent=pendCamera?nameOf(pendCamera):'—';
-  $('pairbtn').disabled=!(pendClock&&pendCamera);
-}
-function pick(role,id){                                   // a device can't be both roles
-  if(role==='clock'){pendClock=pendClock===id?null:id; if(pendClock===pendCamera)pendCamera=null;}
-  else{pendCamera=pendCamera===id?null:id; if(pendCamera===pendClock)pendClock=null;}
-  $('pmsg').classList.add('hidden');updatePair();render();
-}
+function osText(d){return d.plat||d.name||'—'}
+function fmtTime(s){if(!s)return '';const d=new Date(s*1000);
+  return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+
 let renderPending=false;
 function render(){
-  const a=document.activeElement;                         // don't rebuild the list out from under a name being typed
-  if(a&&a.tagName==='INPUT'&&$('list').contains(a)){renderPending=true;return}
+  const a=document.activeElement;                          // don't rebuild a field out from under typing
+  if(a&&a.tagName==='INPUT'&&($('unused').contains(a)||$('tables').contains(a))){renderPending=true;return}
   renderPending=false;
-  const L=$('list');
-  $('sub').textContent=devs.filter(d=>d.online).length+' online · '+devs.length+' known';
-  if(!devs.length){L.innerHTML='<div class="empty">No devices yet.<br>Open the clock or camera page on a phone/tablet — it shows up here automatically.</div>';return}
-  L.innerHTML='';
-  devs.slice().sort((a,b)=>(b.online-a.online)||(a.role||'').localeCompare(b.role||'')).forEach(d=>{
-    const row=document.createElement('div');row.className='dev'+(d.online?'':' off');
-    const st=document.createElement('span');st.className='st'+(d.online?' on':'');
-    const badge=document.createElement('span');badge.className='badge '+(d.role||'');badge.textContent=d.role||'device';
-    const meta=document.createElement('div');meta.className='meta';
-    const nm=document.createElement('div');nm.className='nm';nm.textContent=d.name||'device';
-    const id=document.createElement('div');id.className='id';id.textContent=(d.id||'').slice(0,8);
-    const spec=document.createElement('div');spec.className='spec';spec.textContent=specText(d);
-    const inp=document.createElement('input');inp.placeholder='your name — e.g. “Table 1 clock”';inp.value=d.userName||'';
+  const online=devs.filter(d=>d.online).length;
+  $('sub').textContent=online+' online · '+devs.length+' known · '+tabs.length+' tables';
+  renderUnused();renderTables();renderRunning();
+}
+
+function renderUnused(){
+  const used=usedIds();
+  const list=devs.filter(d=>!used.has(d.id))
+                 .sort((a,b)=>(b.online-a.online)||nameOf(a).localeCompare(nameOf(b)));
+  $('ucnt').textContent=list.length?('— '+list.length):'';
+  const L=$('unused');L.innerHTML='';
+  if(!list.length){L.innerHTML='<div class="empty">No unused devices.<br>Open the chessmon page on a phone or tablet — it shows up here, ready to drop into a table.</div>';return}
+  list.forEach(d=>{
+    const row=document.createElement('div');row.className='urow'+(d.online?'':' off');
+    const dot=document.createElement('span');dot.className='st'+(d.online?' on':'');
+    const nmw=document.createElement('div');nmw.className='uname';
+    const inp=document.createElement('input');inp.placeholder='New device '+(d.id||'').slice(0,6);
+    inp.value=d.userName||'';inp.autocomplete='off';inp.maxLength=28;
     inp.onchange=()=>send({type:'device.rename',devId:d.id,userName:inp.value.trim()});
-    inp.onblur=()=>{if(renderPending)render()};            // refresh once they're done typing
-    meta.append(nm,id,spec,inp);
-    const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
-    const acts=document.createElement('div');acts.className='acts';
-    if(d.online){                                          // any online device can be (re-)paired into a table
-      const bc=document.createElement('button');bc.className='clk'+(pendClock===d.id?' on':'');bc.textContent='Clock';bc.onclick=()=>pick('clock',d.id);
-      const bm=document.createElement('button');bm.className='cam'+(pendCamera===d.id?' on':'');bm.textContent='Camera';bm.onclick=()=>pick('camera',d.id);
-      acts.append(bc,bm);
-      if(d.role==='camera'&&d.table){                      // a paired camera -> also calibrate it here
-        const cb=document.createElement('button');cb.className='cal';cb.textContent='Calibrate';cb.onclick=()=>startCalib(d.table);
-        acts.append(cb);
-      }
-    }
-    const fb=document.createElement('button');fb.className='forget';fb.textContent='✕';fb.title='Forget this device';
-    fb.onclick=()=>{if(confirm('Forget “'+(d.userName||d.name||'device')+'”?'))send({type:'device.remove',devId:d.id})};
-    acts.append(fb);
-    row.append(st,badge,meta,tbl,acts);
-    L.appendChild(row);
+    inp.onblur=()=>{if(renderPending)render()};
+    nmw.appendChild(inp);
+    const sp=document.createElement('div');sp.className='uspec';
+    sp.innerHTML='<span class="os">'+osText(d)+'</span><br>'+(specText(d)||'—');
+    const fb=document.createElement('button');fb.className='mini';fb.textContent='Forget';
+    fb.onclick=()=>{if(confirm('Forget “'+nameOf(d)+'”?'))send({type:'device.remove',devId:d.id})};
+    row.append(dot,nmw,sp,fb);L.appendChild(row);
   });
 }
-$('pairbtn').onclick=()=>send({type:'pair.devices',clock:pendClock,camera:pendCamera,name:$('tname').value.trim()});
-function showQR(m){
-  let url='';
-  if(!m.cameraOnline)url=location.origin+'/app/camera.html?pair='+m.pair;
-  else if(!m.clockOnline)url=location.origin+'/app/clock.html?table='+m.table;
-  if(!url){$('qrwrap').classList.add('hidden');return}
-  $('qrlabel').textContent=(!m.cameraOnline?'Camera not connected — scan with the camera device':'Clock not connected — open on the clock device');
-  $('qrtext').textContent=url;const q=$('qr');q.innerHTML='';
-  if(typeof QRCode!=='undefined')new QRCode(q,{text:url,width:150,height:150});
-  $('qrwrap').classList.remove('hidden');
+
+function slotEl(t,role){
+  const devId=role==='clock'?t.clock:t.camera;
+  const wrap=document.createElement('div');wrap.className='slot '+role;
+  const rl=document.createElement('div');rl.className='role';rl.textContent=role;
+  const body=document.createElement('div');body.className='body';
+  if(devId){
+    const d=devById(devId);
+    const dot=document.createElement('span');dot.className='st'+(d&&d.online?' on':'');
+    const nm=document.createElement('div');nm.className='snm';nm.textContent=d?nameOf(d):'(offline unit)';
+    const sp=document.createElement('div');sp.className='ssp';sp.textContent=d?(specText(d)||osText(d)):'remembered, not connected';
+    body.append(nm,sp);
+    const rm=document.createElement('button');rm.className='mini';rm.textContent='✕';rm.title='Remove from table';
+    rm.onclick=()=>send({type:'table.unassign',table:t.token,role});
+    wrap.append(rl,dot,body,rm);
+  }else{
+    const sel=document.createElement('select');
+    const o0=document.createElement('option');o0.value='';o0.textContent='+ add '+role+'…';sel.appendChild(o0);
+    const used=usedIds();
+    devs.filter(d=>!used.has(d.id)).forEach(d=>{
+      const o=document.createElement('option');o.value=d.id;
+      o.textContent=nameOf(d)+(d.online?'':' (offline)');sel.appendChild(o);});
+    sel.onchange=()=>{if(sel.value)send({type:'table.assign',table:t.token,role,devId:sel.value})};
+    body.appendChild(sel);
+    wrap.append(rl,body);
+  }
+  return wrap;
 }
-function flash(t){$('pmsg').textContent=t;$('pmsg').classList.remove('hidden');setTimeout(()=>$('pmsg').classList.add('hidden'),4000)}
+
+function renderTables(){
+  const L=$('tables');L.innerHTML='';
+  if(!tabs.length){L.innerHTML='<div class="empty">No tables yet.<br>Tap <b>+ New table</b>, then drop in a clock and a camera from Unused.</div>';return}
+  tabs.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(t=>{
+    const card=document.createElement('div');card.className='tcard';
+    const head=document.createElement('div');head.className='thead';
+    const nm=document.createElement('input');nm.value=t.name||'';nm.placeholder='Table name';nm.maxLength=24;
+    nm.onchange=()=>send({type:'table.rename',table:t.token,name:nm.value.trim()});
+    nm.onblur=()=>{if(renderPending)render()};
+    const pill=document.createElement('span');pill.className='pill'+(t.calibrated?' ok':'');
+    pill.textContent=t.calibrated?'calibrated':'not calibrated';
+    const camDev=devById(t.camera);
+    const cal=document.createElement('button');cal.className='cal';cal.textContent='Calibrate';
+    cal.disabled=!(t.camera&&camDev&&camDev.online);
+    cal.title=cal.disabled?'Add an online camera first':'Capture a frame and mark the corners';
+    cal.onclick=()=>startCalib(t.token);
+    const rm=document.createElement('button');rm.className='mini';rm.textContent='✕ table';
+    rm.onclick=()=>{if(confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))send({type:'table.remove',table:t.token})};
+    head.append(nm,pill,cal,rm);
+    const slots=document.createElement('div');slots.className='slots';
+    slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
+    card.append(head,slots);L.appendChild(card);
+  });
+}
+
+function renderRunning(){
+  const list=tabs.filter(t=>t.moves>0).sort((a,b)=>(b.started_at||0)-(a.started_at||0));
+  $('rcnt').textContent=list.length?('— '+list.length):'';
+  const L=$('running');L.innerHTML='';
+  if(!list.length){L.innerHTML='<div class="empty">No games in progress.</div>';return}
+  list.forEach(t=>{
+    const row=document.createElement('div');row.className='grow';
+    const left=document.createElement('div');
+    const nm=document.createElement('div');nm.className='gnm';nm.textContent=t.name||'unnamed table';
+    const sub=document.createElement('div');sub.className='gsub';
+    sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
+    left.append(nm,sub);
+    const res=document.createElement('div');res.className='gres';res.textContent=t.result?(''+t.result):'';
+    row.append(left,res);L.appendChild(row);
+  });
+}
+
+$('newtable').onclick=()=>{const n=prompt('Name for the new table:','Table '+(tabs.length+1));
+  if(n!==null)send({type:'table.create',name:n.trim()})};
+
+/* ---- calibration (same flow as before) ---- */
 function handle(m){
-  if(m.type==='devices'){devs=m.devices||[];render();updatePair();}
-  else if(m.type==='paired'){pendClock=pendCamera=null;$('tname').value='';updatePair();render();
-    if(m.clockOnline&&m.cameraOnline){$('qrwrap').classList.add('hidden');flash('Paired ✓')}else showQR(m);}
+  if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
-  else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib();flash('Calibrated ✓')}}
+  else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
@@ -186,19 +258,19 @@ function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
 function onCalImage(durl){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
   $('caltitle').textContent='Mark the board corners';
-  img.onload=resetCalDots;                                  // start fresh: bullseye-click the 4 corners
+  img.onload=resetCalDots;
   img.src=durl;show('crow',true);show('caloside',false);}
 function showOrientCal(){$('ccwrap').classList.remove('marking');$('caltitle').textContent='Which side is White on?';
   $('calhint').textContent='Click the side of the image where the white pieces are.';show('crow',false);show('caloside',true);}
 function closeCalib(){show('calmodal',false);calibTable=null}
-let calCorners=[];                                          // corner clicks collected as [xfrac,yfrac]
+let calCorners=[];
 const CORNER_LABELS=['top-left','top-right','bottom-right','bottom-left'];
 function updateCalHint(){$('calhint').textContent = calCorners.length<4
   ? 'Click the '+CORNER_LABELS[calCorners.length]+' corner of the playing area  ('+(calCorners.length+1)+' / 4).'
   : 'Four corners marked — “Use these corners”, or Redo to start over.';}
 function resetCalDots(){calCorners=[];document.querySelectorAll('#ccwrap .cdot').forEach(d=>d.remove());
   $('caldone').disabled=true;updateCalHint();}
-$('cimg').addEventListener('click',e=>{                     // bullseye-click drops the next corner (no marker to hide it)
+$('cimg').addEventListener('click',e=>{
   if($('calmodal').classList.contains('hidden')||!$('ccwrap').classList.contains('marking')||calCorners.length>=4)return;
   const r=$('cimg').getBoundingClientRect();
   const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
@@ -214,6 +286,7 @@ $('calredo').onclick=resetCalDots;
 $('calcancel').onclick=closeCalib;
 document.querySelectorAll('#caloside button').forEach(b=>b.onclick=()=>{
   send({type:'admin.orient',table:calibTable,side:b.dataset.side});$('calhint').textContent='Orienting…'});
+
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
@@ -222,7 +295,7 @@ function connect(){
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 render();connect();
-setInterval(()=>send({type:'ping'}),20000);            // heartbeat
+setInterval(()=>send({type:'ping'}),20000);
 </script>
 </body>
 </html>

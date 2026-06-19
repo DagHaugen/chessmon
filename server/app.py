@@ -64,14 +64,26 @@ async def broadcast_state(s):
 
 
 def dev_public(d):
-    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam")}
+    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam", "plat")}
+
+
+def tables_public():
+    """The configured tables (each persists its unit assignments + name + calibration)."""
+    return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
+             "calibrated": s.board_reader is not None, "moves": len(s.moves),
+             "started_at": s.started_at, "result": s.result}
+            for s in mgr._by_table.values()]
+
+
+def admin_state():
+    return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public()}
 
 
 async def broadcast_devices():
     save_devices()
-    lst = [dev_public(d) for d in devices.values()]
+    msg = admin_state()
     for ws in list(admins):
-        await send(ws, {"type": "devices", "devices": lst})
+        await send(ws, msg)
 
 
 def save_devices():
@@ -79,7 +91,7 @@ def save_devices():
     doesn't lose the names the operator typed in the console."""
     try:
         recs = [{"id": d["id"], "name": d.get("name", ""), "userName": d.get("userName", ""),
-                 "role": d.get("role", ""), "screen": d.get("screen"), "cam": d.get("cam")}
+                 "role": d.get("role", ""), "screen": d.get("screen"), "cam": d.get("cam"), "plat": d.get("plat")}
                 for d in devices.values()]
         with open(DEVICES_FILE, "w") as f:
             json.dump(recs, f)
@@ -97,6 +109,11 @@ def load_devices():
 
 
 load_devices()
+for _s in mgr._by_table.values():          # rebuild the live device<->table link from persisted table configs
+    for _role, _devid in (("clock", _s.clock_dev), ("camera", _s.camera_dev)):
+        if _devid and _devid in devices:
+            devices[_devid]["table"] = _s.table_token
+            devices[_devid]["role"] = _role
 
 
 async def to_clock_admins(sess, obj):
@@ -228,8 +245,9 @@ async def ws_endpoint(ws: WebSocket):
                     d = devices.setdefault(dev_id, {"id": dev_id, "userName": "", "table": None})
                     d.update({"name": data.get("name", "device"), "role": data.get("role", "?"),
                               "online": True, "ws": ws})
-                    if data.get("screen"):
-                        d["screen"] = data["screen"]
+                    for k in ("screen", "plat"):
+                        if data.get(k):
+                            d[k] = data[k]
                     await broadcast_devices()
             elif t == "device.meta":                              # extra device info (e.g. camera capture res)
                 if dev_id in devices:
@@ -240,8 +258,7 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "admin.join":                               # the server-console page
                 role = "admin"
                 admins.add(ws)
-                await send(ws, {"type": "devices",
-                                "devices": [dev_public(d) for d in devices.values()]})
+                await send(ws, admin_state())
             elif t == "device.rename":                            # console set a user-defined name
                 d = devices.get(data.get("devId"))
                 if d is not None:
@@ -250,20 +267,64 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "device.remove":                            # console forgot a device (stale / phantom)
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
-            elif t == "pair.devices":                             # console pairs two devices into a new table
-                clock_dev = devices.get(data.get("clock"))
-                cam_dev = devices.get(data.get("camera"))
-                sess = mgr.create_table("White", "Black", "standard", name=data.get("name", ""))
+            elif t == "table.create":                             # console makes a new, empty table
+                mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)
-                if clock_dev and clock_dev.get("ws"):             # push the role + token; the unit auto-joins
-                    await send(clock_dev["ws"], {"type": "assign", "role": "clock",
-                                                 "table": sess.table_token})
-                if cam_dev and cam_dev.get("ws"):
-                    await send(cam_dev["ws"], {"type": "assign", "role": "camera",
-                                               "pair": sess.pair_token})
-                await send(ws, {"type": "paired", "table": sess.table_token, "pair": sess.pair_token,
-                                "clockOnline": bool(clock_dev and clock_dev.get("ws")),
-                                "cameraOnline": bool(cam_dev and cam_dev.get("ws"))})
+                await broadcast_devices()
+            elif t == "table.rename":
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    sess.name = (data.get("name") or "").strip()
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_devices()
+            elif t == "table.remove":                             # console deletes a table -> its units go back to Unused
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    for dv in devices.values():
+                        if dv.get("table") == sess.table_token:
+                            dv["table"] = None
+                    mgr._by_table.pop(sess.table_token, None)
+                    mgr._by_pair.pop(sess.pair_token, None)
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_devices()
+            elif t == "table.assign":                             # add / replace a unit on a table, picked from Unused
+                sess = mgr.by_table(data.get("table"))
+                dev = devices.get(data.get("devId"))
+                role2 = data.get("role")
+                if sess is not None and dev is not None and role2 in ("clock", "camera"):
+                    for other in mgr._by_table.values():          # a device lives on one table -> free its old slot
+                        if other.clock_dev == dev["id"]:
+                            other.clock_dev = None
+                        if other.camera_dev == dev["id"]:
+                            other.camera_dev = None
+                    if role2 == "clock":
+                        sess.clock_dev = dev["id"]
+                        if dev.get("ws"):
+                            await send(dev["ws"], {"type": "assign", "role": "clock", "table": sess.table_token})
+                    else:
+                        sess.camera_dev = dev["id"]
+                        if dev.get("ws"):
+                            await send(dev["ws"], {"type": "assign", "role": "camera", "pair": sess.pair_token})
+                    dev["table"] = sess.table_token
+                    dev["role"] = role2
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_devices()
+            elif t == "table.unassign":                           # pull a unit off a table -> back to Unused
+                sess = mgr.by_table(data.get("table"))
+                role2 = data.get("role")
+                if sess is not None and role2 in ("clock", "camera"):
+                    devid = sess.clock_dev if role2 == "clock" else sess.camera_dev
+                    if role2 == "clock":
+                        sess.clock_dev = None
+                    else:
+                        sess.camera_dev = None
+                    dev = devices.get(devid)
+                    if dev is not None:
+                        dev["table"] = None
+                        if dev.get("ws"):
+                            await send(dev["ws"], {"type": "unassigned"})
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_devices()
             elif t == "admin.calib":                              # console triggers a calibration frame
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:

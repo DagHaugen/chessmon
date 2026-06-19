@@ -42,8 +42,10 @@ class SessionManager:
                 self._by_table = pickle.load(f)
         except Exception:
             return
-        empties = [tok for tok, s in self._by_table.items()          # prune stale empty pairings:
-                   if s.board_reader is None and not s.moves and not s.result]  # never calibrated, no game
+        empties = [tok for tok, s in self._by_table.items()          # prune only truly-empty tables:
+                   if s.board_reader is None and not s.moves and not s.result  # never calibrated, no game,
+                   and not getattr(s, "clock_dev", None) and not getattr(s, "camera_dev", None)  # no units,
+                   and not getattr(s, "name", "")]                   # and unnamed -> nothing worth keeping
         for tok in empties:
             del self._by_table[tok]
         if empties:
