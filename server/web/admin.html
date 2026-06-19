@@ -134,7 +134,7 @@ function specText(d){const p=[];
   if(d.screen)p.push(d.screen.w+'×'+d.screen.h+(d.screen.dpr&&d.screen.dpr!==1?' @'+d.screen.dpr:'')+' screen');
   if(d.cam)p.push(d.cam.w+'×'+d.cam.h+' cam');
   return p.join('  ·  ');}
-function osText(d){return d.plat||d.name||'—'}
+function osText(d){return d.plat||''}                       // OS/platform only — no generic "device" filler
 function fmtTime(s){if(!s)return '';const d=new Date(s*1000);
   return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 
@@ -165,7 +165,8 @@ function renderUnused(){
     inp.onblur=()=>{if(renderPending)render()};
     nmw.appendChild(inp);
     const sp=document.createElement('div');sp.className='uspec';
-    sp.innerHTML='<span class="os">'+osText(d)+'</span><br>'+(specText(d)||'—');
+    const os=osText(d);
+    sp.innerHTML=(os?'<span class="os">'+os+'</span><br>':'')+(specText(d)||'—');
     const fb=document.createElement('button');fb.className='mini';fb.textContent='Forget';
     fb.onclick=()=>{if(confirm('Forget “'+nameOf(d)+'”?'))send({type:'device.remove',devId:d.id})};
     row.append(dot,nmw,sp,fb);L.appendChild(row);
@@ -217,7 +218,9 @@ function renderTables(){
     cal.title=cal.disabled?'Add an online camera first':'Capture a frame and mark the corners';
     cal.onclick=()=>startCalib(t.token);
     const rm=document.createElement('button');rm.className='mini';rm.textContent='✕ table';
-    rm.onclick=()=>{if(confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))send({type:'table.remove',table:t.token})};
+    rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
+      if((!t.clock&&!t.camera)||confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))
+        send({type:'table.remove',table:t.token})};
     head.append(nm,pill,cal,rm);
     const slots=document.createElement('div');slots.className='slots';
     slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
@@ -226,7 +229,8 @@ function renderTables(){
 }
 
 function renderRunning(){
-  const list=tabs.filter(t=>t.moves>0).sort((a,b)=>(b.started_at||0)-(a.started_at||0));
+  const list=tabs.filter(t=>t.moves>0&&!t.result)           // active = has moves and not yet finished (history comes later)
+                 .sort((a,b)=>(b.started_at||0)-(a.started_at||0));
   $('rcnt').textContent=list.length?('— '+list.length):'';
   const L=$('running');L.innerHTML='';
   if(!list.length){L.innerHTML='<div class="empty">No games in progress.</div>';return}
@@ -237,8 +241,7 @@ function renderRunning(){
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
     left.append(nm,sub);
-    const res=document.createElement('div');res.className='gres';res.textContent=t.result?(''+t.result):'';
-    row.append(left,res);L.appendChild(row);
+    row.append(left);L.appendChild(row);
   });
 }
 
