@@ -42,7 +42,8 @@
   .cbtn.go{background:var(--good);border-color:var(--good);color:#08110a}
   .cbtn.off{background:var(--panel);border-color:var(--line);color:transparent;cursor:default}  /* blank when not your move */
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
-  .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad)}
+  .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad);font-size:min(7.5vw,27px);
+    line-height:1.15;white-space:normal;padding:6px;letter-spacing:.01em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
   .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
     padding:2px 0}
@@ -58,8 +59,6 @@
     width:42px;height:42px;border-radius:50%;line-height:1;
     background:rgba(21,23,28,.85);border:1px solid var(--line);color:var(--ink);font-size:22px;cursor:pointer;
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
-  .badmsg{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--bad);color:#fff;text-align:center;
-    padding:7px 4px;font-weight:800;font-size:13px;letter-spacing:.03em;border-radius:0 0 6px 6px}   /* illegal-move banner */
   .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:9px;z-index:6;padding:8px 0}
   .rail button{writing-mode:vertical-rl;transform:rotate(180deg);background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
@@ -161,7 +160,6 @@
         <div class="board" id="board"></div>
         <button class="startov hidden" id="startov"><span>START</span></button>
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
-        <div class="badmsg hidden" id="badmsg">ILLEGAL MOVE — TRY AGAIN</div>
       </div>
       <div class="zone white" id="z-white">
         <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
@@ -233,7 +231,7 @@ let reading=false, warnMsg=null;
 function paint(){                                          // big ✓ for the side to move; blank for the other
   for(const side of ['white','black']){
     const b=$('cb-'+side),active=clk.active===side&&phase==='run';let cls='cbtn off',txt='',dis=true;
-    if(active&&warnMsg){cls='cbtn warn';txt='⚠';dis=false}            // bad read -> red, tap to retry
+    if(active&&warnMsg){cls='cbtn warn';txt=warnMsg;dis=false}        // bad read -> red, message in the button
     else if(active&&reading){cls='cbtn reading';txt='✓'}             // confirmed, reading the board
     else if(active){cls='cbtn go';txt='✓';dis=false}                // your move -> green check
     b.className=cls;b.textContent=txt;b.disabled=dis;}
@@ -246,16 +244,16 @@ function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // 
     b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};g.appendChild(b)});
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);show('rotbtn',true);showCtrls(false);show('badmsg',false);showUndo(false);clearCands();paint();renderClocks()}
+function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks()}
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
-  show('startov',false);show('rotbtn',false);showCtrls(true);show('badmsg',false);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
+  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
-  showCtrls(false);show('startov',true);show('rotbtn',true);show('badmsg',false);showUndo(false);clearCands();paint();renderClocks();
+  showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();
   $('report').className='report';$('report').textContent='Ready — press START'}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
 ['white','black'].forEach(side=>$('cb-'+side).onclick=()=>{   // confirm, or retry after a warning
@@ -335,7 +333,7 @@ function handle(m){
     case 'state':                                               // refresh/reconnect -> restore the view
       {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);
-      show('badmsg',false);showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
+      showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
         started=true;show('pair',false);show('calib',false);show('refreshbtn',true);
@@ -360,17 +358,17 @@ function handle(m){
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
       if(m.fen)renderBoard(m.fen);
-      show('badmsg',false);showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
+      showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
       $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
       reading=false;warnMsg=null;clearCands();paint();break;
     case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
       clk.running=true;clk.last=Date.now();reading=false;
-      if(m.squares&&m.squares.length){markBad(m.squares);show('badmsg',true);warnMsg='ILLEGAL';   // illegal: red squares + banner
-        $('report').className='report warn';$('report').textContent='⚠ ILLEGAL MOVE — try again';}
-      else{markBad([]);show('badmsg',false);warnMsg=(m.reason||'move not recognized');
-        $('report').className='report warn';$('report').textContent='⚠ '+warnMsg+' — check & tap again';}
+      if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE — TRY AGAIN';   // illegal: red squares + button text
+        $('report').className='report warn';$('report').textContent='⚠ illegal move';}
+      else{markBad([]);warnMsg=(m.reason||'not recognized')+' — try again';
+        $('report').className='report warn';$('report').textContent='⚠ '+(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
       phase='over';clk.running=false;showCtrls(false);clearCands();paint();
