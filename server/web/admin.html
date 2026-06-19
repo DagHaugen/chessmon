@@ -49,6 +49,22 @@
     padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer}
   .acts button.clk.on{background:var(--accent);border-color:var(--accent);color:#0b1020}
   .acts button.cam.on{background:var(--cam);border-color:var(--cam);color:#0b1020}
+  .acts button.cal{border-color:var(--good);color:var(--good)}
+  .modal{position:fixed;inset:0;background:rgba(8,10,14,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:560px;width:100%;text-align:center}
+  .modal h2{font-size:15px;margin:0 0 4px}
+  .modal p{font-size:13px;color:var(--mut);margin:4px 0 12px}
+  .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
+  .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px}
+  .cmark{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
+    border:2px solid #46d369;background:rgba(70,211,105,.16);cursor:grab}
+  .cmark::before,.cmark::after{content:'';position:absolute;background:#46d369}
+  .cmark::before{left:50%;top:3px;bottom:3px;width:2px;margin-left:-1px}
+  .cmark::after{top:50%;left:3px;right:3px;height:2px;margin-top:-1px}
+  .crow{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+  .crow button{background:var(--good);color:#0b1020;border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
+  .crow button.sec{background:transparent;border:1px solid var(--line);color:var(--mut)}
+  .crow.oside button{background:#262b34;border:1px solid var(--accent);color:var(--ink)}
   .hidden{display:none}
 </style>
 </head>
@@ -69,11 +85,24 @@
   </div>
 
   <div id="list"></div>
+
+  <div class="modal hidden" id="calmodal"><div class="card">
+    <h2 id="caltitle">Mark the board corners</h2>
+    <p id="calhint">Drag the four markers onto the corners of the playing area.</p>
+    <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera">
+      <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div></div>
+    <div class="crow" id="crow">
+      <button class="sec" id="calcancel">Cancel</button><button id="caldone">Use these corners</button></div>
+    <div class="crow oside hidden" id="caloside">
+      <button data-side="top">▲ Top</button><button data-side="bottom">▼ Bottom</button>
+      <button data-side="left">◀ Left</button><button data-side="right">Right ▶</button></div>
+  </div></div>
 </div>
 <script src="qrcode.min.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
-let ws, devs=[], pendClock=null, pendCamera=null;
+function show(id,on){$(id).classList.toggle('hidden',!on)}
+let ws, devs=[], pendClock=null, pendCamera=null, calibTable=null;
 function nameOf(id){const d=devs.find(x=>x.id===id);return d?(d.userName||d.name||'device'):'—'}
 function updatePair(){
   $('pc').textContent=pendClock?nameOf(pendClock):'—';
@@ -102,7 +131,10 @@ function render(){
     meta.append(nm,id,inp);
     const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
     const acts=document.createElement('div');acts.className='acts';
-    if(d.online){
+    if(d.online&&d.role==='camera'&&d.table){             // a paired camera -> calibrate it on this screen
+      const cb=document.createElement('button');cb.className='cal';cb.textContent='Calibrate';cb.onclick=()=>startCalib(d.table);
+      acts.append(cb);
+    }else if(d.online&&!d.table){                          // unpaired -> assign a role + pair
       const bc=document.createElement('button');bc.className='clk'+(pendClock===d.id?' on':'');bc.textContent='Clock';bc.onclick=()=>pick('clock',d.id);
       const bm=document.createElement('button');bm.className='cam'+(pendCamera===d.id?' on':'');bm.textContent='Camera';bm.onclick=()=>pick('camera',d.id);
       acts.append(bc,bm);
@@ -122,15 +154,43 @@ function showQR(m){
   if(typeof QRCode!=='undefined')new QRCode(q,{text:url,width:150,height:150});
   $('qrwrap').classList.remove('hidden');
 }
+function flash(t){$('pmsg').textContent=t;$('pmsg').classList.remove('hidden');setTimeout(()=>$('pmsg').classList.add('hidden'),4000)}
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];render();updatePair();}
-  else if(m.type==='paired'){
-    pendClock=pendCamera=null;updatePair();render();
-    if(m.clockOnline&&m.cameraOnline){$('qrwrap').classList.add('hidden');
-      $('pmsg').classList.remove('hidden');setTimeout(()=>$('pmsg').classList.add('hidden'),4000);}
-    else showQR(m);
-  }
+  else if(m.type==='paired'){pendClock=pendCamera=null;updatePair();render();
+    if(m.clockOnline&&m.cameraOnline){$('qrwrap').classList.add('hidden');flash('Paired ✓')}else showQR(m);}
+  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image)}
+  else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
+  else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib();flash('Calibrated ✓')}}
+  else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
 }
+function startCalib(table){calibTable=table;send({type:'admin.calib',table});
+  $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
+  show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
+function onCalImage(durl){const img=$('cimg');show('ccwrap',true);
+  $('caltitle').textContent='Mark the board corners';
+  $('calhint').textContent='Drag the four markers onto the corners of the playing area.';
+  img.onload=()=>{const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];
+    document.querySelectorAll('#ccwrap .cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'})};
+  img.src=durl;show('crow',true);show('caloside',false);}
+function showOrientCal(){$('caltitle').textContent='Which side is White on?';
+  $('calhint').textContent='Click the side of the image where the white pieces are.';show('crow',false);show('caloside',true);}
+function closeCalib(){show('calmodal',false);calibTable=null}
+(function(){let drag=null;                                 // direct mouse/pointer drag of the markers
+  document.addEventListener('pointerdown',e=>{const m=e.target.closest('#ccwrap .cmark');
+    if(!m||$('calmodal').classList.contains('hidden'))return;drag=m;e.preventDefault()});
+  document.addEventListener('pointermove',e=>{if(!drag)return;const r=$('cimg').getBoundingClientRect();
+    const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
+    drag.style.left=(x*100)+'%';drag.style.top=(y*100)+'%';e.preventDefault()});
+  document.addEventListener('pointerup',()=>{drag=null});
+})();
+$('caldone').onclick=()=>{const r=$('cimg').getBoundingClientRect();
+  const corners=[...document.querySelectorAll('#ccwrap .cmark')].map(m=>{const b=m.getBoundingClientRect();
+    return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});
+  send({type:'admin.corners',table:calibTable,corners});$('calhint').textContent='Registering…';};
+$('calcancel').onclick=closeCalib;
+document.querySelectorAll('#caloside button').forEach(b=>b.onclick=()=>{
+  send({type:'admin.orient',table:calibTable,side:b.dataset.side});$('calhint').textContent='Orienting…'});
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');

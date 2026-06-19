@@ -67,6 +67,24 @@ async def broadcast_devices():
         await send(ws, {"type": "devices", "devices": lst})
 
 
+async def to_clock_admins(sess, obj):
+    """A calibration message to the table's clock + every console (either can drive the corner-tap)."""
+    obj = {**obj, "table": sess.table_token}
+    await send(hub(sess.table_token)["clock"], obj)
+    for a in list(admins):
+        await send(a, obj)
+
+
+async def to_units_admins(sess, obj):
+    """A calibration verdict to the table's clock + camera + every console."""
+    obj = {**obj, "table": sess.table_token}
+    h = hub(sess.table_token)
+    await send(h["clock"], obj)
+    await send(h["camera"], obj)
+    for a in list(admins):
+        await send(a, obj)
+
+
 @app.post("/tables")
 async def create_table(body: dict):
     s = mgr.create_table(body.get("white", "White"), body.get("black", "Black"),
@@ -119,7 +137,7 @@ async def ws_endpoint(ws: WebSocket):
                         s._calib_step, s._calib_frame = None, frame
                         _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                         durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
-                        await send(hub(s.table_token)["clock"], {"type": "calib.image", "image": durl})
+                        await to_clock_admins(s, {"type": "calib.image", "image": durl})
                         await send(ws, {"type": "calib.relayed"})
                         print(f"[frame] corners {frame.shape} -> relayed to clock")
                         continue
@@ -197,6 +215,33 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "paired", "table": sess.table_token, "pair": sess.pair_token,
                                 "clockOnline": bool(clock_dev and clock_dev.get("ws")),
                                 "cameraOnline": bool(cam_dev and cam_dev.get("ws"))})
+            elif t == "admin.calib":                              # console triggers a calibration frame
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    sess.set_calib_step("corners")
+                    await send(hub(sess.table_token)["camera"], {"type": "capture.req"})
+            elif t == "admin.corners":                            # console returned the 4 tapped corners
+                sess = mgr.by_table(data.get("table"))
+                fr = sess._calib_frame if sess is not None else None
+                if fr is None:
+                    await send(ws, {"type": "calib.failed", "reason": "no frame — hit Calibrate first"})
+                else:
+                    h, w = fr.shape[:2]
+                    px = [[c[0] * w, c[1] * h] for c in data["corners"]]   # fractions -> pixels
+                    try:
+                        verdict = sess.calibrate_oneshot(fr, px)
+                    except Exception as e:
+                        verdict = {"type": "calib.failed", "reason": str(e)}
+                    await to_units_admins(sess, verdict)
+                    if verdict.get("type") == "session.baselined":
+                        await broadcast_state(sess)
+            elif t == "admin.orient":                             # console picked which side White is on
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    verdict = sess.resolve_orientation(data.get("side"))
+                    await to_units_admins(sess, verdict)
+                    if verdict.get("type") == "session.baselined":
+                        await broadcast_state(sess)
             elif s is None:
                 await send(ws, {"type": "error", "reason": "join a table first"})
             elif t == "calib":                                    # next camera frame is this step
