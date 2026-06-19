@@ -391,7 +391,7 @@ class CameraGame:
         if gesture is not None:                  # (checked before move-matching so it is
             return ("gesture", gesture, None)    # never squeezed into a bogus king move)
         delta = self.prev != obs                 # the squares we actually saw change
-        viable = []
+        viable, legal_arrivals = [], set()       # legal_arrivals: every square some legal move can newly occupy
         for m in self.board.legal_moves:
             is_cast = self.board.is_castling(m)
             before = board_to_grid(self.board)
@@ -399,6 +399,9 @@ class CameraGame:
             after = board_to_grid(self.board)
             self.board.pop()
             changed = before != after
+            for rr, cc in zip(*np.where(changed)):           # remember where this move PUTS a piece
+                if before[rr, cc] == Cell.EMPTY and after[rr, cc] != Cell.EMPTY:
+                    legal_arrivals.add((int(rr), int(cc)))
             hard, soft, seen = False, 0, 0
             for r, c in zip(*np.where(changed)):
                 want, got = after[r, c], obs[r, c]
@@ -427,6 +430,16 @@ class CameraGame:
                 continue
             unexplained = int(np.count_nonzero(delta & ~changed))
             viable.append((soft, unexplained, seen, m))
+        # STRONG illegal signal: a piece actually LEFT a square (a real move, not a lone flicker) AND
+        # a clearly-visible piece now sits where no legal move can place one.
+        vacated = any(self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY
+                      for r, c in zip(*np.where(delta)))
+        if vacated:
+            for r, c in zip(*np.where(delta)):
+                if (self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY
+                        and (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c)
+                        and (int(r), int(c)) not in legal_arrivals):
+                    return ("error", "illegal move", delta)
         if not viable:
             return ("error", "illegal move", delta)   # a clean change that no legal move fits
         distinct = {(v[3].from_square, v[3].to_square) for v in viable}
