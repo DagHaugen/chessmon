@@ -29,7 +29,8 @@
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
   .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
   .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
-  #game{display:flex;flex-direction:column;flex:1;min-height:0;gap:6px;position:relative}
+  #game{display:flex;flex-direction:row;align-items:stretch;flex:1;min-height:0;gap:8px;position:relative}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;gap:6px}   /* col 3 */
   .zone{flex:1;display:flex;flex-direction:column;min-height:0;gap:6px}
   .zone.black{transform:rotate(180deg)}
   .zone .act{flex:1;min-height:0;position:relative}        /* fixed box; contents fill it, never resize it */
@@ -40,14 +41,13 @@
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
   .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad)}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
-  .mid{flex:0 0 auto;display:flex;align-items:stretch;justify-content:center;gap:8px;min-width:0}
-  .cstrip{flex:0 0 44px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6px 0;gap:6px;min-height:0}
-  .cstrip .ct{writing-mode:vertical-rl;font-variant-numeric:tabular-nums;font-weight:700;font-size:22px;color:var(--mut);letter-spacing:.02em}
-  .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}
-  .cstrip #st-black{transform:rotate(180deg)}                  /* black's dup faces black */
-  .cstrip .ctname{writing-mode:vertical-rl;font-size:13px;color:var(--accent);font-weight:600;letter-spacing:.04em;
+  .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2, full height */
+    padding:2px 0;min-height:0}
+  .cstrip .ct{writing-mode:vertical-rl;transform:rotate(180deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
+  .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
+  .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--accent);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
-  .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,calc(100% - 56px));aspect-ratio:1}
+  .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(21,23,28,.6);border:none;border-radius:8px;cursor:pointer;z-index:4}
   .startov span{transform:rotate(-90deg);font-size:min(13vw,64px);font-weight:800;color:var(--good);letter-spacing:.14em}
@@ -57,7 +57,7 @@
     border-radius:9px 0 0 9px;padding:13px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rrail{position:fixed;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}
   .rrail .report{writing-mode:vertical-rl;transform:rotate(180deg);background:none;border:none;padding:0;
-    font-size:11px;max-height:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* faces the board */
+    font-size:14px;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
   .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.4}
@@ -138,24 +138,24 @@
   </div>
 
   <div id="game" class="hidden">
-    <div class="zone black" id="z-black">
-      <div class="side" id="s-black"><span class="nm">Black</span><span class="tm" id="t-black">5:00</span></div>
-      <div class="act" id="act-black"><button class="cbtn off" id="cb-black" disabled></button><div class="cands" id="cands-black"></div></div>
+    <div class="cstrip">                                <!-- col 2: clocks + table name, read from the right -->
+      <span class="ct" id="st-black">5:00</span>
+      <span class="ctname" id="tid"></span>
+      <span class="ct" id="st-white">5:00</span>
     </div>
-    <div class="mid">
-      <div class="cstrip">
-        <span class="ct" id="st-black">5:00</span>
-        <span class="ctname" id="tid"></span>
-        <span class="ct" id="st-white">5:00</span>
+    <div class="main">                                  <!-- col 3: clocks + buttons + board -->
+      <div class="zone black" id="z-black">
+        <div class="side" id="s-black"><span class="nm">Black</span><span class="tm" id="t-black">5:00</span></div>
+        <div class="act" id="act-black"><button class="cbtn off" id="cb-black" disabled></button><div class="cands" id="cands-black"></div></div>
       </div>
       <div class="boardwrap">
         <div class="board" id="board"></div>
         <button class="startov hidden" id="startov"><span>START</span></button>
       </div>
-    </div>
-    <div class="zone white" id="z-white">
-      <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
-      <div class="act" id="act-white"><button class="cbtn off" id="cb-white" disabled></button><div class="cands" id="cands-white"></div></div>
+      <div class="zone white" id="z-white">
+        <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
+        <div class="act" id="act-white"><button class="cbtn off" id="cb-white" disabled></button><div class="cands" id="cands-white"></div></div>
+      </div>
     </div>
   </div>
 
