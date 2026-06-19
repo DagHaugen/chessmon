@@ -184,6 +184,19 @@ async def ws_endpoint(ws: WebSocket):
                 if d is not None:
                     d["userName"] = data.get("userName", "")
                     await broadcast_devices()
+            elif t == "pair.devices":                             # console pairs two devices into a new table
+                clock_dev = devices.get(data.get("clock"))
+                cam_dev = devices.get(data.get("camera"))
+                sess = mgr.create_table("White", "Black", "standard")
+                if clock_dev and clock_dev.get("ws"):             # push the role + token; the unit auto-joins
+                    await send(clock_dev["ws"], {"type": "assign", "role": "clock",
+                                                 "table": sess.table_token})
+                if cam_dev and cam_dev.get("ws"):
+                    await send(cam_dev["ws"], {"type": "assign", "role": "camera",
+                                               "pair": sess.pair_token})
+                await send(ws, {"type": "paired", "table": sess.table_token, "pair": sess.pair_token,
+                                "clockOnline": bool(clock_dev and clock_dev.get("ws")),
+                                "cameraOnline": bool(cam_dev and cam_dev.get("ws"))})
             elif s is None:
                 await send(ws, {"type": "error", "reason": "join a table first"})
             elif t == "calib":                                    # next camera frame is this step

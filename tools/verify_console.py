@@ -1,5 +1,5 @@
-"""Device-registry / server-console check over the live server: a device says hello, the console
-(admin.join) sees it, a rename sticks, and a disconnect flips it offline."""
+"""Server-console checks over the live server: devices register (hello), rename sticks, and the
+console pairs two connected devices -> each gets an `assign` push, the console gets `paired`."""
 import asyncio
 import json
 
@@ -11,29 +11,31 @@ WS = "ws://127.0.0.1:8788/ws"
 async def main():
     async with websockets.connect(WS) as admin:
         await admin.send(json.dumps({"type": "admin.join"}))
-        d0 = json.loads(await admin.recv())
-        assert d0["type"] == "devices", d0
+        assert json.loads(await admin.recv())["type"] == "devices"
 
-        async with websockets.connect(WS) as dev:
-            await dev.send(json.dumps({"type": "hello", "devId": "dev-test-1",
-                                       "name": "iPad", "role": "camera"}))
-            upd = json.loads(await admin.recv())
-            found = [x for x in upd.get("devices", []) if x["id"] == "dev-test-1"]
-            assert found and found[0]["name"] == "iPad" and found[0]["role"] == "camera" \
-                and found[0]["online"] is True, upd
-            print("hello -> console sees device (iPad / camera / online)  OK", flush=True)
+        async with websockets.connect(WS) as devA, websockets.connect(WS) as devB:
+            await devA.send(json.dumps({"type": "hello", "devId": "devA", "name": "iPhone", "role": "clock"}))
+            await admin.recv()
+            await devB.send(json.dumps({"type": "hello", "devId": "devB", "name": "iPad", "role": "camera"}))
+            seen = json.loads(await admin.recv())["devices"]
+            assert {d["id"] for d in seen} >= {"devA", "devB"}, seen
+            print("hello x2 -> console sees both devices  OK", flush=True)
 
-            await admin.send(json.dumps({"type": "device.rename", "devId": "dev-test-1",
-                                         "userName": "Board 1 cam"}))
-            ren = json.loads(await admin.recv())
-            f2 = [x for x in ren["devices"] if x["id"] == "dev-test-1"][0]
-            assert f2["userName"] == "Board 1 cam", ren
+            await admin.send(json.dumps({"type": "device.rename", "devId": "devA", "userName": "T1 clock"}))
+            ren = json.loads(await admin.recv())["devices"]
+            assert [d for d in ren if d["id"] == "devA"][0]["userName"] == "T1 clock"
             print("rename -> userName set  OK", flush=True)
 
-        off = json.loads(await admin.recv())                       # dev disconnected above
-        f3 = [x for x in off["devices"] if x["id"] == "dev-test-1"][0]
-        assert f3["online"] is False, off
-        print("disconnect -> online=False  CONSOLE PASSED", flush=True)
+            await admin.send(json.dumps({"type": "pair.devices", "clock": "devA", "camera": "devB"}))
+            asn_a = json.loads(await devA.recv())
+            asn_b = json.loads(await devB.recv())
+            paired = json.loads(await admin.recv())
+            assert asn_a["type"] == "assign" and asn_a["role"] == "clock" and asn_a.get("table"), asn_a
+            assert asn_b["type"] == "assign" and asn_b["role"] == "camera" and asn_b.get("pair"), asn_b
+            assert paired["type"] == "paired" and paired["clockOnline"] and paired["cameraOnline"], paired
+            assert asn_a["table"] == paired["table"] and asn_b["pair"] == paired["pair"]
+            print("pair.devices -> assign(clock)+assign(camera) pushed, console got paired  PAIRING PASSED",
+                  flush=True)
 
 
 asyncio.run(main())

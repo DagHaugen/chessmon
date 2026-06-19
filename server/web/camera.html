@@ -106,6 +106,9 @@ function connect(){
     if(m.type==='calib.relayed'){status('frame sent — mark the board corners on the clock','ok')}
     else if(m.type==='orient.ask'){status('now tap which side White is on, on the clock','ok')}
     else if(m.type==='session.baselined'){status('calibrated · armed — a frame is sent on every move','ok')}
+    else if(m.type==='assign'){if(m.role==='camera'){pair=m.pair;localStorage.setItem('cm_pair',pair);
+      ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));status('paired from the console','ok')}
+      else if(m.role==='clock'){location.href='clock.html?table='+m.table}}
     else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
       status('already calibrated · armed — a frame is sent on every move','ok')}
       else{status('camera ready — capture the empty board, then the start position')}}

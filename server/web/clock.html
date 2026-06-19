@@ -237,6 +237,12 @@ function handle(m){
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
       break;
+    case 'assign':                                              // console assigned this device a role
+      if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
+        show('setup',false);show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+        send({type:'table.join',tableToken:table});}
+      else if(m.role==='camera'){location.href='camera.html?pair='+m.pair;}
+      break;
     case 'state':                                               // refresh/reconnect -> restore the view
       renderBoard(m.fen);
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}

@@ -12,14 +12,25 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:760px;margin:0 auto;padding:22px}
-  .top{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .wrap{max-width:780px;margin:0 auto;padding:22px}
+  .top{display:flex;align-items:center;gap:10px;margin-bottom:16px}
   .top h1{font-size:18px;margin:0;font-weight:700}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
   .sub{color:var(--mut);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .pairbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+  .pairbar .slot{font-size:13px;color:var(--mut)}.pairbar .slot b{color:var(--ink)}
+  .pairbar .msg{color:var(--good);font-size:13px}
+  .pairbar button{margin-left:auto;background:var(--good);color:#0b1020;border:none;border-radius:10px;
+    padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
+  .pairbar button:disabled{opacity:.35;cursor:default}
+  .qrwrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;text-align:center}
+  .qrwrap h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600}
+  #qr{display:inline-flex;background:#fff;padding:8px;border-radius:10px}
+  .qrwrap code{display:block;margin-top:9px;color:var(--accent);font-size:12px;word-break:break-all}
   .empty{color:var(--mut);background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:30px;text-align:center;line-height:1.5}
-  .dev{display:grid;grid-template-columns:auto auto 1fr auto;gap:14px;align-items:center;
+  .dev{display:grid;grid-template-columns:auto auto 1fr auto auto;gap:14px;align-items:center;
     background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
   .dev.off{opacity:.55}
   .st{width:10px;height:10px;border-radius:50%;background:var(--mut)}.st.on{background:var(--good)}
@@ -27,24 +38,53 @@
     padding:4px 9px;border-radius:8px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
   .badge.clock{color:var(--accent);border-color:var(--accent)}
   .badge.camera{color:var(--cam);border-color:var(--cam)}
-  .meta{min-width:0}
-  .meta .nm{font-weight:600}
+  .meta{min-width:0}.meta .nm{font-weight:600}
   .meta .id{font-size:11px;color:var(--mut);font-family:ui-monospace,monospace}
-  .meta input{margin-top:7px;width:100%;max-width:300px;background:#11141a;border:1px solid var(--line);
+  .meta input{margin-top:7px;width:100%;max-width:280px;background:#11141a;border:1px solid var(--line);
     color:var(--ink);border-radius:9px;padding:8px 11px;font-size:14px}
   .meta input:focus{outline:none;border-color:var(--accent)}
   .tbl{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;text-align:right;white-space:nowrap}
+  .acts{display:flex;gap:6px}
+  .acts button{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:8px;
+    padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer}
+  .acts button.clk.on{background:var(--accent);border-color:var(--accent);color:#0b1020}
+  .acts button.cam.on{background:var(--cam);border-color:var(--cam);color:#0b1020}
+  .hidden{display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
     <span class="sub" id="sub">connecting…</span></div>
+
+  <div class="pairbar">
+    <span class="slot">Clock: <b id="pc">—</b></span>
+    <span class="slot">Camera: <b id="pcam">—</b></span>
+    <span class="msg hidden" id="pmsg">Paired ✓</span>
+    <button id="pairbtn" disabled>Pair into a table</button>
+  </div>
+
+  <div class="qrwrap hidden" id="qrwrap">
+    <h3 id="qrlabel"></h3><div id="qr"></div><code id="qrtext"></code>
+  </div>
+
   <div id="list"></div>
 </div>
+<script src="qrcode.min.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
-let ws, devs=[];
+let ws, devs=[], pendClock=null, pendCamera=null;
+function nameOf(id){const d=devs.find(x=>x.id===id);return d?(d.userName||d.name||'device'):'—'}
+function updatePair(){
+  $('pc').textContent=pendClock?nameOf(pendClock):'—';
+  $('pcam').textContent=pendCamera?nameOf(pendCamera):'—';
+  $('pairbtn').disabled=!(pendClock&&pendCamera);
+}
+function pick(role,id){                                   // a device can't be both roles
+  if(role==='clock'){pendClock=pendClock===id?null:id; if(pendClock===pendCamera)pendCamera=null;}
+  else{pendCamera=pendCamera===id?null:id; if(pendCamera===pendClock)pendClock=null;}
+  $('pmsg').classList.add('hidden');updatePair();render();
+}
 function render(){
   const L=$('list');
   $('sub').textContent=devs.filter(d=>d.online).length+' online · '+devs.length+' known';
@@ -61,16 +101,42 @@ function render(){
     inp.onchange=()=>send({type:'device.rename',devId:d.id,userName:inp.value.trim()});
     meta.append(nm,id,inp);
     const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
-    row.append(st,badge,meta,tbl);
+    const acts=document.createElement('div');acts.className='acts';
+    if(d.online){
+      const bc=document.createElement('button');bc.className='clk'+(pendClock===d.id?' on':'');bc.textContent='Clock';bc.onclick=()=>pick('clock',d.id);
+      const bm=document.createElement('button');bm.className='cam'+(pendCamera===d.id?' on':'');bm.textContent='Camera';bm.onclick=()=>pick('camera',d.id);
+      acts.append(bc,bm);
+    }
+    row.append(st,badge,meta,tbl,acts);
     L.appendChild(row);
   });
+}
+$('pairbtn').onclick=()=>send({type:'pair.devices',clock:pendClock,camera:pendCamera});
+function showQR(m){
+  let url='';
+  if(!m.cameraOnline)url=location.origin+'/app/camera.html?pair='+m.pair;
+  else if(!m.clockOnline)url=location.origin+'/app/clock.html?table='+m.table;
+  if(!url){$('qrwrap').classList.add('hidden');return}
+  $('qrlabel').textContent=(!m.cameraOnline?'Camera not connected — scan with the camera device':'Clock not connected — open on the clock device');
+  $('qrtext').textContent=url;const q=$('qr');q.innerHTML='';
+  if(typeof QRCode!=='undefined')new QRCode(q,{text:url,width:150,height:150});
+  $('qrwrap').classList.remove('hidden');
+}
+function handle(m){
+  if(m.type==='devices'){devs=m.devices||[];render();updatePair();}
+  else if(m.type==='paired'){
+    pendClock=pendCamera=null;updatePair();render();
+    if(m.clockOnline&&m.cameraOnline){$('qrwrap').classList.add('hidden');
+      $('pmsg').classList.remove('hidden');setTimeout(()=>$('pmsg').classList.add('hidden'),4000);}
+    else showQR(m);
+  }
 }
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
   ws.onclose=()=>{$('dot').classList.remove('on');$('sub').textContent='reconnecting…';setTimeout(connect,1500)};
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){devs=m.devices||[];render()}};
+  ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 render();connect();
 setInterval(()=>send({type:'ping'}),20000);            // heartbeat
