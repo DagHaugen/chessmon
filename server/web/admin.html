@@ -235,9 +235,9 @@ function renderTables(){
     const pill=document.createElement('span');pill.className='pill'+(t.calibrated?' ok':'');
     pill.textContent=t.calibrated?'calibrated':'not calibrated';
     const camDev=devById(t.camera);
-    const cal=document.createElement('button');cal.className='cal';cal.textContent='Calibrate';
+    const cal=document.createElement('button');cal.className='cal';cal.textContent=t.calibrated?'Re-calibrate':'Calibrate';
     cal.disabled=!(t.camera&&camDev&&camDev.online);
-    cal.title=cal.disabled?'Add an online camera first':'Capture a frame and mark the corners';
+    cal.title=cal.disabled?'Add an online camera first':(t.calibrated?'View the current corners, then adjust or re-register':'Capture a frame and mark the corners');
     cal.onclick=()=>startCalib(t.token);
     const rm=document.createElement('button');rm.className='mini bin';rm.innerHTML=BIN;rm.title='Remove this table';
     rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
@@ -276,7 +276,7 @@ $('newtable').onclick=()=>{const n=prompt('Name for the new table:','Table '+(ta
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
-  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image)}
+  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
@@ -284,9 +284,9 @@ function handle(m){
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
-function onCalImage(durl){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
-  $('caltitle').textContent='Mark the board corners';
-  img.onload=resetCalDots;
+function onCalImage(durl,corners){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
+  $('caltitle').textContent=(corners&&corners.length===4)?'Current calibration':'Mark the board corners';
+  img.onload=()=>seedCorners(corners);
   img.src=durl;show('crow',true);show('caloside',false);}
 function showOrientCal(){$('ccwrap').classList.remove('marking');$('caltitle').textContent='Which side is White on?';
   $('calhint').textContent='Click the side of the image where the white pieces are.';show('crow',false);show('caloside',true);}
@@ -298,13 +298,20 @@ function updateCalHint(){$('calhint').textContent = calCorners.length<4
   : 'Four corners marked — “Use these corners”, or Redo to start over.';}
 function resetCalDots(){calCorners=[];document.querySelectorAll('#ccwrap .cdot').forEach(d=>d.remove());
   $('caldone').disabled=true;updateCalHint();}
+function drawDot(x,y,n){const d=document.createElement('div');d.className='cdot';d.textContent=n;
+  d.style.left=(x*100)+'%';d.style.top=(y*100)+'%';$('ccwrap').appendChild(d);}
+function seedCorners(corners){                                  // re-show the stored corners (view), else start clean for marking
+  document.querySelectorAll('#ccwrap .cdot').forEach(d=>d.remove());
+  if(corners&&corners.length===4){calCorners=corners.map(c=>[c[0],c[1]]);
+    calCorners.forEach((c,i)=>drawDot(c[0],c[1],i+1));$('caldone').disabled=false;
+    $('calhint').textContent='Current corners shown — Redo to re-mark, or “Use these corners” to re-register.';}
+  else resetCalDots();}
 $('cimg').addEventListener('click',e=>{
   if($('calmodal').classList.contains('hidden')||!$('ccwrap').classList.contains('marking')||calCorners.length>=4)return;
   const r=$('cimg').getBoundingClientRect();
   const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
   calCorners.push([x,y]);
-  const d=document.createElement('div');d.className='cdot';d.textContent=calCorners.length;
-  d.style.left=(x*100)+'%';d.style.top=(y*100)+'%';$('ccwrap').appendChild(d);
+  drawDot(x,y,calCorners.length);
   if(calCorners.length===4)$('caldone').disabled=false;
   updateCalHint();
 });

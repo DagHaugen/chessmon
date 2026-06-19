@@ -37,6 +37,7 @@ class Session:
         self.clock_dev = None              # devId of the assigned clock / camera unit (the table config,
         self.camera_dev = None             # persisted so it survives the units going offline)
         self.started_at = None             # epoch seconds of the first move (a "running game")
+        self.corners = None                # last calibration corners (fractions 0..1) so the console can re-show / edit them
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -58,7 +59,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", "")):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None)):
             if not hasattr(self, k):
                 setattr(self, k, v)
 

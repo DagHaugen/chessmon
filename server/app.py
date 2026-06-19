@@ -187,7 +187,7 @@ async def ws_endpoint(ws: WebSocket):
                         s._calib_step, s._calib_frame = None, frame
                         _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                         durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
-                        await to_clock_admins(s, {"type": "calib.image", "image": durl})
+                        await to_clock_admins(s, {"type": "calib.image", "image": durl, "corners": s.corners})
                         await send(ws, {"type": "calib.relayed"})
                         print(f"[frame] corners {frame.shape} -> relayed to clock")
                         continue
@@ -353,6 +353,7 @@ async def ws_endpoint(ws: WebSocket):
                 else:
                     h, w = fr.shape[:2]
                     px = [[c[0] * w, c[1] * h] for c in data["corners"]]   # fractions -> pixels
+                    sess.corners = data["corners"]                         # remember for view/edit from the console
                     try:
                         verdict = sess.calibrate_oneshot(fr, px)
                     except Exception as e:
@@ -379,6 +380,7 @@ async def ws_endpoint(ws: WebSocket):
                 else:
                     h, w = fr.shape[:2]
                     px = [[c[0] * w, c[1] * h] for c in data["corners"]]   # fractions -> pixels
+                    s.corners = data["corners"]
                     try:
                         verdict = s.calibrate_oneshot(fr, px)          # one-step on the set-up board
                     except Exception as e:
