@@ -20,6 +20,17 @@ kind, san, _ = g.observe(obs)
 assert kind == "error", f"illegal e2->e5 not flagged: {kind} ({san})"
 print(f"illegal e2->e5 (white on dark, unreachable) -> {kind} / {san}")
 
+# illegal: bishop c1 -> c3. c3 IS a legal landing (Nc3) so the arrival looks fine, but the blocked
+# c1 bishop can't legally leave c1 -> the origin gives it away.
+gb = CameraGame(chess.Board())
+sb = board_to_grid(gb.board); gb.observe(sb)
+ob = sb.copy()
+ob[7][2] = Cell.EMPTY       # c1 vacates  (r = 8-1 = 7, c = 2)
+ob[5][2] = Cell.LIGHT       # c3 occupied (r = 8-3 = 5, c = 2) by the bishop
+kb, sanb, _ = gb.observe(ob)
+assert kb == "error", f"illegal Bc1-c3 not flagged: {kb} ({sanb})"
+print(f"illegal Bc1-c3 (legal landing c3, illegal origin c1) -> {kb} / {sanb}")
+
 # legal e2-e4 from the start must still register as a move (e4 IS a legal landing square)
 g2 = CameraGame(chess.Board())
 s2 = board_to_grid(g2.board); g2.observe(s2)
