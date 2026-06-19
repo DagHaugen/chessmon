@@ -53,7 +53,8 @@
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(21,23,28,.6);border:none;border-radius:8px;cursor:pointer;z-index:4}
   .startov span{transform:rotate(-90deg);font-size:min(13vw,64px);font-weight:800;color:var(--good);letter-spacing:.14em}
-  .rotbtn{position:absolute;top:8px;right:8px;z-index:5;width:42px;height:42px;border-radius:50%;line-height:1;
+  .rotbtn{position:absolute;top:50%;left:50%;transform:translate(calc(-50% - 82px),-50%);z-index:5;   /* centered vertically, just left of START */
+    width:42px;height:42px;border-radius:50%;line-height:1;
     background:rgba(21,23,28,.85);border:1px solid var(--line);color:var(--ink);font-size:22px;cursor:pointer;
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
   .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
