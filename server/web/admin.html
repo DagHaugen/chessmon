@@ -60,11 +60,10 @@
   .modal p{font-size:13px;color:var(--mut);margin:4px 0 12px}
   .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
   .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px}
-  .cmark{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;
-    border:2px solid #46d369;background:rgba(70,211,105,.16);cursor:grab}
-  .cmark::before,.cmark::after{content:'';position:absolute;background:#46d369}
-  .cmark::before{left:50%;top:3px;bottom:3px;width:2px;margin-left:-1px}
-  .cmark::after{top:50%;left:3px;right:3px;height:2px;margin-top:-1px}
+  .ccwrap.marking img{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2346d369' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%2346d369'/%3E%3Cline x1='16' y1='1' x2='16' y2='6' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='16' y1='26' x2='16' y2='31' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='1' y1='16' x2='6' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='26' y1='16' x2='31' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3C/svg%3E") 16 16, crosshair}
+  .cdot{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid #46d369;
+    background:rgba(70,211,105,.3);color:#eaffea;font-size:10px;font-weight:700;display:flex;align-items:center;
+    justify-content:center;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.45)}
   .crow{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
   .crow button{background:var(--good);color:#0b1020;border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
   .crow button.sec{background:transparent;border:1px solid var(--line);color:var(--mut)}
@@ -94,10 +93,9 @@
   <div class="modal hidden" id="calmodal"><div class="card">
     <h2 id="caltitle">Mark the board corners</h2>
     <p id="calhint">Drag the four markers onto the corners of the playing area.</p>
-    <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera">
-      <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div></div>
+    <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera"></div>
     <div class="crow" id="crow">
-      <button class="sec" id="calcancel">Cancel</button><button id="caldone">Use these corners</button></div>
+      <button class="sec" id="calcancel">Cancel</button><button class="sec" id="calredo">Redo</button><button id="caldone">Use these corners</button></div>
     <div class="crow oside hidden" id="caloside">
       <button data-side="top">▲ Top</button><button data-side="bottom">▼ Bottom</button>
       <button data-side="left">◀ Left</button><button data-side="right">Right ▶</button></div>
@@ -186,27 +184,33 @@ function handle(m){
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
-function onCalImage(durl){const img=$('cimg');show('ccwrap',true);
+function onCalImage(durl){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
   $('caltitle').textContent='Mark the board corners';
-  $('calhint').textContent='Drag the four markers onto the corners of the playing area.';
-  img.onload=()=>{const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];
-    document.querySelectorAll('#ccwrap .cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'})};
+  img.onload=resetCalDots;                                  // start fresh: bullseye-click the 4 corners
   img.src=durl;show('crow',true);show('caloside',false);}
-function showOrientCal(){$('caltitle').textContent='Which side is White on?';
+function showOrientCal(){$('ccwrap').classList.remove('marking');$('caltitle').textContent='Which side is White on?';
   $('calhint').textContent='Click the side of the image where the white pieces are.';show('crow',false);show('caloside',true);}
 function closeCalib(){show('calmodal',false);calibTable=null}
-(function(){let drag=null;                                 // direct mouse/pointer drag of the markers
-  document.addEventListener('pointerdown',e=>{const m=e.target.closest('#ccwrap .cmark');
-    if(!m||$('calmodal').classList.contains('hidden'))return;drag=m;e.preventDefault()});
-  document.addEventListener('pointermove',e=>{if(!drag)return;const r=$('cimg').getBoundingClientRect();
-    const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
-    drag.style.left=(x*100)+'%';drag.style.top=(y*100)+'%';e.preventDefault()});
-  document.addEventListener('pointerup',()=>{drag=null});
-})();
-$('caldone').onclick=()=>{const r=$('cimg').getBoundingClientRect();
-  const corners=[...document.querySelectorAll('#ccwrap .cmark')].map(m=>{const b=m.getBoundingClientRect();
-    return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});
-  send({type:'admin.corners',table:calibTable,corners});$('calhint').textContent='Registering…';};
+let calCorners=[];                                          // corner clicks collected as [xfrac,yfrac]
+const CORNER_LABELS=['top-left','top-right','bottom-right','bottom-left'];
+function updateCalHint(){$('calhint').textContent = calCorners.length<4
+  ? 'Click the '+CORNER_LABELS[calCorners.length]+' corner of the playing area  ('+(calCorners.length+1)+' / 4).'
+  : 'Four corners marked — “Use these corners”, or Redo to start over.';}
+function resetCalDots(){calCorners=[];document.querySelectorAll('#ccwrap .cdot').forEach(d=>d.remove());
+  $('caldone').disabled=true;updateCalHint();}
+$('cimg').addEventListener('click',e=>{                     // bullseye-click drops the next corner (no marker to hide it)
+  if($('calmodal').classList.contains('hidden')||!$('ccwrap').classList.contains('marking')||calCorners.length>=4)return;
+  const r=$('cimg').getBoundingClientRect();
+  const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
+  calCorners.push([x,y]);
+  const d=document.createElement('div');d.className='cdot';d.textContent=calCorners.length;
+  d.style.left=(x*100)+'%';d.style.top=(y*100)+'%';$('ccwrap').appendChild(d);
+  if(calCorners.length===4)$('caldone').disabled=false;
+  updateCalHint();
+});
+$('caldone').onclick=()=>{if(calCorners.length!==4)return;
+  send({type:'admin.corners',table:calibTable,corners:calCorners});$('calhint').textContent='Registering…';};
+$('calredo').onclick=resetCalDots;
 $('calcancel').onclick=closeCalib;
 document.querySelectorAll('#caloside button').forEach(b=>b.onclick=()=>{
   send({type:'admin.orient',table:calibTable,side:b.dataset.side});$('calhint').textContent='Orienting…'});
