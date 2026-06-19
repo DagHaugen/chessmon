@@ -71,8 +71,11 @@ async function startCam(){
     status('camera ready — mount it straight down over the board')
   }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
 }
-let zoom=1;                                              // digital-zoom factor (stays 1 for hardware zoom)
+let zoom=1,camRes=null;                                  // digital-zoom factor; current camera capture resolution
 function setupZoom(track){
+  const set=track.getSettings?track.getSettings():{};
+  if(set.width){camRes={w:set.width,h:set.height};
+    if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',cam:camRes}))}
   const caps=track.getCapabilities?track.getCapabilities():{},sl=$('zoom');
   if(caps.zoom){                                         // real camera zoom (newer iOS Safari exposes it)
     sl.min=caps.zoom.min;sl.max=caps.zoom.max;sl.step=caps.zoom.step||1;
@@ -96,7 +99,9 @@ $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the se
 
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');ws.send(JSON.stringify({type:'hello',devId,devName,role:'camera'}));
+  ws.onopen=()=>{$('dot').classList.add('on');
+    ws.send(JSON.stringify({type:'hello',devId,devName,role:'camera',screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
+    if(camRes)ws.send(JSON.stringify({type:'device.meta',cam:camRes}));
     if(pair){ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')}else log('registered — waiting to be paired')};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
   ws.onmessage=e=>{

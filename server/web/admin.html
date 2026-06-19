@@ -40,6 +40,7 @@
   .badge.camera{color:var(--cam);border-color:var(--cam)}
   .meta{min-width:0}.meta .nm{font-weight:600}
   .meta .id{font-size:11px;color:var(--mut);font-family:ui-monospace,monospace}
+  .meta .spec{font-size:11px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
   .meta input{margin-top:7px;width:100%;max-width:280px;background:#11141a;border:1px solid var(--line);
     color:var(--ink);border-radius:9px;padding:8px 11px;font-size:14px}
   .meta input:focus{outline:none;border-color:var(--accent)}
@@ -104,6 +105,10 @@ function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 let ws, devs=[], pendClock=null, pendCamera=null, calibTable=null;
 function nameOf(id){const d=devs.find(x=>x.id===id);return d?(d.userName||d.name||'device'):'—'}
+function specText(d){const p=[];
+  if(d.screen)p.push('screen '+d.screen.w+'×'+d.screen.h+(d.screen.dpr&&d.screen.dpr!==1?' @'+d.screen.dpr:''));
+  if(d.cam)p.push('cam '+d.cam.w+'×'+d.cam.h);
+  return p.join('  ·  ');}
 function updatePair(){
   $('pc').textContent=pendClock?nameOf(pendClock):'—';
   $('pcam').textContent=pendCamera?nameOf(pendCamera):'—';
@@ -130,10 +135,11 @@ function render(){
     const meta=document.createElement('div');meta.className='meta';
     const nm=document.createElement('div');nm.className='nm';nm.textContent=d.name||'device';
     const id=document.createElement('div');id.className='id';id.textContent=(d.id||'').slice(0,8);
+    const spec=document.createElement('div');spec.className='spec';spec.textContent=specText(d);
     const inp=document.createElement('input');inp.placeholder='your name — e.g. “Table 1 clock”';inp.value=d.userName||'';
     inp.onchange=()=>send({type:'device.rename',devId:d.id,userName:inp.value.trim()});
     inp.onblur=()=>{if(renderPending)render()};            // refresh once they're done typing
-    meta.append(nm,id,inp);
+    meta.append(nm,id,spec,inp);
     const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
     const acts=document.createElement('div');acts.className='acts';
     if(d.online&&d.role==='camera'&&d.table){             // a paired camera -> calibrate it on this screen

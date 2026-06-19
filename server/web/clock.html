@@ -282,7 +282,8 @@ function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');keepAwake();send({type:'hello',devId,devName,role:'clock'});
+  ws.onopen=()=>{$('dot').classList.add('on');keepAwake();
+    send({type:'hello',devId,devName,role:'clock',screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}});
     if(table)send({type:'table.join',tableToken:table})};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));

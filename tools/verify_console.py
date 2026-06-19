@@ -14,12 +14,19 @@ async def main():
         assert json.loads(await admin.recv())["type"] == "devices"
 
         async with websockets.connect(WS) as devA, websockets.connect(WS) as devB:
-            await devA.send(json.dumps({"type": "hello", "devId": "devA", "name": "iPhone", "role": "clock"}))
+            await devA.send(json.dumps({"type": "hello", "devId": "devA", "name": "iPhone", "role": "clock",
+                                        "screen": {"w": 390, "h": 844, "dpr": 3}}))
             await admin.recv()
-            await devB.send(json.dumps({"type": "hello", "devId": "devB", "name": "iPad", "role": "camera"}))
+            await devB.send(json.dumps({"type": "hello", "devId": "devB", "name": "iPad", "role": "camera",
+                                        "screen": {"w": 1024, "h": 768, "dpr": 2}}))
+            await admin.recv()
+            await devB.send(json.dumps({"type": "device.meta", "cam": {"w": 1280, "h": 960}}))
             seen = json.loads(await admin.recv())["devices"]
-            assert {d["id"] for d in seen} >= {"devA", "devB"}, seen
-            print("hello x2 -> console sees both devices  OK", flush=True)
+            da = [d for d in seen if d["id"] == "devA"][0]
+            db = [d for d in seen if d["id"] == "devB"][0]
+            assert da.get("screen") == {"w": 390, "h": 844, "dpr": 3}, da
+            assert db.get("screen") == {"w": 1024, "h": 768, "dpr": 2} and db.get("cam") == {"w": 1280, "h": 960}, db
+            print("hello x2 + screen/cam resolution -> console sees both  OK", flush=True)
 
             await admin.send(json.dumps({"type": "device.rename", "devId": "devA", "userName": "T1 clock"}))
             ren = json.loads(await admin.recv())["devices"]

@@ -59,7 +59,7 @@ async def broadcast_state(s):
 
 
 def dev_public(d):
-    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online")}
+    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam")}
 
 
 async def broadcast_devices():
@@ -74,7 +74,8 @@ def save_devices():
     doesn't lose the names the operator typed in the console."""
     try:
         recs = [{"id": d["id"], "name": d.get("name", ""), "userName": d.get("userName", ""),
-                 "role": d.get("role", "")} for d in devices.values()]
+                 "role": d.get("role", ""), "screen": d.get("screen"), "cam": d.get("cam")}
+                for d in devices.values()]
         with open(DEVICES_FILE, "w") as f:
             json.dump(recs, f)
     except Exception:
@@ -217,6 +218,14 @@ async def ws_endpoint(ws: WebSocket):
                     d = devices.setdefault(dev_id, {"id": dev_id, "userName": "", "table": None})
                     d.update({"name": data.get("name", "device"), "role": data.get("role", "?"),
                               "online": True, "ws": ws})
+                    if data.get("screen"):
+                        d["screen"] = data["screen"]
+                    await broadcast_devices()
+            elif t == "device.meta":                              # extra device info (e.g. camera capture res)
+                if dev_id in devices:
+                    for k in ("screen", "cam"):
+                        if data.get(k):
+                            devices[dev_id][k] = data[k]
                     await broadcast_devices()
             elif t == "admin.join":                               # the server-console page
                 role = "admin"
