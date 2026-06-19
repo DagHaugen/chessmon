@@ -15,7 +15,7 @@
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
   .page{max-width:520px;margin:0 auto;padding:6px 34px;min-height:100dvh;display:flex;flex-direction:column;gap:8px}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:0 0 auto}
-  .dot.on{background:var(--good)}
+  .dot.on{display:none}                              /* only show the dot (red) when the connection drops */
   .side{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
     display:flex;align-items:center;justify-content:space-between;transition:.15s;opacity:.5}
   .side.active{opacity:1;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
@@ -29,7 +29,7 @@
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
   .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
   .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
-  #game{display:flex;flex-direction:row;align-items:stretch;flex:1;min-height:0;gap:8px;position:relative}
+  #game{display:flex;flex-direction:row;flex:1;min-height:0;gap:8px;position:relative}
   .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;gap:6px}   /* col 3 */
   .zone{flex:1;display:flex;flex-direction:column;min-height:0;gap:6px}
   .zone.black{transform:rotate(180deg)}
@@ -41,11 +41,11 @@
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
   .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad)}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
-  .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2, full height */
-    padding:2px 0;min-height:0}
+  .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
+    padding:2px 0}
   .cstrip .ct{writing-mode:vertical-rl;transform:rotate(180deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
-  .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--accent);font-weight:600;letter-spacing:.04em;
+  .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -138,12 +138,12 @@
   </div>
 
   <div id="game" class="hidden">
-    <div class="cstrip">                                <!-- col 2: clocks + table name, read from the right -->
+    <div class="cstrip">                                <!-- col 2: clocks + table, sized to the board height -->
       <span class="ct" id="st-black">5:00</span>
       <span class="ctname" id="tid"></span>
       <span class="ct" id="st-white">5:00</span>
     </div>
-    <div class="main">                                  <!-- col 3: clocks + buttons + board -->
+    <div class="main">                                  <!-- col 3: zones (clocks + buttons) + board -->
       <div class="zone black" id="z-black">
         <div class="side" id="s-black"><span class="nm">Black</span><span class="tm" id="t-black">5:00</span></div>
         <div class="act" id="act-black"><button class="cbtn off" id="cb-black" disabled></button><div class="cands" id="cands-black"></div></div>
@@ -382,6 +382,8 @@ if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ
 else{show('setup',true);$('tid').textContent='no table';}
 connect();                                             // always connect so the server console sees the device
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+(function(){const bw=document.querySelector('.boardwrap'),cs=document.querySelector('.cstrip');   // col 2 spans exactly the board height
+  if(bw&&cs&&window.ResizeObserver)new ResizeObserver(()=>{cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px'}).observe(bw);})();
 
 async function keepAwake(){try{if('wakeLock'in navigator)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(!ws||ws.readyState>1)connect()}});
