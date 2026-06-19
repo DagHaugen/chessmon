@@ -43,7 +43,7 @@
   .cbtn.off{background:var(--panel);border-color:var(--line);color:transparent;cursor:default}  /* blank when not your move */
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
   .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad);font-size:min(7.5vw,27px);
-    line-height:1.15;white-space:normal;padding:6px;letter-spacing:.01em}
+    line-height:1.2;white-space:pre-line;padding:6px;letter-spacing:.01em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
   .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
     padding:2px 0}
@@ -365,9 +365,9 @@ function handle(m){
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
       clk.running=true;clk.last=Date.now();reading=false;
-      if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE — TRY AGAIN';   // illegal: red squares + button text
+      if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE\nTRY AGAIN';   // illegal: red squares + button text (two lines)
         $('report').className='report warn';$('report').textContent='⚠ illegal move';}
-      else{markBad([]);warnMsg=(m.reason||'not recognized')+' — try again';
+      else{markBad([]);warnMsg=(m.reason||'not recognized')+'\ntry again';
         $('report').className='report warn';$('report').textContent='⚠ '+(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
