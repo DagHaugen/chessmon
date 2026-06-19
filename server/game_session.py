@@ -178,6 +178,15 @@ class Session:
         self.seed_baseline(self.board_reader.classify(frame))
         return {"type": "refreshed", "fen": self.game.board.fen()}
 
+    def reset_game(self):
+        """Operator moved all pieces back to the start position and confirmed RESET: rebuild the game
+        from scratch. The detector re-anchors to the start position from the next camera frame, which
+        the I/O layer requests as a 'refresh' (resnap against the now-start board)."""
+        self.game = CameraGame(chess.Board(chess960=(self.variant == "chess960")))
+        self.moves = []
+        self.result = None
+        self._pending = None
+
     # --- move loop ---
     def confirm(self, side, clock_white=None, clock_black=None):
         """A player tapped CONFIRM. Stash the reported clocks; the camera frame follows."""

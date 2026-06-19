@@ -139,8 +139,7 @@
   </div>
 
   <div class="setup hidden" id="setup">
-    <p class="ph">No table. Start one to get going.</p>
-    <button class="btn" id="newtable">New table</button>
+    <p class="ph">No table yet.<br>Pair this device from the chessmon console.</p>
   </div>
 
   <div id="game" class="hidden">
@@ -247,6 +246,7 @@ function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
+  lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
   showCtrls(false);show('startov',true);show('rotbtn',true);clearCands();paint();renderClocks();
   $('report').className='report';$('report').textContent='Ready — press START'}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
@@ -384,11 +384,10 @@ $('cdone').onclick=sendCorners;
 document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-step: White's side -> orient
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
-$('startov').onclick=startGame;$('pausebtn').onclick=togglePause;$('resetbtn').onclick=resetGame;
+$('startov').onclick=startGame;$('pausebtn').onclick=togglePause;
+$('resetbtn').onclick=()=>{if(confirm('Reset the game?\nMove all the pieces back to the start position first.'))resetGame()};
 $('rotbtn').onclick=()=>{rotMode=(rotMode+1)%3;localStorage.setItem('cm_rot',rotMode);applyRot()};   // cycle 0->1->2
 applyRot();
-$('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({white:'White',black:'Black'})});const j=await r.json();location.search='?table='+j.tableToken};
 
 if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');}
 else{show('setup',true);$('tid').textContent='no table';}

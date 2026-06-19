@@ -330,6 +330,14 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "refresh":                                  # clock wants a fresh read (board moved?)
                 s.set_calib_step("refresh")
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
+            elif t == "game.reset":                               # operator reset the pieces to the start
+                s.reset_game()
+                mgr.save(SESSIONS_FILE)
+                await broadcast_state(s)
+                cam = hub(s.table_token)["camera"]
+                if cam is not None and s.board_reader is not None:
+                    s.set_calib_step("refresh")                   # re-anchor the baseline to the start position
+                    await send(cam, {"type": "capture.req"})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)
