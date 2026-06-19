@@ -44,6 +44,10 @@
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
   .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad);font-size:min(7.5vw,27px);
     line-height:1.2;white-space:pre-line;padding:6px;letter-spacing:.01em}
+  .cbtn.won{background:var(--good);border-color:var(--good);color:#08110a}        /* game over */
+  .cbtn.lost{background:var(--panel);border-color:var(--line);color:var(--mut)}
+  .cbtn.draw{background:var(--panel);border-color:var(--accent);color:var(--accent)}
+  .cbtn.won,.cbtn.lost,.cbtn.draw{font-size:min(13vw,54px);font-weight:800;letter-spacing:.05em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
   .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
     padding:2px 0}
@@ -223,17 +227,20 @@ setInterval(()=>{const now=Date.now();
   if(clk.running){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
   clk.last=now;renderClocks()},100);
 function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
-  $('s-'+winner).classList.add('win');$('report').className='report over';
+  $('s-'+winner).classList.add('win');gameResult=winner==='white'?'1-0':'0-1';$('report').className='report over';
   $('report').textContent='flag — '+winner+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
 
-let reading=false, warnMsg=null;
+let reading=false, warnMsg=null, gameResult=null;         // gameResult: '1-0' / '0-1' / '1/2-1/2' once over
 function paint(){                                          // big ✓ for the side to move; blank for the other
   for(const side of ['white','black']){
     const b=$('cb-'+side),active=clk.active===side&&phase==='run';let cls='cbtn off',txt='',dis=true;
-    if(active&&warnMsg){cls='cbtn warn';txt=warnMsg;dis=false}        // bad read -> red, message in the button
-    else if(active&&reading){cls='cbtn reading';txt='✓'}             // confirmed, reading the board
-    else if(active){cls='cbtn go';txt='✓';dis=false}                // your move -> green check
+    if(phase==='over'&&gameResult){                                  // game over -> WON / LOST / DRAW on each button
+      if(gameResult==='1/2-1/2'){cls='cbtn draw';txt='DRAW'}
+      else{const won=(side==='white')===(gameResult==='1-0');cls=won?'cbtn won':'cbtn lost';txt=won?'WON':'LOST'}}
+    else if(active&&warnMsg){cls='cbtn warn';txt=warnMsg;dis=false}  // bad read -> red, message in the button
+    else if(active&&reading){cls='cbtn reading';txt='✓'}            // confirmed, reading the board
+    else if(active){cls='cbtn go';txt='✓';dis=false}               // your move -> green check
     b.className=cls;b.textContent=txt;b.disabled=dis;}
 }
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
@@ -244,14 +251,14 @@ function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // 
     b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};g.appendChild(b)});
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks()}
-function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
+function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks()}
+function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
-function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
+function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
   showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();
@@ -336,7 +343,7 @@ function handle(m){
       renderBoard(m.fen);
       showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
       if(m.result){phase='over';clk.running=false;show('pair',false);show('calib',false);show('startov',false);
-        showCtrls(false);show('resetbtn',true);showUndo(false);paint();           // resumed game-over -> Reset stays available
+        showCtrls(false);show('resetbtn',true);showUndo(false);gameResult=m.result;paint();   // resumed game-over -> Reset stays available
         $('report').textContent='game over · '+m.result;$('report').className='report over';
         const w=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);if(w)$('s-'+w).classList.add('win');}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
@@ -344,7 +351,7 @@ function handle(m){
         const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
         if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();
-        if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
+        if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
           show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();
           $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
         else{enterReady();$('report').className='report';$('report').textContent='Ready — press START';}}
@@ -364,7 +371,7 @@ function handle(m){
       if(m.fen)renderBoard(m.fen);
       showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
       $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
-      reading=false;warnMsg=null;clearCands();paint();break;
+      reading=false;warnMsg=null;gameResult=null;clearCands();paint();break;
     case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
@@ -375,7 +382,7 @@ function handle(m){
         $('report').className='report warn';$('report').textContent='⚠ '+(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
-      phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);clearCands();paint();
+      phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);gameResult=m.result;clearCands();paint();
       $('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);
       if(win)$('s-'+win).classList.add('win');break;
