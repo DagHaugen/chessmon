@@ -241,7 +241,10 @@ function renderRunning(){
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
     left.append(nm,sub);
-    row.append(left);L.appendChild(row);
+    const del=document.createElement('button');del.className='mini';del.textContent='✕ game';
+    del.title='Clear this game off the table (keeps its clock, camera and calibration)';
+    del.onclick=()=>{if(confirm('Clear the game on “'+(t.name||'this table')+'”? The table keeps its setup.'))send({type:'table.cleargame',table:t.token})};
+    row.append(left,del);L.appendChild(row);
   });
 }
 

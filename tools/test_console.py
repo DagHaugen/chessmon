@@ -94,6 +94,12 @@ async def test_ws():
     check(t["camera"] == "dev-ws-1", "table.camera now points at the device")
     check(not any(x["id"] == "dev-ws-1" and x["table"] != tok for x in m["devices"]), "device bound to this table")
 
+    await admin.send(json.dumps({"type": "table.cleargame", "table": tok}))
+    m = await next_devices(admin)
+    t = next((x for x in m["tables"] if x["token"] == tok), None)
+    check(t is not None and t["camera"] == "dev-ws-1" and t["moves"] == 0,
+          "table.cleargame keeps the table + its units (game state cleared)")
+
     await admin.send(json.dumps({"type": "table.unassign", "table": tok, "role": "camera"}))
     una = json.loads(await asyncio.wait_for(dev.recv(), 3))
     check(una.get("type") == "unassigned", "the unit is told it was unassigned")

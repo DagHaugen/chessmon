@@ -277,6 +277,12 @@ async def ws_endpoint(ws: WebSocket):
                     sess.name = (data.get("name") or "").strip()
                     mgr.save(SESSIONS_FILE)
                     await broadcast_devices()
+            elif t == "table.cleargame":                          # console clears a stale/finished game off a table (keeps its setup)
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    sess.reset_game()
+                    await broadcast_state(sess)                   # clock/spectators back to a fresh start (also persists)
+                    await broadcast_devices()                     # drop it out of the console's Running list
             elif t == "table.remove":                             # console deletes a table -> its units go back to Unused
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
