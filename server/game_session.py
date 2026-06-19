@@ -46,6 +46,11 @@ class Session:
         self._calib_step = None            # next binary frame is this calibration step
         self._calib_frame = None           # empty-board frame relayed to the clock for corner-tap
 
+    def __getstate__(self):                # persistence: drop the big transient calibration frame
+        d = self.__dict__.copy()
+        d["_calib_frame"] = None
+        return d
+
     def session_info(self):
         return {"white": self.white, "black": self.black, "variant": self.variant}
 

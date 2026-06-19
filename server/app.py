@@ -35,9 +35,12 @@ WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
 DEVICES_FILE = os.environ.get("CHESSMON_DEVICES",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json"))
+SESSIONS_FILE = os.environ.get("CHESSMON_SESSIONS",
+                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sessions.pkl"))
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
+mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a restart
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
@@ -57,6 +60,7 @@ async def broadcast_state(s):
     h = hub(s.table_token)
     for ws in [h["clock"], *list(h["spectators"])]:
         await send(ws, snap)
+    mgr.save(SESSIONS_FILE)         # a move or calibration changed the session -> persist
 
 
 def dev_public(d):
@@ -117,6 +121,7 @@ async def to_units_admins(sess, obj):
 async def create_table(body: dict):
     s = mgr.create_table(body.get("white", "White"), body.get("black", "Black"),
                          body.get("variant", "standard"))
+    mgr.save(SESSIONS_FILE)
     return {"tableToken": s.table_token, "pairToken": s.pair_token,
             "qr": f"/join/{s.table_token}"}
 
@@ -246,6 +251,7 @@ async def ws_endpoint(ws: WebSocket):
                 clock_dev = devices.get(data.get("clock"))
                 cam_dev = devices.get(data.get("camera"))
                 sess = mgr.create_table("White", "Black", "standard")
+                mgr.save(SESSIONS_FILE)
                 if clock_dev and clock_dev.get("ws"):             # push the role + token; the unit auto-joins
                     await send(clock_dev["ws"], {"type": "assign", "role": "clock",
                                                  "table": sess.table_token})
