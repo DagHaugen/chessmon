@@ -51,6 +51,7 @@
   .acts button.clk.on{background:var(--accent);border-color:var(--accent);color:#0b1020}
   .acts button.cam.on{background:var(--cam);border-color:var(--cam);color:#0b1020}
   .acts button.cal{border-color:var(--good);color:var(--good)}
+  .acts button.forget{border-color:var(--line);color:var(--mut);padding:7px 10px}
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
   .modal .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:560px;width:100%;text-align:center}
   .modal h2{font-size:15px;margin:0 0 4px}
@@ -150,6 +151,9 @@ function render(){
       const bm=document.createElement('button');bm.className='cam'+(pendCamera===d.id?' on':'');bm.textContent='Camera';bm.onclick=()=>pick('camera',d.id);
       acts.append(bc,bm);
     }
+    const fb=document.createElement('button');fb.className='forget';fb.textContent='✕';fb.title='Forget this device';
+    fb.onclick=()=>{if(confirm('Forget “'+(d.userName||d.name||'device')+'”?'))send({type:'device.remove',devId:d.id})};
+    acts.append(fb);
     row.append(st,badge,meta,tbl,acts);
     L.appendChild(row);
   });

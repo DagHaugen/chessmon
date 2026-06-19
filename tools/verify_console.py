@@ -44,5 +44,10 @@ async def main():
             print("pair.devices -> assign(clock)+assign(camera) pushed, console got paired  PAIRING PASSED",
                   flush=True)
 
+            await admin.send(json.dumps({"type": "device.remove", "devId": "devA"}))
+            after = json.loads(await admin.recv())["devices"]
+            assert not any(d["id"] == "devA" for d in after), after
+            print("device.remove -> devA gone from the registry  OK", flush=True)
+
 
 asyncio.run(main())

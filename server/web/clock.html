@@ -269,12 +269,13 @@ function handle(m){
       camLinked=m.cameraLinked;
       $('tid').textContent='table '+(table||'').slice(0,6)+' · '+m.white+' vs '+m.black;
       show('pairbtn',true);                                     // always available to (re-)pair a camera
-      if(m.pairToken&&!started&&!m.calibrated){                 // first pairing only — a calibrated session continues
+      if(m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){ // only when no camera is linked yet (else skip the QR)
         show('pair',true);$('paircode').textContent=m.pairToken;
         const qr=$('qr');qr.innerHTML='';                       // clear so reconnects don't stack QRs
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
       break;
+    case 'camera.linked': camLinked=true;show('pair',false);break;   // a camera joined -> drop the QR
     case 'assign':                                              // console assigned this device a role
       if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
         show('setup',false);show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');

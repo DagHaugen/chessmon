@@ -33,7 +33,8 @@ from .manager import SessionManager
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
-DEVICES_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json")
+DEVICES_FILE = os.environ.get("CHESSMON_DEVICES",
+                              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json"))
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -198,6 +199,7 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown pairing"})
                     continue
                 hub(s.table_token)["camera"] = ws
+                await send(hub(s.table_token)["clock"], {"type": "camera.linked"})  # clock drops the QR
                 if dev_id in devices:
                     devices[dev_id]["table"] = s.table_token
                     await broadcast_devices()
@@ -236,6 +238,9 @@ async def ws_endpoint(ws: WebSocket):
                 d = devices.get(data.get("devId"))
                 if d is not None:
                     d["userName"] = data.get("userName", "")
+                    await broadcast_devices()
+            elif t == "device.remove":                            # console forgot a device (stale / phantom)
+                if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
             elif t == "pair.devices":                             # console pairs two devices into a new table
                 clock_dev = devices.get(data.get("clock"))

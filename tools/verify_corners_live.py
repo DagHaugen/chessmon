@@ -26,6 +26,7 @@ async def main():
         await clock.recv(); await clock.recv()
         await cam.send(json.dumps({"type": "pair.join", "pairToken": pair}))
         await cam.recv()
+        assert json.loads(await clock.recv())["type"] == "camera.linked"      # clock told the camera linked
 
         await cam.send(json.dumps({"type": "calib", "step": "corners"}))      # one button on the camera
         await cam.send(jpg)
