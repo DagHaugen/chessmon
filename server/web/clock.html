@@ -354,12 +354,13 @@ function handle(m){
         if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
           show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();
           $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
+        else if(phase==='run'){$('report').className='report';$('report').textContent=m.turn+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
         else{enterReady();$('report').className='report';$('report').textContent='Ready — press START';}}
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
-      started=true;show('pair',false);show('calib',false);enterReady();
-      $('report').className='report';$('report').textContent='Ready — press START';break;
+      started=true;show('pair',false);show('calib',false);
+      if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}break;   // a move that re-seeded the baseline mustn't yank a running game back to START
     case 'calib.image': showCalib(m.image); break;
     case 'orient.ask': showOrient(); break;
     case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
