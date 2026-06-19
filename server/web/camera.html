@@ -47,6 +47,14 @@
 <script>
 let pair=new URLSearchParams(location.search).get('pair')||localStorage.getItem('cm_pair');
 if(pair)localStorage.setItem('cm_pair',pair);            // reuse the last table on reopen — no rescan
+let devId=localStorage.getItem('cm_devid');             // a stable per-device id for the server console
+if(!devId){devId=(crypto.randomUUID&&crypto.randomUUID())||('d'+Date.now().toString(36)+Math.random().toString(36).slice(2));localStorage.setItem('cm_devid',devId)}
+function deviceName(){const u=navigator.userAgent;
+  if(/iPhone/.test(u))return'iPhone';
+  if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))return'iPad';
+  if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
+  if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
+const devName=deviceName();
 const v=document.getElementById('v'),cv=document.getElementById('cv');
 let ws;
 function $(id){return document.getElementById(id)}
@@ -88,7 +96,8 @@ $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the se
 
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')};
+  ws.onopen=()=>{$('dot').classList.add('on');ws.send(JSON.stringify({type:'hello',devId,devName,role:'camera'}));
+    if(pair){ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')}else log('registered — waiting to be paired')};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
   ws.onmessage=e=>{
     if(typeof e.data!=='string')return;
@@ -106,8 +115,8 @@ function connect(){
   };
 }
 
-if(!pair){status('no pair token — scan the QR shown on the clock','err')}
-else{startCam();connect()}
+startCam();connect();                                  // always: register the device + show the preview
+if(!pair)status('camera ready — pair from the server console, or scan a QR');
 </script>
 </body>
 </html>

@@ -37,6 +37,8 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
+devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
+admins: set = set()                # server-console websockets
 
 
 def hub(token):
@@ -53,6 +55,16 @@ async def broadcast_state(s):
     h = hub(s.table_token)
     for ws in [h["clock"], *list(h["spectators"])]:
         await send(ws, snap)
+
+
+def dev_public(d):
+    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online")}
+
+
+async def broadcast_devices():
+    lst = [dev_public(d) for d in devices.values()]
+    for ws in list(admins):
+        await send(ws, {"type": "devices", "devices": lst})
 
 
 @app.post("/tables")
@@ -86,6 +98,7 @@ async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     s = None
     role = None
+    dev_id = None
     try:
         while True:
             msg = await ws.receive()
@@ -126,6 +139,9 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown table"})
                     continue
                 hub(s.table_token)["clock"] = ws
+                if dev_id in devices:
+                    devices[dev_id]["table"] = s.table_token
+                    await broadcast_devices()
                 await send(ws, {"type": "session.ready", "pairToken": s.pair_token,
                                 "calibrated": s.board_reader is not None,
                                 "cameraLinked": hub(s.table_token)["camera"] is not None,
@@ -137,6 +153,9 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown pairing"})
                     continue
                 hub(s.table_token)["camera"] = ws
+                if dev_id in devices:
+                    devices[dev_id]["table"] = s.table_token
+                    await broadcast_devices()
                 await send(ws, {"type": "session.ready", "role": "camera",
                                 "calibrated": s.board_reader is not None})
             elif t == "spectate":
@@ -148,6 +167,23 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "state", **s.snapshot()})
             elif t == "ping":                                     # heartbeat — keep the socket alive
                 pass
+            elif t == "hello":                                    # device registers itself (clock/camera)
+                dev_id = data.get("devId")
+                if dev_id:
+                    d = devices.setdefault(dev_id, {"id": dev_id, "userName": "", "table": None})
+                    d.update({"name": data.get("name", "device"), "role": data.get("role", "?"),
+                              "online": True, "ws": ws})
+                    await broadcast_devices()
+            elif t == "admin.join":                               # the server-console page
+                role = "admin"
+                admins.add(ws)
+                await send(ws, {"type": "devices",
+                                "devices": [dev_public(d) for d in devices.values()]})
+            elif t == "device.rename":                            # console set a user-defined name
+                d = devices.get(data.get("devId"))
+                if d is not None:
+                    d["userName"] = data.get("userName", "")
+                    await broadcast_devices()
             elif s is None:
                 await send(ws, {"type": "error", "reason": "join a table first"})
             elif t == "calib":                                    # next camera frame is this step
@@ -197,6 +233,11 @@ async def ws_endpoint(ws: WebSocket):
                 h["spectators"].discard(ws)
             elif h.get(role) is ws:
                 h[role] = None
+        admins.discard(ws)
+        if dev_id in devices and devices[dev_id].get("ws") is ws:
+            devices[dev_id]["online"] = False
+            devices[dev_id]["ws"] = None
+            await broadcast_devices()
 
 
 app.mount("/app", StaticFiles(directory=WEB, html=True), name="app")    # the clock PWA

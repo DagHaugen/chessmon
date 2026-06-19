@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#15171c">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>chessmon console</title>
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
+    --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:22px}
+  .top{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .top h1{font-size:18px;margin:0;font-weight:700}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
+  .sub{color:var(--mut);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .empty{color:var(--mut);background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:30px;text-align:center;line-height:1.5}
+  .dev{display:grid;grid-template-columns:auto auto 1fr auto;gap:14px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+  .dev.off{opacity:.55}
+  .st{width:10px;height:10px;border-radius:50%;background:var(--mut)}.st.on{background:var(--good)}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:4px 9px;border-radius:8px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+  .badge.clock{color:var(--accent);border-color:var(--accent)}
+  .badge.camera{color:var(--cam);border-color:var(--cam)}
+  .meta{min-width:0}
+  .meta .nm{font-weight:600}
+  .meta .id{font-size:11px;color:var(--mut);font-family:ui-monospace,monospace}
+  .meta input{margin-top:7px;width:100%;max-width:300px;background:#11141a;border:1px solid var(--line);
+    color:var(--ink);border-radius:9px;padding:8px 11px;font-size:14px}
+  .meta input:focus{outline:none;border-color:var(--accent)}
+  .tbl{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;text-align:right;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
+    <span class="sub" id="sub">connecting…</span></div>
+  <div id="list"></div>
+</div>
+<script>
+function $(id){return document.getElementById(id)}
+let ws, devs=[];
+function render(){
+  const L=$('list');
+  $('sub').textContent=devs.filter(d=>d.online).length+' online · '+devs.length+' known';
+  if(!devs.length){L.innerHTML='<div class="empty">No devices yet.<br>Open the clock or camera page on a phone/tablet — it shows up here automatically.</div>';return}
+  L.innerHTML='';
+  devs.slice().sort((a,b)=>(b.online-a.online)||(a.role||'').localeCompare(b.role||'')).forEach(d=>{
+    const row=document.createElement('div');row.className='dev'+(d.online?'':' off');
+    const st=document.createElement('span');st.className='st'+(d.online?' on':'');
+    const badge=document.createElement('span');badge.className='badge '+(d.role||'');badge.textContent=d.role||'device';
+    const meta=document.createElement('div');meta.className='meta';
+    const nm=document.createElement('div');nm.className='nm';nm.textContent=d.name||'device';
+    const id=document.createElement('div');id.className='id';id.textContent=(d.id||'').slice(0,8);
+    const inp=document.createElement('input');inp.placeholder='your name — e.g. “Table 1 clock”';inp.value=d.userName||'';
+    inp.onchange=()=>send({type:'device.rename',devId:d.id,userName:inp.value.trim()});
+    meta.append(nm,id,inp);
+    const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
+    row.append(st,badge,meta,tbl);
+    L.appendChild(row);
+  });
+}
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
+  ws.onclose=()=>{$('dot').classList.remove('on');$('sub').textContent='reconnecting…';setTimeout(connect,1500)};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){devs=m.devices||[];render()}};
+}
+render();connect();
+setInterval(()=>send({type:'ping'}),20000);            // heartbeat
+</script>
+</body>
+</html>

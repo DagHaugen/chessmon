@@ -121,6 +121,14 @@ const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'
 const params=new URLSearchParams(location.search);
 let table=params.get('table')||localStorage.getItem('cm_table');
 if(table)localStorage.setItem('cm_table',table);     // reopen rejoins the last table — no new QR/scan
+let devId=localStorage.getItem('cm_devid');          // a stable per-device id for the server console
+if(!devId){devId=(crypto.randomUUID&&crypto.randomUUID())||('d'+Date.now().toString(36)+Math.random().toString(36).slice(2));localStorage.setItem('cm_devid',devId)}
+function deviceName(){const u=navigator.userAgent;
+  if(/iPhone/.test(u))return'iPhone';
+  if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))return'iPad';
+  if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
+  if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
+const devName=deviceName();
 let ws,started=false,wakeLock=null,camLinked=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 
 function $(id){return document.getElementById(id)}
@@ -268,7 +276,8 @@ function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');keepAwake();send({type:'table.join',tableToken:table})};
+  ws.onopen=()=>{$('dot').classList.add('on');keepAwake();send({type:'hello',devId,devName,role:'clock'});
+    if(table)send({type:'table.join',tableToken:table})};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
@@ -281,12 +290,13 @@ $('pairbtn').onclick=()=>show('pair',$('pair').classList.contains('hidden'));
 $('newtable').onclick=async()=>{const r=await fetch('/tables',{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({white:'White',black:'Black'})});const j=await r.json();location.search='?table='+j.tableToken};
 
-if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');connect();}
+if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');}
 else{show('setup',true);$('tid').textContent='no table';}
+connect();                                             // always connect so the server console sees the device
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 async function keepAwake(){try{if('wakeLock'in navigator)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(table&&(!ws||ws.readyState>1))connect()}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(!ws||ws.readyState>1)connect()}});
 document.addEventListener('click',keepAwake);
 setInterval(()=>send({type:'ping'}),20000);            // heartbeat keeps the socket alive when idle
 </script>
