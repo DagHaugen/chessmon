@@ -56,6 +56,15 @@
   .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
+  .qrjoinbtn{position:absolute;top:8px;right:8px;z-index:6;width:36px;height:36px;padding:0;border-radius:10px;
+    background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;justify-content:center}
+  .qrjoinbtn svg{display:block}
+  .qrjoin{position:fixed;inset:0;z-index:60;background:rgba(8,10,14,.92);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;padding:24px}
+  .qrjoin .qrlbl{color:var(--ink);font-size:16px;font-weight:700}
+  .qrjoin .qrcard{background:#fff;padding:14px;border-radius:14px;line-height:0}
+  .qrjoin .qrhint{color:var(--mut);font-size:12px}
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(21,23,28,.6);border:none;border-radius:8px;cursor:pointer;z-index:4}
   .startov span{transform:rotate(-90deg);font-size:min(13vw,64px);font-weight:800;color:var(--good);letter-spacing:.14em}
@@ -164,12 +173,19 @@
         <div class="board" id="board"></div>
         <button class="startov hidden" id="startov"><span>START</span></button>
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
+        <button class="qrjoinbtn hidden" id="qrjoinbtn" title="Show the join QR — add another device"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M17 21h.01M21 17v4"/></svg></button>
       </div>
       <div class="zone white" id="z-white">
         <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
         <div class="act" id="act-white"><button class="cbtn off" id="cb-white" disabled></button><div class="cands" id="cands-white"></div></div>
       </div>
     </div>
+  </div>
+
+  <div class="qrjoin hidden" id="qrjoin">
+    <div class="qrlbl">Scan to add a device</div>
+    <div class="qrcard" id="qrjoinqr"></div>
+    <div class="qrhint">opens the chessmon join page · tap to close</div>
   </div>
 
 </div>
@@ -242,7 +258,15 @@ function paint(){                                          // big ✓ for the si
     else if(active&&reading){cls='cbtn reading';txt='✓'}            // confirmed, reading the board
     else if(active){cls='cbtn go';txt='✓';dis=false}               // your move -> green check
     b.className=cls;b.textContent=txt;b.disabled=dis;}
+  updateQrBtn();
 }
+let joinRendered=false;
+function renderJoinQR(){if(joinRendered)return;                         // the idle "add a device" QR -> the /app landing page
+  if(typeof QRCode!=='undefined'){new QRCode($('qrjoinqr'),{text:location.origin+'/app/',width:200,height:200});joinRendered=true}}
+function showJoinQR(on){if(on)renderJoinQR();show('qrjoin',on)}
+function updateQrBtn(){show('qrjoinbtn',phase!=='run'&&phase!=='paused')}  // visible only when no game is running
+$('qrjoinbtn').onclick=()=>showJoinQR(true);
+$('qrjoin').onclick=()=>showJoinQR(false);
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
 function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // candidates fill the fixed box
   const h=document.createElement('div');h.className='chead';h.textContent=warnMsg||'pick your move:';c.appendChild(h);
