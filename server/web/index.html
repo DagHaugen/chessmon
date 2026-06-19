@@ -27,8 +27,10 @@
   h1{font-size:18px;margin:0 0 6px}
   .msg{font-size:13.5px;color:var(--mut);margin:0 0 18px;line-height:1.5}
   .dev{border-top:1px solid var(--line);padding-top:16px;margin-top:4px}
-  .dname{font-weight:700;font-size:15px}
-  .did{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;margin-top:3px}
+  .nameinp{width:100%;background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;
+    padding:9px 11px;font-size:14px;text-align:center}
+  .nameinp:focus{outline:none;border-color:var(--accent)}
+  .did{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;margin-top:9px}
   .hint{font-size:12px;color:var(--mut);margin:16px 0 0;line-height:1.5}
 </style>
 </head>
@@ -40,10 +42,10 @@
       <h1 id="title">Connecting…</h1>
       <p class="msg" id="msg">Reaching the chessmon server.</p>
       <div class="dev">
-        <div class="dname" id="dname">—</div>
+        <input id="nameinp" class="nameinp" placeholder="Name this device — e.g. Table 1 clock" maxlength="28" autocomplete="off">
         <div class="did" id="did"></div>
       </div>
-      <p class="hint" id="hint">Bookmark this page so you can reopen it on this device.</p>
+      <p class="hint" id="hint">Name it so it's easy to spot in the console, then bookmark this page on this device.</p>
     </div>
   </div>
 <script>
@@ -56,8 +58,10 @@ function deviceName(){const u=navigator.userAgent;
   if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
-$('dname').textContent=devName;
-$('did').textContent='New device '+devId.slice(0,6);
+$('nameinp').value=localStorage.getItem('cm_devname')||'';   // a friendly name the operator can set right here
+$('did').textContent=devName+' · New device '+devId.slice(0,6);
+$('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
+  if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));};
 
 let ws;
 function ready(){

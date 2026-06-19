@@ -49,6 +49,8 @@
   .mini{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:8px;
     padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
   .mini:hover{border-color:var(--mut)}
+  .mini.bin{padding:7px 8px;line-height:0}.mini.bin svg{display:block}
+  .mini.bin:hover{color:var(--bad);border-color:var(--bad)}
 
   /* configured tables */
   .tcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:10px}
@@ -144,6 +146,7 @@
 <script>
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
+const BIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 let ws, devs=[], tabs=[], calibTable=null;
 
 function devById(id){return devs.find(d=>d.id===id)}
@@ -236,7 +239,7 @@ function renderTables(){
     cal.disabled=!(t.camera&&camDev&&camDev.online);
     cal.title=cal.disabled?'Add an online camera first':'Capture a frame and mark the corners';
     cal.onclick=()=>startCalib(t.token);
-    const rm=document.createElement('button');rm.className='mini';rm.textContent='✕ table';
+    const rm=document.createElement('button');rm.className='mini bin';rm.innerHTML=BIN;rm.title='Remove this table';
     rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
       if((!t.clock&&!t.camera)||confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))
         send({type:'table.remove',table:t.token})};
@@ -260,7 +263,7 @@ function renderRunning(){
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
     left.append(nm,sub);
-    const del=document.createElement('button');del.className='mini';del.textContent='✕ game';
+    const del=document.createElement('button');del.className='mini bin';del.innerHTML=BIN;
     del.title='Clear this game off the table (keeps its clock, camera and calibration)';
     del.onclick=()=>{if(confirm('Clear the game on “'+(t.name||'this table')+'”? The table keeps its setup.'))send({type:'table.cleargame',table:t.token})};
     row.append(left,del);L.appendChild(row);
