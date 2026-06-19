@@ -25,7 +25,7 @@
   .pairbar .msg{color:var(--good);font-size:13px}
   .pairbar button{margin-left:auto;background:var(--good);color:#0b1020;border:none;border-radius:10px;
     padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer}
-  .pairbar button:disabled{opacity:.35;cursor:default}
+  .pairbar button:disabled{background:var(--line);color:var(--mut);cursor:default}
   .qrwrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;text-align:center}
   .qrwrap h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600}
   #qr{display:inline-flex;background:#fff;padding:8px;border-radius:10px}
@@ -146,13 +146,14 @@ function render(){
     meta.append(nm,id,spec,inp);
     const tbl=document.createElement('div');tbl.className='tbl';tbl.textContent=d.table?('table '+d.table.slice(0,6)):'—';
     const acts=document.createElement('div');acts.className='acts';
-    if(d.online&&d.role==='camera'&&d.table){             // a paired camera -> calibrate it on this screen
-      const cb=document.createElement('button');cb.className='cal';cb.textContent='Calibrate';cb.onclick=()=>startCalib(d.table);
-      acts.append(cb);
-    }else if(d.online&&!d.table){                          // unpaired -> assign a role + pair
+    if(d.online){                                          // any online device can be (re-)paired into a table
       const bc=document.createElement('button');bc.className='clk'+(pendClock===d.id?' on':'');bc.textContent='Clock';bc.onclick=()=>pick('clock',d.id);
       const bm=document.createElement('button');bm.className='cam'+(pendCamera===d.id?' on':'');bm.textContent='Camera';bm.onclick=()=>pick('camera',d.id);
       acts.append(bc,bm);
+      if(d.role==='camera'&&d.table){                      // a paired camera -> also calibrate it here
+        const cb=document.createElement('button');cb.className='cal';cb.textContent='Calibrate';cb.onclick=()=>startCalib(d.table);
+        acts.append(cb);
+      }
     }
     const fb=document.createElement('button');fb.className='forget';fb.textContent='✕';fb.title='Forget this device';
     fb.onclick=()=>{if(confirm('Forget “'+(d.userName||d.name||'device')+'”?'))send({type:'device.remove',devId:d.id})};
