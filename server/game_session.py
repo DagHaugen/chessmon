@@ -187,6 +187,18 @@ class Session:
         self.result = None
         self._pending = None
 
+    def undo_move(self):
+        """Take back the last accepted move (a misread / wrong move). Pops the game + move list; the
+        detector re-anchors to the reverted position from the next camera frame (a 'refresh')."""
+        if not self.game.board.move_stack:
+            return False
+        self.game.board.pop()
+        if self.moves:
+            self.moves.pop()
+        self.result = None
+        self._pending = None
+        return True
+
     # --- move loop ---
     def confirm(self, side, clock_white=None, clock_black=None):
         """A player tapped CONFIRM. Stash the reported clocks; the camera frame follows."""
@@ -218,7 +230,17 @@ class Session:
             return {"type": "move.nochange"}
         if kind == "baseline":
             return {"type": "session.baselined"}
+        if kind == "error":                            # a change that fits no legal move -> flag it
+            return {"type": "move.unclear", "reason": san or "no legal move matches",
+                    "squares": self._delta_squares(extra)}
         return {"type": "move.unclear", "reason": "no legal move matches"}
+
+    def _delta_squares(self, delta):
+        """Map a boolean change-mask (board_to_grid coords: row 0 = rank 8, col 0 = file a) to chess
+        square names, so the clock can flag exactly the squares the illegal move touched."""
+        if delta is None:
+            return []
+        return [chr(97 + int(c)) + str(8 - int(r)) for r, c in zip(*np.where(np.asarray(delta)))]
 
     def _cands(self, sans):
         """Attach the UCI to each SAN candidate so the clock can resolve by tapping one."""

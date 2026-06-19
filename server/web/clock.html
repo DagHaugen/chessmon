@@ -30,6 +30,7 @@
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
   .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
+  .sq.l.bad{background:#f2a6a6} .sq.d.bad{background:#dd8585}     /* an illegal move's squares */
   .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
   #game{display:flex;flex-direction:row;flex:1;min-height:0;gap:8px;position:relative}
   .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;gap:6px}   /* col 3 */
@@ -57,6 +58,8 @@
     width:42px;height:42px;border-radius:50%;line-height:1;
     background:rgba(21,23,28,.85);border:1px solid var(--line);color:var(--ink);font-size:22px;cursor:pointer;
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
+  .badmsg{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--bad);color:#fff;text-align:center;
+    padding:7px 4px;font-weight:800;font-size:13px;letter-spacing:.03em;border-radius:0 0 6px 6px}   /* illegal-move banner */
   .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:9px;z-index:6;padding:8px 0}
   .rail button{writing-mode:vertical-rl;transform:rotate(180deg);background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
@@ -113,6 +116,7 @@
   <div class="rail" id="rail">
     <span class="dot" id="dot"></span>
     <button id="refreshbtn" class="hidden">↻ Resnap</button>
+    <button id="undobtn" class="hidden">↶ Undo</button>
     <button id="pausebtn" class="hidden">Pause</button>
     <button id="resetbtn" class="hidden">Reset</button>
   </div>
@@ -157,6 +161,7 @@
         <div class="board" id="board"></div>
         <button class="startov hidden" id="startov"><span>START</span></button>
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
+        <div class="badmsg hidden" id="badmsg">ILLEGAL MOVE — TRY AGAIN</div>
       </div>
       <div class="zone white" id="z-white">
         <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
@@ -205,6 +210,9 @@ function mkSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((
     const i=document.createElement('img');i.className='pc';i.alt=ch;
     i.onerror=()=>{i.remove();d.textContent=GLYPH[ch]};                  // fall back to the glyph
     i.src='pieces/'+(ch<'a'?'w':'b')+ch.toUpperCase()+'.svg';d.appendChild(i)}return d}
+function markBad(squares){$('board').querySelectorAll('.sq.bad').forEach(s=>s.classList.remove('bad'));   // flag illegal squares red
+  (squares||[]).forEach(sq=>{const r=8-(+sq[1]),c=sq.charCodeAt(0)-97,cell=$('board').children[r*8+c];if(cell)cell.classList.add('bad')})}
+function showUndo(on){show('undobtn',on)}
 
 function renderClocks(){
   for(const c of ['white','black']){const ms=clk[c],txt=fmt(ms),cls=(ms<=0?' flag':(ms<30000?' low':''));
@@ -238,16 +246,16 @@ function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // 
     b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};g.appendChild(b)});
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);show('rotbtn',true);showCtrls(false);clearCands();paint();renderClocks()}
+function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;show('startov',true);show('rotbtn',true);showCtrls(false);show('badmsg',false);showUndo(false);clearCands();paint();renderClocks()}
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;
-  show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
+  show('startov',false);show('rotbtn',false);showCtrls(true);show('badmsg',false);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
-  showCtrls(false);show('startov',true);show('rotbtn',true);clearCands();paint();renderClocks();
+  showCtrls(false);show('startov',true);show('rotbtn',true);show('badmsg',false);showUndo(false);clearCands();paint();renderClocks();
   $('report').className='report';$('report').textContent='Ready — press START'}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
 ['white','black'].forEach(side=>$('cb-'+side).onclick=()=>{   // confirm, or retry after a warning
@@ -327,6 +335,7 @@ function handle(m){
     case 'state':                                               // refresh/reconnect -> restore the view
       {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);
+      show('badmsg',false);showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
       if(m.result){clk.running=false;$('report').textContent='game over · '+m.result;$('report').className='report over';}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
         started=true;show('pair',false);show('calib',false);show('refreshbtn',true);
@@ -351,13 +360,18 @@ function handle(m){
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
       if(m.fen)renderBoard(m.fen);
+      show('badmsg',false);showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
       $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
       reading=false;warnMsg=null;clearCands();paint();break;
     case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
-      clk.running=true;clk.last=Date.now();reading=false;warnMsg=(m.reason||'move not recognized');
-      $('report').className='report warn';$('report').textContent='⚠ '+warnMsg+' — check & tap again';paint();break;
+      clk.running=true;clk.last=Date.now();reading=false;
+      if(m.squares&&m.squares.length){markBad(m.squares);show('badmsg',true);warnMsg='ILLEGAL';   // illegal: red squares + banner
+        $('report').className='report warn';$('report').textContent='⚠ ILLEGAL MOVE — try again';}
+      else{markBad([]);show('badmsg',false);warnMsg=(m.reason||'move not recognized');
+        $('report').className='report warn';$('report').textContent='⚠ '+warnMsg+' — check & tap again';}
+      paint();break;
     case 'game.end':
       phase='over';clk.running=false;showCtrls(false);clearCands();paint();
       $('report').textContent='game over · '+m.result;$('report').className='report over';
@@ -384,6 +398,7 @@ $('cdone').onclick=sendCorners;
 document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-step: White's side -> orient
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
+$('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
 $('startov').onclick=startGame;$('pausebtn').onclick=togglePause;
 $('resetbtn').onclick=()=>{if(confirm('Reset the game?\nMove all the pieces back to the start position first.'))resetGame()};
 $('rotbtn').onclick=()=>{rotMode=(rotMode+1)%3;localStorage.setItem('cm_rot',rotMode);applyRot()};   // cycle 0->1->2

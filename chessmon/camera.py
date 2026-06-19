@@ -428,7 +428,7 @@ class CameraGame:
             unexplained = int(np.count_nonzero(delta & ~changed))
             viable.append((soft, unexplained, seen, m))
         if not viable:
-            return ("error", None, None)
+            return ("error", "illegal move", delta)   # a clean change that no legal move fits
         distinct = {(v[3].from_square, v[3].to_square) for v in viable}
         # Minimum-evidence gate: if the observed change coincides with NONE of any viable
         # move's predicted squares (every candidate seen == 0), we saw no move-like signal
@@ -443,7 +443,7 @@ class CameraGame:
         # move ignores is strong evidence against it). A hand over the board trips max_noise.
         min_unexp = min(v[1] for v in viable)
         if min_unexp > max_noise:
-            return ("error", None, None)
+            return ("error", "too much movement", None)   # a hand over the board / big disturbance
         best = [v for v in viable if v[1] == min_unexp]
         # Haugen's rule: a king leaving home with castling available is castling, not a
         # one-square king move - so among the equally best-explained reads, a castle wins

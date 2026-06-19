@@ -338,6 +338,14 @@ async def ws_endpoint(ws: WebSocket):
                 if cam is not None and s.board_reader is not None:
                     s.set_calib_step("refresh")                   # re-anchor the baseline to the start position
                     await send(cam, {"type": "capture.req"})
+            elif t == "game.undo":                                # take back the last (wrong) move
+                if s.undo_move():
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_state(s)
+                    cam = hub(s.table_token)["camera"]
+                    if cam is not None and s.board_reader is not None:
+                        s.set_calib_step("refresh")               # re-anchor to the reverted position
+                        await send(cam, {"type": "capture.req"})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)
