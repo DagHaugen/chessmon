@@ -13,7 +13,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transparent;
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .page{max-width:520px;margin:0 auto;padding:6px 66px 6px 34px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:8px}
+  .page{max-width:520px;margin:0 auto;padding:6px 48px 6px 34px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:8px}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:0 0 auto}
   .dot.on{display:none}                              /* only show the dot (red) when the connection drops */
   .side{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
@@ -88,7 +88,7 @@
   .rail button{width:30px;box-sizing:border-box;background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);   /* fixed narrow width: no writing-mode on the <button> (Safari flips the .lbl 180deg if both nest), so pin width so it can't bloat */
     border-radius:9px 0 0 9px;padding:13px 4px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rail button .lbl{transform:rotate(-90deg)}   /* vertical text lives on a child span -- old WebKit ignores text-orientation on the <button> itself */
-  .rrail{position:fixed;right:0;top:0;bottom:0;width:64px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0;background:rgba(29,32,38,.85)}   /* col 4: doubled width + visible background so the column is obvious even when empty */
+  .rrail{position:fixed;right:0;top:0;bottom:0;width:46px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}   /* col 4: report, narrowed with margin around the text */
   .rrail .report{transform:rotate(-90deg);background:none;border:none;padding:0;
     font-size:22px;font-weight:600;white-space:nowrap}  /* faces the board; NO max-height%/overflow -- those blanked the text on old WebKit (the side clocks lack them and render fine) */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
@@ -337,7 +337,7 @@ function reportStatus(){                                // tell the server runni
 }
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
-function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
+function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen||e.webkitRequestFullscreen||e.webkitRequestFullScreen||e.mozRequestFullScreen||e.msRequestFullscreen;if(!fn)return;try{const r=fn.call(e);if(r&&r.catch)r.catch(()=>{});}catch(_){}}  // webkit-prefixed too: old WebKit (Android 8) lacks unprefixed requestFullscreen
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
