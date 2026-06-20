@@ -78,5 +78,34 @@ print("Bc1-c3 (+ stray on h4):", v3.get("type"), v3.get("squares"))
 check(v3["type"] == "move.unclear" and set(v3.get("squares", [])) == {"c1", "c3"},
       "Bc1-c3 flags c1,c3 (the bishop), NOT the far stray on h4")
 
+# Ng1-g3 (illegal): g1 is a legal knight origin AND g3 a legal pawn landing, but NO single move does
+# both. Both squares are high contrast -> must flag g1,g3 (not guess).
+s4 = Session("t-ill4")
+s4.seed_baseline(board_to_grid(chess.Board()))
+o4 = board_to_grid(chess.Board()).copy()
+o4[rc("g1")] = Cell.EMPTY
+o4[rc("g3")] = Cell.LIGHT
+v4 = s4.ingest_grid(o4)
+print("Ng1-g3 (g1 origin, g3 landing, no single move):", v4.get("type"), v4.get("squares"))
+check(v4["type"] == "move.unclear" and set(v4.get("squares", [])) == {"g1", "g3"},
+      "Ng1-g3 flagged with g1,g3 (no single legal move does both)")
+b4 = chess.Board()
+b4.set_board_fen(v4["fen"])
+check(b4.piece_at(chess.G3) is not None and b4.piece_at(chess.G3).piece_type == chess.KNIGHT
+      and b4.piece_at(chess.G1) is None, "display board: the knight sits on g3")
+
+# the user's actual board: Ng1-g3 with a SHADOW reading as a (dark) piece on h3 (which made "Nh3" a
+# guess). g3 (the knight, light) must still win over the h3 shadow, and it's still illegal.
+s5 = Session("t-ill5")
+s5.seed_baseline(board_to_grid(chess.Board()))
+o5 = board_to_grid(chess.Board()).copy()
+o5[rc("g1")] = Cell.EMPTY
+o5[rc("g3")] = Cell.LIGHT                      # the knight (light) on dark g3
+o5[rc("h3")] = Cell.DARK                       # a shadow reading as a DARK piece on light h3
+v5 = s5.ingest_grid(o5)
+print("Ng1-g3 (+ shadow on h3):", v5.get("type"), v5.get("squares"))
+check(v5["type"] == "move.unclear" and set(v5.get("squares", [])) == {"g1", "g3"},
+      "Ng1-g3 with an h3 shadow still flags g1,g3 (g3 wins over the shadow)")
+
 print("ALL ILLEGAL-DISPLAY TESTS OK" if not FAIL else f"{FAIL} CHECK(S) FAILED")
 sys.exit(1 if FAIL else 0)

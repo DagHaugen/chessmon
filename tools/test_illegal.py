@@ -54,6 +54,18 @@ kv, sanv, _ = gv.observe(ov)
 assert kv == "error", f"vacate-only illegal (c1 emptied, no landing) not flagged: {kv} ({sanv})"
 print(f"illegal vacate-only (c1 emptied, landing unseen) -> {kv} / {sanv}")
 
+# illegal: knight g1 -> g3. g1 IS a legal knight origin (Nf3/Nh3/Ne2) and g3 IS a legal pawn landing
+# (g2-g3), so each square ALONE is explainable -- but NO single legal move does g1->g3. Both squares are
+# high contrast (knight on a dark square), so the high-contrast pair must be flagged, not guessed.
+gg = CameraGame(chess.Board())
+sg = board_to_grid(gg.board); gg.observe(sg)
+og = sg.copy()
+og[7][6] = Cell.EMPTY        # g1 vacates  (r = 8-1 = 7, c = 6) -- white knight on dark g1
+og[5][6] = Cell.LIGHT        # g3 occupied (r = 8-3 = 5, c = 6) -- the knight, on dark g3
+kg, sang, _ = gg.observe(og)
+assert kg == "error", f"illegal Ng1-g3 not flagged: {kg} ({sang})"
+print(f"illegal Ng1-g3 (g1 a knight origin, g3 a pawn landing, no single move) -> {kg} / {sang}")
+
 # legal e2-e4 from the start must still register as a move (e4 IS a legal landing square)
 g2 = CameraGame(chess.Board())
 s2 = board_to_grid(g2.board); g2.observe(s2)
