@@ -85,8 +85,9 @@
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
   .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:9px;z-index:6;padding:8px 0}
-  .rail button{transform:rotate(-90deg);background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
+  .rail button{background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
     border-radius:9px 0 0 9px;padding:13px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
+  .rail button .lbl{transform:rotate(-90deg)}   /* vertical text lives on a child span -- old WebKit ignores text-orientation on the <button> itself */
   .rrail{position:fixed;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}
   .rrail .report{transform:rotate(-90deg);background:none;border:none;padding:0;
     font-size:22px;font-weight:600;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
@@ -133,17 +134,17 @@
   .setup{margin:auto;text-align:center}
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
   @supports (writing-mode:vertical-rl){   /* where it works, use real vertical text; old browsers keep the rotate(-90deg) base */
-    .cstrip .ct,.cstrip .ctname,.rail button,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
+    .cstrip .ct,.cstrip .ctname,.rail button .lbl,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
 </style>
 </head>
 <body>
 <div class="page">
   <div class="rail" id="rail">
     <span class="dot" id="dot"></span>
-    <button id="refreshbtn" class="hidden">↻ Resnap</button>
-    <button id="undobtn" class="hidden">↶ Undo</button>
-    <button id="pausebtn" class="hidden">Pause</button>
-    <button id="resetbtn" class="hidden">Reset</button>
+    <button id="refreshbtn" class="hidden"><span class="lbl">↻ Resnap</span></button>
+    <button id="undobtn" class="hidden"><span class="lbl">↶ Undo</span></button>
+    <button id="pausebtn" class="hidden"><span class="lbl">Pause</span></button>
+    <button id="resetbtn" class="hidden"><span class="lbl">Reset</span></button>
   </div>
   <div class="rrail"><span class="report" id="report"></span></div>
 
@@ -335,11 +336,11 @@ function reportStatus(){                                // tell the server runni
   if(st!==lastGameStatus){lastGameStatus=st;if(ws&&ws.readyState===1)send({type:'game.status',status:st})}
 }
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
-  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
+  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
-  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint();updateWait()}
-  else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint();updateWait()}}
+  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
+  else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
@@ -437,7 +438,7 @@ function handle(m){
         if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();
         if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
-          show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();
+          show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();
           $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
         else if(phase==='run'){$('report').className='report';$('report').textContent=m.turn+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
         else{enterReady();}}                                 // enterReady -> updateWait sets Ready / Camera not ready
