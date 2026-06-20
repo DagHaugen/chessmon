@@ -80,7 +80,7 @@
     border-radius:9px 0 0 9px;padding:13px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rrail{position:fixed;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}
   .rrail .report{writing-mode:vertical-rl;transform:rotate(180deg);background:none;border:none;padding:0;
-    font-size:14px;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
+    font-size:18px;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
   .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.4}
@@ -246,7 +246,7 @@ setInterval(()=>{const now=Date.now();
   clk.last=now;renderClocks()},100);
 function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');gameResult=winner==='white'?'1-0':'0-1';$('report').className='report over';
-  $('report').textContent='flag — '+winner+' wins on time';paint();
+  $('report').textContent=(winner[0].toUpperCase()+winner.slice(1))+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
 
 let reading=false, warnMsg=null, gameResult=null;         // gameResult: '1-0' / '0-1' / '1/2-1/2' once over

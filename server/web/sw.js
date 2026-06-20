@@ -1,4 +1,4 @@
-const C = 'chessmon-clock-v40';
+const C = 'chessmon-clock-v41';
 const PIECES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
   .map(p => 'pieces/' + p + '.svg');
 const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'qrcode.min.js', ...PIECES];
