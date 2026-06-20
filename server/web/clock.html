@@ -52,11 +52,11 @@
   .cbtn:not(:disabled):active{transform:translateY(1px)}
   .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
     padding:2px 0}
-  .cstrip .ct{writing-mode:vertical-rl;transform:rotate(180deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
+  .cstrip .ct{-webkit-writing-mode:vertical-rl;writing-mode:vertical-rl;transform:rotate(180deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
-  .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
+  .cstrip .ctname{-webkit-writing-mode:vertical-rl;writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
-  .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
+  .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .qrjoinbtn{position:fixed;top:12px;left:42px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;
     background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
     display:flex;align-items:center;justify-content:center}
@@ -85,10 +85,10 @@
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
   .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:9px;z-index:6;padding:8px 0}
-  .rail button{writing-mode:vertical-rl;transform:rotate(180deg);background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
+  .rail button{-webkit-writing-mode:vertical-rl;writing-mode:vertical-rl;transform:rotate(180deg);background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
     border-radius:9px 0 0 9px;padding:13px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rrail{position:fixed;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}
-  .rrail .report{writing-mode:vertical-rl;transform:rotate(180deg);background:none;border:none;padding:0;
+  .rrail .report{-webkit-writing-mode:vertical-rl;writing-mode:vertical-rl;transform:rotate(180deg);background:none;border:none;padding:0;
     font-size:22px;font-weight:600;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
