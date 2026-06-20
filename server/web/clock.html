@@ -24,7 +24,7 @@
   .tm{font-variant-numeric:tabular-nums;font-weight:700;font-size:42px;line-height:1}
   .tm.low{color:var(--warn)} .tm.flag{color:var(--bad)}
   .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
-    aspect-ratio:1;width:100%;border-radius:6px;overflow:hidden}
+    aspect-ratio:1;width:100%;height:100%;border-radius:6px;overflow:hidden}   /* height:100% so it fills the (JS-squared) wrap on old browsers */
   .board.m1{transform:rotate(-90deg)}                         /* mode 1: board turned -90 (pieces too) */
   .board.m2 .sq.bp{transform:rotate(180deg)}                  /* mode 2: black pieces face the black side */
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
@@ -240,6 +240,7 @@ function renderBoard(fen){
   rows.forEach((row,r)=>{let c=0;for(const ch of row){
     if(/\d/.test(ch)){for(let i=0;i<+ch;i++){b.appendChild(mkSq(r,c++,''))}}
     else{b.appendChild(mkSq(r,c++,ch))}}});
+  layoutBoard();
 }
 function sqRC(s){return [8-(+s[1]),s.charCodeAt(0)-97]}     // 'e2' -> [row,col] (row 0 = rank 8)
 function isLast(r,c){if(!lastMove)return false;const f=sqRC(lastMove.from),t=sqRC(lastMove.to);
@@ -509,8 +510,13 @@ if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ
 else{show('setup',true);$('tid').textContent='no table';}
 connect();                                             // always connect so the server console sees the device
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-(function(){const bw=document.querySelector('.boardwrap'),cs=document.querySelector('.cstrip');   // col 2 spans exactly the board height
-  if(bw&&cs&&window.ResizeObserver)new ResizeObserver(()=>{cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px'}).observe(bw);})();
+function layoutBoard(){const bw=document.querySelector('.boardwrap'),cs=document.querySelector('.cstrip');
+  if(!bw||!bw.offsetWidth)return;                                                                  // hidden / not laid out yet
+  if(!(window.CSS&&CSS.supports&&CSS.supports('aspect-ratio','1')))bw.style.height=bw.offsetWidth+'px';  // old browsers: no aspect-ratio -> force the board square
+  if(cs)cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px';}                       // col 2 (side clocks) spans exactly the board height
+window.addEventListener('resize',layoutBoard);
+(function(){const bw=document.querySelector('.boardwrap');
+  if(bw&&window.ResizeObserver)new ResizeObserver(layoutBoard).observe(bw);})();
 
 async function keepAwake(){try{if('wakeLock'in navigator)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(!ws||ws.readyState>1)connect()}});
