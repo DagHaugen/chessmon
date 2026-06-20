@@ -66,6 +66,20 @@ kg, sang, _ = gg.observe(og)
 assert kg == "error", f"illegal Ng1-g3 not flagged: {kg} ({sang})"
 print(f"illegal Ng1-g3 (g1 a knight origin, g3 a pawn landing, no single move) -> {kg} / {sang}")
 
+# illegal: black bishop c8 -> f5 (blocked by the d7 pawn). c8 and f5 are LIGHT squares holding a DARK
+# (black) piece -> high contrast, so the c8 vacate + the landing fit no single move -> illegal, NOT a
+# guessed g7-g6. Tall-piece note: even if the bishop's TOP reads one square over on g6 (parallax) and f5
+# reads empty, the SEEN c8 vacate still makes it illegal.
+bc = chess.Board(); bc.push_san("e4")          # black to move; bishop on c8, pawn on g7
+for label, (vac, land) in {"f5 (clean)": ((0, 2), (3, 5)), "g6 (parallax)": ((0, 2), (2, 6))}.items():
+    gc = CameraGame(bc.copy()); gc.observe(board_to_grid(bc))
+    oc = board_to_grid(bc).copy()
+    oc[vac[0]][vac[1]] = Cell.EMPTY            # c8 vacates
+    oc[land[0]][land[1]] = Cell.DARK           # the bishop lands (f5, or its top on g6)
+    kc, sanc, _ = gc.observe(oc)
+    assert kc == "error", f"illegal Bc8-f5 [{label}] not flagged: {kc} ({sanc})"
+    print(f"illegal Bc8-f5 [{label}] -> {kc} / {sanc}")
+
 # legal e2-e4 from the start must still register as a move (e4 IS a legal landing square)
 g2 = CameraGame(chess.Board())
 s2 = board_to_grid(g2.board); g2.observe(s2)
