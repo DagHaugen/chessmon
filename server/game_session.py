@@ -25,7 +25,7 @@ import cv2
 import chess
 import chess.pgn
 
-from chessmon.camera import CameraGame, RealBoard, solve_orientation_by_color
+from chessmon.camera import CameraGame, RealBoard, solve_orientation_by_color, _square_is_light
 from chessmon.board_state import Cell, board_to_grid, empty_grid
 
 
@@ -355,8 +355,15 @@ class Session:
         if kind == "baseline":
             return {"type": "session.baselined"}
         if kind == "error":                            # a change that fits no legal move -> flag it
-            return {"type": "move.unclear", "reason": san or "no legal move matches",
-                    "squares": self._delta_squares(extra)}
+            frm, to = self._illegal_move(grid)         # the offending piece's origin + where it actually sits now
+            sqs = [sq for sq in (frm, to) if sq]
+            msg = {"type": "move.unclear", "reason": san or "no legal move matches",
+                   "squares": sqs or self._delta_squares(extra)}   # fall back to the full mask only if we couldn't pin it
+            if frm and to:
+                fen = self._displaced_fen(frm, to)     # render the piece where the camera sees it, not where it was
+                if fen:
+                    msg["fen"] = fen
+            return msg
         return {"type": "move.unclear", "reason": "no legal move matches"}
 
     def _delta_squares(self, delta):
@@ -365,6 +372,40 @@ class Session:
         if delta is None:
             return []
         return [chr(97 + int(c)) + str(8 - int(r)) for r, c in zip(*np.where(np.asarray(delta)))]
+
+    def _sq(self, rc):
+        """(row, col) in board_to_grid coords -> square name (a1 = row 7, col 0)."""
+        return chr(97 + int(rc[1])) + str(8 - int(rc[0]))
+
+    def _illegal_move(self, obs):
+        """Pin an illegal move to a single from/to from the believed baseline (prev) vs the grid now:
+        the ORIGIN = a square that clearly held a piece at baseline and now reads empty; the LANDING =
+        a changed square now showing a piece CONTRASTING its own colour (so it's really there), preferring
+        one the believed board thought was empty. Either may be None when it can't be seen. Lets the clock
+        flag just those two squares (not the whole noisy change-mask) and show the piece where it sits."""
+        prev = self.game.prev
+        if prev is None:
+            return (None, None)
+        obs = np.asarray(obs)
+        delta = prev != obs
+        bel = board_to_grid(self.game.board)
+        froms = [(int(r), int(c)) for r, c in zip(*np.where(delta & (prev != Cell.EMPTY) & (obs == Cell.EMPTY)))]
+        tos = [(int(r), int(c)) for r, c in zip(*np.where(delta & (obs != Cell.EMPTY)))
+               if (obs[int(r), int(c)] == Cell.LIGHT) != _square_is_light(int(r), int(c))]
+        frm = next((rc for rc in froms if bel[rc[0], rc[1]] != Cell.EMPTY), froms[0] if froms else None)
+        to = next((rc for rc in tos if bel[rc[0], rc[1]] == Cell.EMPTY), tos[0] if tos else None)
+        return (self._sq(frm) if frm else None, self._sq(to) if to else None)
+
+    def _displaced_fen(self, frm, to):
+        """The believed position with the moved piece relocated from->to (an ILLEGAL placement, for
+        display only) so the clock can render the piece where the camera sees it, not where it was."""
+        b = self.game.board.copy()
+        pc = b.piece_at(chess.parse_square(frm))
+        if pc is None:
+            return None
+        b.remove_piece_at(chess.parse_square(frm))
+        b.set_piece_at(chess.parse_square(to), pc)
+        return b.board_fen()
 
     def _cands(self, sans):
         """Attach the UCI to each SAN candidate so the clock can resolve by tapping one."""

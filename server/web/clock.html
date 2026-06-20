@@ -432,6 +432,7 @@ function handle(m){
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
       clk.running=true;clk.last=Date.now();reading=false;
+      if(m.fen)renderBoard(m.fen);                                 // show the moved piece where the camera sees it, not where it was
       if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE\nTRY AGAIN';   // illegal: red squares + button text (two lines)
         $('report').className='report warn';$('report').textContent='⚠ illegal move';}
       else{markBad([]);warnMsg=(m.reason||'not recognized')+'\ntry again';

@@ -1,0 +1,52 @@
+"""Session test: an illegal move flags just its from/to (not the whole noisy change-mask) and reports a
+display FEN with the piece where it physically sits. No camera / server.
+Run: .venv\\Scripts\\python tools\\test_illegal_display.py
+"""
+import os
+import sys
+
+import numpy as np
+import chess
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from server.game_session import Session
+from chessmon.board_state import Cell, board_to_grid
+
+FAIL = 0
+
+
+def check(cond, label):
+    global FAIL
+    print(f"  [{'ok  ' if cond else 'FAIL'}] {label}")
+    if not cond:
+        FAIL += 1
+
+
+def rc(sq):                                   # 'e2' -> (row, col) with row 0 = rank 8
+    return (8 - int(sq[1]), ord(sq[0]) - 97)
+
+
+s = Session("t-ill")
+start = board_to_grid(chess.Board())
+s.seed_baseline(start)                        # baseline = the start position
+
+# illegal: the e2 pawn jumps to e5 (vacate e2, land e5) + a low-contrast GHOST on g4 (noise to ignore)
+obs = start.copy()
+obs[rc("e2")] = Cell.EMPTY                     # piece clearly left e2
+obs[rc("e5")] = Cell.LIGHT                     # white pawn now on e5 (a dark square -> high contrast, really seen)
+obs[rc("g4")] = Cell.LIGHT                     # a light "piece" on a light square -> low contrast ghost, must be dropped
+
+v = s.ingest_grid(obs)
+print("illegal e2->e5 (+ ghost on g4):", v.get("type"), v.get("squares"))
+check(v["type"] == "move.unclear", "flagged as a warning")
+check(set(v.get("squares", [])) == {"e2", "e5"}, "flags exactly the from/to (e2,e5) -- ghost dropped, not 5 squares")
+
+# the display FEN shows the pawn where it physically is (e5), origin empty
+b = chess.Board()
+b.set_board_fen(v["fen"])
+check(b.piece_at(chess.E5) is not None and b.piece_at(chess.E5).piece_type == chess.PAWN,
+      "display board: the pawn sits on e5 (where it is)")
+check(b.piece_at(chess.E2) is None, "display board: e2 is empty (not where it was)")
+
+print("ALL ILLEGAL-DISPLAY TESTS OK" if not FAIL else f"{FAIL} CHECK(S) FAILED")
+sys.exit(1 if FAIL else 0)
