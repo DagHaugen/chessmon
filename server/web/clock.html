@@ -13,7 +13,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transparent;
     font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .page{max-width:520px;margin:0 auto;padding:6px 34px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:8px}
+  .page{position:relative;max-width:520px;margin:0 auto;padding:6px 34px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:8px}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:0 0 auto}
   .dot.on{display:none}                              /* only show the dot (red) when the connection drops */
   .side{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
@@ -83,12 +83,12 @@
     width:42px;height:42px;border-radius:50%;line-height:1;
     background:rgba(21,23,28,.85);border:1px solid var(--line);color:var(--ink);font-size:22px;cursor:pointer;
     display:flex;align-items:center;justify-content:center}   /* START-screen orientation toggle */
-  .rail{position:fixed;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;
+  .rail{position:absolute;left:0;top:0;bottom:0;width:32px;display:flex;flex-direction:column;align-items:center;   /* absolute (not fixed) -> hugs the centered .page edge, not the viewport edge, on wide phones */
     justify-content:center;gap:9px;z-index:6;padding:8px 0}
-  .rail button{background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);
-    border-radius:9px 0 0 9px;padding:13px 5px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
+  .rail button{width:30px;box-sizing:border-box;background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);   /* fixed narrow width: no writing-mode on the <button> (Safari flips the .lbl 180deg if both nest), so pin width so it can't bloat */
+    border-radius:9px 0 0 9px;padding:13px 4px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rail button .lbl{transform:rotate(-90deg)}   /* vertical text lives on a child span -- old WebKit ignores text-orientation on the <button> itself */
-  .rrail{position:fixed;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}
+  .rrail{position:absolute;right:0;top:0;bottom:0;width:32px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}   /* absolute -> hugs the centered .page right edge */
   .rrail .report{transform:rotate(-90deg);background:none;border:none;padding:0;
     font-size:22px;font-weight:600;max-height:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}  /* col 4, faces the board */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
@@ -135,7 +135,6 @@
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
   @supports (writing-mode:vertical-rl){   /* where it works, use real vertical text; old browsers keep the rotate(-90deg) base */
     .cstrip .ct,.cstrip .ctname,.rail button .lbl,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
-  @supports (writing-mode:vertical-rl){.rail button{writing-mode:vertical-rl}}   /* narrow box on the BUTTON itself -- old WebKit won't shrink-wrap a writing-mode .lbl child, so the button bloated and pushed the right rail off-screen. No rotate here (the .lbl rotates). */
 </style>
 </head>
 <body>
