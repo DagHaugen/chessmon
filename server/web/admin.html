@@ -296,7 +296,7 @@ function renderRunning(){
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
-    const vb=document.createElement('button');vb.className='mini';vb.textContent='View game';vb.onclick=()=>openView(t);acts.append(vb);
+    const vb=document.createElement('button');vb.className='mini';vb.textContent='View board';vb.onclick=()=>openView(t);acts.append(vb);
     if(camDev&&camDev.online){                                // live camera -> snapshot + remote controls (camDev declared above)
       const vsb=document.createElement('button');vsb.className='mini';vsb.textContent='View screen';vsb.onclick=()=>openSnap(t);acts.append(vsb);
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
