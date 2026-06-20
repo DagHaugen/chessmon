@@ -71,7 +71,7 @@ def dev_public(d):
 def tables_public():
     """The configured tables (each persists its unit assignments + name + calibration)."""
     return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
-             "calibrated": s.board_reader is not None, "moves": len(s.moves),
+             "calibrated": s.board_reader is not None, "moved": getattr(s, "alignment_alert", False), "moves": len(s.moves),
              "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
 

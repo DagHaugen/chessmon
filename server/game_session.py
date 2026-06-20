@@ -21,6 +21,7 @@ import secrets
 import time
 
 import numpy as np
+import cv2
 import chess
 import chess.pgn
 
@@ -40,6 +41,9 @@ class Session:
         self.corners = None                # last calibration corners (fractions 0..1) so the console can re-show / edit them
         self.status = ""                   # clock-reported game status (running / paused / waiting) for the console
         self.calibrations = {}             # the remembered calibration {camera devId: (reader, corners)} -- at most one; a new calibration replaces it (old camera moved away)
+        self.align_refs = {}               # per-camera corner patches for movement detection {camera devId: [(cx,cy,patch),...]}
+        self.alignment_alert = False       # True while the camera looks moved since calibration (console flag)
+        self._align_strikes = 0            # consecutive frames that looked moved (debounce before raising the alert)
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -61,7 +65,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {})):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0)):
             if not hasattr(self, k):
                 setattr(self, k, v)
         if self.board_reader is not None and self.camera_dev and not self.calibrations:   # migrate a pre-existing single-camera calibration
@@ -105,7 +109,10 @@ class Session:
         self.board_reader = rb
         if self.camera_dev:                            # the calibration belongs to THIS camera; a new calibration replaces the old (you moved the old camera away)
             self.calibrations = {self.camera_dev: (rb, self.corners)}
+            self.align_refs = {self.camera_dev: self._capture_align_refs(frame)}   # reference patches to detect later camera movement
         self._calib_frame = frame
+        self.alignment_alert = False                   # a fresh calibration clears any "camera moved" alert
+        self._align_strikes = 0
         t = rb.calibrate_orientation_auto(frame)
         if t is not None:
             rb.learn(frame, self.game.board)
@@ -172,6 +179,9 @@ class Session:
                 return self.resnap(frame)
             if self.board_reader is None:
                 return {"type": "calib.failed", "reason": "camera not calibrated"}
+            moved = self.check_alignment(frame)        # has the camera/board shifted since calibration? resnap can't fix that -- re-calibrate
+            if moved is not None:
+                return moved
             return self.ingest_frame(frame)
         except Exception as e:
             return {"type": "calib.failed", "reason": str(e)}
@@ -195,6 +205,82 @@ class Session:
         self.seed_baseline(self.board_reader.classify(frame))
         return {"type": "refreshed", "fen": self.game.board.fen()}
 
+    # --- camera-movement detection -------------------------------------------------------------
+    # The corner homography is only valid while the board sits where it was calibrated. A bumped
+    # camera (or board) makes the warp map to the wrong squares, and resnap CAN'T fix it (it would
+    # re-learn colours on a misaligned grid) -- only re-calibration can. We catch that by template-
+    # matching a small patch from each calibrated corner in every move frame.
+    _ALIGN_PATCH = 0.028     # corner-patch half-size, fraction of frame width
+    _ALIGN_SEARCH = 0.030    # search radius around the calibrated corner, fraction of width
+    _ALIGN_MOVE = 0.012      # a corner shift past this (fraction of width) counts as displaced
+    _ALIGN_CONF = 0.45       # min normalized-correlation to trust a corner's match (else occluded)
+    _ALIGN_STRIKES = 2       # consecutive moved frames before raising the console alert (debounce)
+
+    def _capture_align_refs(self, frame):
+        """Grab a grayscale patch around each of the 4 calibrated board corners (skipping any corner
+        too close to the frame edge). Stored with the calibration so movement can be detected later."""
+        if not self.corners or frame is None:
+            return []
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape[:2]
+        p = max(12, int(self._ALIGN_PATCH * w))
+        refs = []
+        for fx, fy in self.corners:
+            cx, cy = int(fx * w), int(fy * h)
+            if cx - p < 0 or cy - p < 0 or cx + p > w or cy + p > h:
+                continue
+            refs.append((cx, cy, gray[cy - p:cy + p, cx - p:cx + p].copy()))
+        return refs
+
+    def check_alignment(self, frame):
+        """Re-find each calibrated corner patch in a small window. A coherent shift across corners (a
+        translation) -- or every corner displaced (rotation / zoom) -- means the camera or board moved,
+        which invalidates the calibration. Returns a move.unclear verdict to HOLD the move while that's
+        the case, and raises self.alignment_alert once it's confirmed over `_ALIGN_STRIKES` frames; a
+        clean frame (corners back in place) self-heals both. Returns None when alignment is fine."""
+        refs = self.align_refs.get(self.camera_dev)
+        if not refs or frame is None:
+            return None
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape[:2]
+        s = max(10, int(self._ALIGN_SEARCH * w))
+        move_px = max(6, int(self._ALIGN_MOVE * w))
+        reliable = 0
+        vecs = []                                          # shift vectors of the displaced corners
+        for cx, cy, patch in refs:
+            ph, pw = patch.shape[:2]
+            y0, y1 = cy - ph // 2 - s, cy + (ph - ph // 2) + s
+            x0, x1 = cx - pw // 2 - s, cx + (pw - pw // 2) + s
+            if x0 < 0 or y0 < 0 or x1 > w or y1 > h:
+                continue
+            res = cv2.matchTemplate(gray[y0:y1, x0:x1], patch, cv2.TM_CCOEFF_NORMED)
+            _, conf, _, loc = cv2.minMaxLoc(res)
+            if conf < self._ALIGN_CONF:
+                continue                                   # corner occluded / unrecognizable -> can't judge it
+            reliable += 1
+            vx, vy = loc[0] - s, loc[1] - s
+            if (vx * vx + vy * vy) ** 0.5 > move_px:
+                vecs.append((vx, vy))
+        if reliable < 3:
+            return None                                    # too few corners visible -> inconclusive
+        moved = False
+        if len(vecs) >= 3:                                 # a coherent, same-direction shift = a translation
+            mx = sum(v[0] for v in vecs) / len(vecs)
+            my = sum(v[1] for v in vecs) / len(vecs)
+            avg = sum((v[0] ** 2 + v[1] ** 2) ** 0.5 for v in vecs) / len(vecs)
+            if avg > 0 and (mx * mx + my * my) ** 0.5 > 0.6 * avg:
+                moved = True
+        if reliable >= 4 and len(vecs) >= 4:               # every corner displaced = rotation / zoom too
+            moved = True
+        if moved:
+            self._align_strikes += 1
+            if self._align_strikes >= self._ALIGN_STRIKES:
+                self.alignment_alert = True
+            return {"type": "move.unclear", "reason": "camera moved - re-calibrate", "squares": []}
+        self._align_strikes = 0                            # corners in place -> all clear
+        self.alignment_alert = False
+        return None
+
     def reset_game(self):
         """Operator moved all pieces back to the start position and confirmed RESET: rebuild the game
         from scratch. The detector re-anchors to the start position from the next camera frame, which
@@ -216,8 +302,10 @@ class Session:
         Swapping a table's camera deactivates the calibration; swapping back to a calibrated camera restores it."""
         cal = self.calibrations.get(self.camera_dev)
         new_reader = cal[0] if cal else None
-        if new_reader is not self.board_reader:        # a different camera -> the move-detection baseline is stale
+        if new_reader is not self.board_reader:        # a different camera -> the move-detection baseline + movement alert are stale
             self.game.prev = None                      # re-baseline off the new camera's next frame
+            self.alignment_alert = False
+            self._align_strikes = 0
         if cal:
             self.board_reader, self.corners = cal
         else:

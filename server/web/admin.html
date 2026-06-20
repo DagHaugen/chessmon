@@ -274,7 +274,9 @@ function renderTables(){
     rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
       if((!t.clock&&!t.camera)||confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))
         send({type:'table.remove',table:t.token})};
-    head.append(nm,pill,cal,rm);
+    head.append(nm,pill);
+    if(t.moved){const mv=document.createElement('span');mv.className='gstat wait';mv.textContent='⚠ moved';mv.title='The camera or board looks like it shifted since calibration — re-calibrate.';head.append(mv);}
+    head.append(cal,rm);
     const slots=document.createElement('div');slots.className='slots';
     slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
     card.append(head,slots);L.appendChild(card);
@@ -291,7 +293,7 @@ function renderRunning(){
     const row=document.createElement('div');row.className='grow';
     const left=document.createElement('div');
     const nm=document.createElement('div');nm.className='gnm';
-    nm.innerHTML=(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''));
+    nm.innerHTML=(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''))+(t.moved?' <span class="gstat wait" title="Camera/board shifted since calibration — re-calibrate.">⚠ CAMERA MOVED</span>':'');
     const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
