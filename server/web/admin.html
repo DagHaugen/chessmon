@@ -102,6 +102,7 @@
   .vturn{color:var(--mut);font-size:13px;margin:2px 0 4px}
   .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
   .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px}
+  .snapgrid{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   .ccwrap.marking img{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2346d369' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%2346d369'/%3E%3Cline x1='16' y1='1' x2='16' y2='6' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='16' y1='26' x2='16' y2='31' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='1' y1='16' x2='6' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='26' y1='16' x2='31' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3C/svg%3E") 16 16, crosshair}
   .cdot{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid #46d369;
     background:rgba(70,211,105,.3);color:#eaffea;font-size:10px;font-weight:700;display:flex;align-items:center;
@@ -164,8 +165,8 @@
   <div class="modal hidden" id="snapmodal"><div class="card">
     <h2 id="snaptitle">Camera</h2>
     <p id="snaphint">Asking the camera for a frame…</p>
-    <div class="ccwrap"><img id="snapimg" alt="camera snapshot"></div>
-    <div class="crow"><button class="sec" id="snapclose">Close</button></div>
+    <div class="ccwrap"><img id="snapimg" alt="camera snapshot"><svg class="snapgrid hidden" id="snapgrid" viewBox="0 0 1 1" preserveAspectRatio="none"></svg></div>
+    <div class="crow"><button class="sec hidden" id="snapgridbtn">Hide grid</button><button class="sec" id="snapclose">Close</button></div>
   </div></div>
 </div>
 <script src="qrcode.min.js"></script>
@@ -330,9 +331,24 @@ $('vclose').onclick=closeView;
 let snapTable=null;
 function openSnap(t){snapTable=t.token;$('snaptitle').textContent=(t.name||'Table')+' — camera';
   $('snaphint').textContent='Asking the camera for a frame…';$('snapimg').removeAttribute('src');
+  $('snapgrid').innerHTML='';show('snapgrid',false);show('snapgridbtn',false);
   show('snapmodal',true);send({type:'admin.snap',table:t.token});}
 function closeSnap(){show('snapmodal',false);snapTable=null}
 $('snapclose').onclick=closeSnap;
+function drawCalibGrid(corners){                        // overlay the calibrated 8x8 board (square->quad homography from the stored corners)
+  const g=$('snapgrid');
+  if(!corners||corners.length!==4){g.innerHTML='';show('snapgrid',false);show('snapgridbtn',false);return}
+  const [p0,p1,p2,p3]=corners,x0=p0[0],y0=p0[1],x1=p1[0],y1=p1[1],x2=p2[0],y2=p2[1],x3=p3[0],y3=p3[1];
+  const dx1=x1-x2,dx2=x3-x2,dx3=x0-x1+x2-x3,dy1=y1-y2,dy2=y3-y2,dy3=y0-y1+y2-y3,den=dx1*dy2-dx2*dy1;
+  const gg=(dx3*dy2-dx2*dy3)/den,hh=(dx1*dy3-dx3*dy1)/den;
+  const a=x1-x0+gg*x1,b=x3-x0+hh*x3,c=x0,d=y1-y0+gg*y1,e=y3-y0+hh*y3,f=y0;
+  const map=(u,v)=>{const w=gg*u+hh*v+1;return [(a*u+b*v+c)/w,(d*u+e*v+f)/w]};
+  const ln=(A,B,sw)=>'<line x1="'+A[0]+'" y1="'+A[1]+'" x2="'+B[0]+'" y2="'+B[1]+'" stroke="#3ecf8e" stroke-width="'+sw+'" vector-effect="non-scaling-stroke"/>';
+  let svg='';
+  for(let i=0;i<=8;i++){const sw=(i===0||i===8)?2:1;svg+=ln(map(i/8,0),map(i/8,1),sw)+ln(map(0,i/8),map(1,i/8),sw);}
+  g.innerHTML=svg;show('snapgrid',true);show('snapgridbtn',true);$('snapgridbtn').textContent='Hide grid';
+}
+$('snapgridbtn').onclick=()=>{const hid=$('snapgrid').classList.toggle('hidden');$('snapgridbtn').textContent=hid?'Show grid':'Hide grid'};
 function addVSq(b,r,c,ch){const d=document.createElement('div');d.className='vsq '+((r+c)%2?'dark':'light');
   if(ch){d.textContent=VGLYPH[ch.toLowerCase()];d.classList.add(ch===ch.toUpperCase()?'wp':'bp');}b.appendChild(d);}
 function renderMiniBoard(fen){const b=$('vboard');b.innerHTML='';
@@ -356,7 +372,7 @@ function handle(m){
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
   else if(m.type==='state'){if(m.table===watchTable){renderMiniBoard(m.fen);renderMoveList(m.moves||[]);
     $('vturn').textContent=m.result?('game over · '+m.result):(m.turn+' to move');}}
-  else if(m.type==='snap.image'){if(m.table===snapTable){$('snapimg').src=m.image;$('snaphint').textContent='Latest frame — Close when done.'}}
+  else if(m.type==='snap.image'){if(m.table===snapTable){$('snapimg').src=m.image;$('snaphint').textContent='Latest frame — Close when done.';drawCalibGrid(m.corners)}}
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';

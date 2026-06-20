@@ -196,7 +196,7 @@ async def ws_endpoint(ws: WebSocket):
                         _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
                         durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
                         for a in list(admins):
-                            await send(a, {"type": "snap.image", "table": s.table_token, "image": durl})
+                            await send(a, {"type": "snap.image", "table": s.table_token, "image": durl, "corners": s.corners})
                         continue
                     if step == "corners" and frame is not None:    # relay to the clock for the corner-tap UI
                         s._calib_step, s._calib_frame = None, frame
