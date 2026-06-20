@@ -212,7 +212,14 @@ async def ws_endpoint(ws: WebSocket):
                     print(f"[frame] {step} {shape} -> {verdict.get('type')}: {verdict.get('reason', '')}")
                     await send(hub(s.table_token)["clock"], verdict)
                     await send(ws, verdict)                         # echo to the camera operator
-                    await broadcast_state(s)
+                    # A warning / prompt verdict (illegal, no-change, ambiguous, unseen) did NOT change the
+                    # board -- re-pushing 'state' to the clock would wipe the warning it just rendered (the
+                    # "flash then back to green" bug). Refresh the console only (keeps the camera-moved badge
+                    # live); anything that actually advanced the game broadcasts state as before.
+                    if verdict.get("type") in ("move.unclear", "move.nochange", "move.ambiguous", "move.unseen"):
+                        await broadcast_tables()
+                    else:
+                        await broadcast_state(s)
                 continue
             data = json.loads(msg["text"])
             t = data.get("type")
