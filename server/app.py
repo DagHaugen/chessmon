@@ -434,6 +434,8 @@ async def ws_endpoint(ws: WebSocket):
                 h["spectators"].discard(ws)
             elif h.get(role) is ws:
                 h[role] = None
+                if role == "camera":                          # tell the clock its camera dropped -> WAIT
+                    await send(h["clock"], {"type": "camera.offline"})
         admins.discard(ws)
         if dev_id in devices and devices[dev_id].get("ws") is ws:
             devices[dev_id]["online"] = False

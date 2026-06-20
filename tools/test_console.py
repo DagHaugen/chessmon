@@ -156,10 +156,50 @@ async def test_landing():
     await reopen.close()
 
 
+async def test_camera_offline():
+    print("camera offline: when the camera ws drops, the table's clock is told camera.offline")
+    admin = await websockets.connect(URL)
+    await admin.send(json.dumps({"type": "admin.join"}))
+    await next_devices(admin)
+
+    await admin.send(json.dumps({"type": "table.create", "name": "Off Table"}))
+    m = await next_devices(admin)
+    tok = next(x["token"] for x in m["tables"] if x["name"] == "Off Table")
+
+    cam = await websockets.connect(URL)
+    await cam.send(json.dumps({"type": "hello", "devId": "cam-off", "name": "Cam", "role": "camera"}))
+    await next_devices(admin)
+    await admin.send(json.dumps({"type": "table.assign", "table": tok, "role": "camera", "devId": "cam-off"}))
+    asg = json.loads(await asyncio.wait_for(cam.recv(), 3))
+    await cam.send(json.dumps({"type": "pair.join", "pairToken": asg["pair"]}))   # camera now linked to the table
+    await next_devices(admin)
+
+    clk = await websockets.connect(URL)
+    await clk.send(json.dumps({"type": "table.join", "tableToken": tok}))
+    await asyncio.sleep(0.2)
+    await cam.close()                                            # camera drops
+
+    got = False
+    for _ in range(8):
+        try:
+            msg = json.loads(await asyncio.wait_for(clk.recv(), 2))
+        except asyncio.TimeoutError:
+            break
+        if msg.get("type") == "camera.offline":
+            got = True
+            break
+    check(got, "the clock receives camera.offline after the camera ws drops")
+
+    await admin.send(json.dumps({"type": "table.remove", "table": tok}))
+    await admin.close()
+    await clk.close()
+
+
 test_persistence()
 try:
     asyncio.run(test_ws())
     asyncio.run(test_landing())
+    asyncio.run(test_camera_offline())
 except Exception as e:                                          # noqa: BLE001
     check(False, f"WS flow raised: {e!r}")
 print("\n" + ("CONSOLE TESTS FAILED: " + "; ".join(_FAIL) if _FAIL else "ALL CONSOLE TESTS OK"))
