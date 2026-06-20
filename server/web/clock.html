@@ -95,7 +95,7 @@
   .cand:active{transform:translateY(1px)}
   .report{background:#11141a;border:1px solid var(--line);border-radius:11px;padding:10px;font-size:13px;
     text-align:center;color:var(--mut)} .report.over{color:var(--good);font-weight:600}
-  .report.warn{color:var(--warn);border-color:var(--warn);font-weight:600}
+  .report.warn{color:var(--bad);border-color:var(--bad);font-weight:800;text-transform:uppercase}
   .pair{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
   .pair h2{font-size:13px;color:var(--mut);margin:0 0 10px;text-transform:uppercase;letter-spacing:.1em}
   #qr{display:flex;justify-content:center;margin:0 auto;width:160px;height:160px;background:#fff;
@@ -434,9 +434,9 @@ function handle(m){
       clk.running=true;clk.last=Date.now();reading=false;
       if(m.fen)renderBoard(m.fen);                                 // show the moved piece where the camera sees it, not where it was
       if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE\nTRY AGAIN';   // illegal: red squares + button text (two lines)
-        $('report').className='report warn';$('report').textContent='⚠ illegal move';}
+        $('report').className='report warn';$('report').textContent='illegal move';}
       else{markBad([]);warnMsg=(m.reason||'not recognized')+'\ntry again';
-        $('report').className='report warn';$('report').textContent='⚠ '+(m.reason||'not recognized');}
+        $('report').className='report warn';$('report').textContent=(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
       phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);gameResult=m.result;clearCands();paint();
