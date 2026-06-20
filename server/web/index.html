@@ -62,14 +62,14 @@ $('nameinp').value=localStorage.getItem('cm_devname')||'';   // a friendly name 
 $('did').textContent=devName+' · New device '+devId.slice(0,6);
 $('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
   if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));
-  if(v)$('msg').textContent='Named “'+v+'”. Now pick it on the chessmon console and drop it into a table.';};
+  if(v)$('msg').textContent='Named “'+v+'” — listed under Unused on the console, ready when you are.';};
 $('nameinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('nameinp').blur();}});  // phone: Enter closes the keyboard (no form to submit)
 
 let ws;
 function ready(){
   $('card').classList.add('ready');
   $('title').innerHTML='<span class="dot"></span>Connected';
-  $('msg').textContent='Waiting to be set up. Pick this device on the chessmon console and drop it into a table.';
+  $('msg').textContent='Connected — added to Unused devices on the console. Set it up there whenever you like.';
 }
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
