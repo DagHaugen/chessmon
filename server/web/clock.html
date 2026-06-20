@@ -56,7 +56,7 @@
   .cstrip .ctname{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
-  .qrjoinbtn{position:absolute;top:8px;right:8px;z-index:6;width:36px;height:36px;padding:0;border-radius:10px;
+  .qrjoinbtn{position:fixed;top:12px;left:42px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;
     background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
     display:flex;align-items:center;justify-content:center}
   .qrjoinbtn svg{display:block}
@@ -68,6 +68,7 @@
   .startov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(21,23,28,.6);border:none;border-radius:8px;cursor:pointer;z-index:4}
   .startov span{transform:rotate(-90deg);font-size:min(13vw,64px);font-weight:800;color:var(--good);letter-spacing:.14em}
+  .startov.wait span{color:var(--mut)}                  /* no camera linked -> WAIT (muted), not START */
   .rotbtn{position:absolute;top:50%;left:50%;transform:translate(calc(-50% - 82px),-50%);z-index:5;   /* centered vertically, just left of START */
     width:42px;height:42px;border-radius:50%;line-height:1;
     background:rgba(21,23,28,.85);border:1px solid var(--line);color:var(--ink);font-size:22px;cursor:pointer;
@@ -275,7 +276,11 @@ function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // 
     b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};g.appendChild(b)});
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks()}
+function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateStartBtn()}
+function updateStartBtn(){                                  // no camera linked yet -> WAIT instead of START
+  $('startov').classList.toggle('wait',!camLinked);
+  $('startov').querySelector('span').textContent=camLinked?'START':'WAIT';
+  if(phase==='ready'){$('report').className='report';$('report').textContent=camLinked?'Ready — press START':'Camera not ready'}}
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
@@ -285,8 +290,7 @@ function togglePause(){
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
-  showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();
-  $('report').className='report';$('report').textContent='Ready — press START'}
+  showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();updateStartBtn()}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}
 ['white','black'].forEach(side=>$('cb-'+side).onclick=()=>{   // confirm, or retry after a warning
   if(clk.active!==side||phase!=='run')return;
@@ -347,7 +351,7 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
-      camLinked=m.cameraLinked;
+      camLinked=m.cameraLinked;updateStartBtn();
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
       if(m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){ // only when no camera is linked yet (else skip the QR)
         show('pair',true);$('paircode').textContent=m.pairToken;
@@ -355,7 +359,7 @@ function handle(m){
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
       break;
-    case 'camera.linked': camLinked=true;show('pair',false);break;   // a camera joined -> drop the QR
+    case 'camera.linked': camLinked=true;show('pair',false);updateStartBtn();break;   // a camera joined -> drop the QR, flip WAIT->START
     case 'assign':                                              // console assigned this device a role
       if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
         show('setup',false);show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
@@ -381,7 +385,7 @@ function handle(m){
           show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').textContent='Pause';clearCands();paint();
           $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
         else if(phase==='run'){$('report').className='report';$('report').textContent=m.turn+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
-        else{enterReady();$('report').className='report';$('report').textContent='Ready — press START';}}
+        else{enterReady();}}                                 // enterReady -> updateStartBtn sets Ready / Camera not ready
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
@@ -435,7 +439,7 @@ document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-s
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
-$('startov').onclick=startGame;$('pausebtn').onclick=togglePause;
+$('startov').onclick=()=>{if(camLinked)startGame()};$('pausebtn').onclick=togglePause;   // WAIT (no camera) does nothing
 $('resetbtn').onclick=()=>{if(confirm('Reset the game?\nMove all the pieces back to the start position first.'))resetGame()};
 $('rotbtn').onclick=()=>{rotMode=(rotMode+1)%3;localStorage.setItem('cm_rot',rotMode);applyRot()};   // cycle 0->1->2
 applyRot();
