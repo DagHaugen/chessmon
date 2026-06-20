@@ -340,6 +340,11 @@ async def ws_endpoint(ws: WebSocket):
                             await send(dev["ws"], {"type": "unassigned"})
                     mgr.save(SESSIONS_FILE)
                     await broadcast_devices()
+            elif t == "camera.control":                           # console -> the table's camera: screen on/off, flashlight
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    await send(hub(sess.table_token)["camera"],
+                               {"type": "camera.control", "what": data.get("what"), "on": bool(data.get("on"))})
             elif t == "admin.calib":                              # console triggers a calibration frame
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:

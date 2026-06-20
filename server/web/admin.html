@@ -51,6 +51,8 @@
   .mini:hover{border-color:var(--mut)}
   .mini.bin{padding:7px 8px;line-height:0}.mini.bin svg{display:block}
   .mini.bin:hover{color:var(--bad);border-color:var(--bad)}
+  .gacts{display:flex;gap:6px;align-items:center}
+  .mini.ctl.on{border-color:var(--accent);color:var(--accent)}
 
   /* configured tables */
   .tcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:10px}
@@ -147,7 +149,7 @@
 function $(id){return document.getElementById(id)}
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 const BIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-let ws, devs=[], tabs=[], calibTable=null;
+let ws, devs=[], tabs=[], calibTable=null, camState={};   // camState: console-intended flash/screen per table
 
 function devById(id){return devs.find(d=>d.id===id)}
 function usedIds(){const s=new Set();tabs.forEach(t=>{if(t.clock)s.add(t.clock);if(t.camera)s.add(t.camera)});return s}
@@ -263,10 +265,21 @@ function renderRunning(){
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
     left.append(nm,sub);
+    const acts=document.createElement('div');acts.className='gacts';
+    const camDev=devById(t.camera);
+    if(camDev&&camDev.online){                                // live camera -> remote controls
+      const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
+      const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');fb.textContent='Flash '+(cs.flash?'on':'off');
+      fb.onclick=()=>{cs.flash=!cs.flash;send({type:'camera.control',table:t.token,what:'flash',on:cs.flash});render()};
+      const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen '+(cs.screen?'on':'off');
+      sb.onclick=()=>{cs.screen=!cs.screen;send({type:'camera.control',table:t.token,what:'screen',on:cs.screen});render()};
+      acts.append(fb,sb);
+    }
     const del=document.createElement('button');del.className='mini bin';del.innerHTML=BIN;
     del.title='Clear this game off the table (keeps its clock, camera and calibration)';
     del.onclick=()=>{if(confirm('Clear the game on “'+(t.name||'this table')+'”? The table keeps its setup.'))send({type:'table.cleargame',table:t.token})};
-    row.append(left,del);L.appendChild(row);
+    acts.append(del);
+    row.append(left,acts);L.appendChild(row);
   });
 }
 

@@ -28,6 +28,7 @@
   .status.err{color:var(--bad)} .status.ok{color:var(--good)}
   .log{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;max-height:130px;overflow:auto;
     white-space:pre-wrap;background:#11141a;border:1px solid var(--line);border-radius:10px;padding:8px}
+  .screenoff{position:fixed;inset:0;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center;color:#1b1b1b;font-size:13px}
 </style>
 </head>
 <body>
@@ -44,6 +45,7 @@
   <div class="log" id="log"></div>
 </div>
 <canvas id="cv" style="display:none"></canvas>
+<div class="screenoff hidden" id="screenoff" onclick="this.classList.add('hidden')">tap to wake the screen</div>
 <script>
 let pair=new URLSearchParams(location.search).get('pair')||localStorage.getItem('cm_pair');
 if(pair)localStorage.setItem('cm_pair',pair);            // reuse the last table on reopen — no rescan
@@ -67,11 +69,20 @@ async function startCam(){
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},
       width:{ideal:1280},height:{ideal:960}},audio:false});
-    v.srcObject=s;await v.play();setupZoom(s.getVideoTracks()[0]);
+    v.srcObject=s;await v.play();camTrack=s.getVideoTracks()[0];setupZoom(camTrack);
     status('camera ready — mount it straight down over the board')
   }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
 }
-let zoom=1,camRes=null;                                  // digital-zoom factor; current camera capture resolution
+let zoom=1,camRes=null,camTrack=null;                   // digital-zoom factor; capture resolution; the live video track (torch)
+function applyControl(what,on){                         // remote control from the console
+  if(what==='flash'){
+    if(!camTrack)return;
+    camTrack.applyConstraints({advanced:[{torch:!!on}]}).then(()=>log('flashlight '+(on?'on':'off'))).catch(()=>log('flashlight not supported on this camera'));
+  }else if(what==='screen'){
+    $('screenoff').classList.toggle('hidden', !!on);    // off -> black overlay (the camera keeps capturing behind it)
+    log('screen '+(on?'on':'off'));
+  }
+}
 function setupZoom(track){
   const set=track.getSettings?track.getSettings():{};
   if(set.width){camRes={w:set.width,h:set.height};
@@ -115,6 +126,7 @@ function connect(){
       ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));status('paired from the console','ok')}
       else if(m.role==='clock'){location.href='clock.html?table='+m.table}}
     else if(m.type==='unassigned'){localStorage.removeItem('cm_pair');location.href='index.html'}  // pulled off its table -> back to landing
+    else if(m.type==='camera.control'){applyControl(m.what,m.on)}                                  // console: screen on/off, flashlight
     else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
       status('already calibrated · armed — a frame is sent on every move','ok')}
       else{status('camera ready — capture the empty board, then the start position')}}

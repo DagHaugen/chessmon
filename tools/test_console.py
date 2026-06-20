@@ -174,6 +174,18 @@ async def test_camera_offline():
     await cam.send(json.dumps({"type": "pair.join", "pairToken": asg["pair"]}))   # camera now linked to the table
     await next_devices(admin)
 
+    await admin.send(json.dumps({"type": "camera.control", "table": tok, "what": "flash", "on": True}))
+    got_ctl = False
+    for _ in range(6):
+        try:
+            mc = json.loads(await asyncio.wait_for(cam.recv(), 2))
+        except asyncio.TimeoutError:
+            break
+        if mc.get("type") == "camera.control" and mc.get("what") == "flash" and mc.get("on") is True:
+            got_ctl = True
+            break
+    check(got_ctl, "the camera receives the camera.control relay (flash on)")
+
     clk = await websockets.connect(URL)
     await clk.send(json.dumps({"type": "table.join", "tableToken": tok}))
     await asyncio.sleep(0.2)
