@@ -442,9 +442,13 @@ function handle(m){
 }
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 
+let battMgr=null;
+function pushBattery(){if(battMgr&&ws&&ws.readyState===1)send({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}})}
+function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
+setupBattery();
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');serverDown=false;updateWait();keepAwake();
+  ws.onopen=()=>{$('dot').classList.add('on');serverDown=false;updateWait();keepAwake();pushBattery();
     send({type:'hello',devId,name:devName,role:'clock',plat:navigator.platform,screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}});
     if(table)send({type:'table.join',tableToken:table})};
   ws.onclose=()=>{$('dot').classList.remove('on');serverDown=true;updateWait();setTimeout(connect,1500)};   // server gone -> WAIT

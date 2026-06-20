@@ -46,6 +46,7 @@
   .uname input:focus{outline:none;border-color:var(--accent)}
   .uspec{font-size:11px;color:var(--mut);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.5}
   .uspec .os{color:var(--ink)}
+  .batt{font-variant-numeric:tabular-nums}.batt.good{color:var(--good)}.batt.bad{color:var(--bad)}
   .mini{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:8px;
     padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
   .mini:hover{border-color:var(--mut)}
@@ -174,6 +175,9 @@ function specText(d){const p=[];
   if(d.cam)p.push(d.cam.w+'×'+d.cam.h+' cam');
   return p.join('  ·  ');}
 function osText(d){return d.plat||''}                       // OS/platform only — no generic "device" filler
+function battText(d){if(!d.battery)return '';const b=d.battery;return (b.charging?'⚡':'')+b.level+'%'}
+function battHTML(d){if(!d.battery)return '';const b=d.battery;const cls=b.charging?' good':(b.level<=20?' bad':'');
+  return ' <span class="batt'+cls+'">'+(b.charging?'⚡':'')+b.level+'%</span>';}
 function fmtTime(s){if(!s)return '';const d=new Date(s*1000);
   return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 
@@ -204,8 +208,8 @@ function renderUnused(){
     inp.onblur=()=>{if(renderPending)render()};
     nmw.appendChild(inp);
     const sp=document.createElement('div');sp.className='uspec';
-    const os=osText(d);
-    sp.innerHTML=(os?'<span class="os">'+os+'</span><br>':'')+(specText(d)||'—');
+    const os=osText(d), bh=battHTML(d);
+    sp.innerHTML=((os||bh)?'<span class="os">'+os+'</span>'+bh+'<br>':'')+(specText(d)||'—');
     const fb=document.createElement('button');fb.className='mini';fb.textContent='Forget';
     fb.onclick=()=>{if(confirm('Forget “'+nameOf(d)+'”?'))send({type:'device.remove',devId:d.id})};
     row.append(dot,nmw,sp,fb);L.appendChild(row);
@@ -221,7 +225,8 @@ function slotEl(t,role){
     const d=devById(devId);
     const dot=document.createElement('span');dot.className='st'+(d&&d.online?' on':'');
     const nm=document.createElement('div');nm.className='snm';nm.textContent=d?nameOf(d):'(offline unit)';
-    const sp=document.createElement('div');sp.className='ssp';sp.textContent=d?(specText(d)||osText(d)):'remembered, not connected';
+    const sp=document.createElement('div');sp.className='ssp';
+    sp.innerHTML=d?((specText(d)||osText(d))+battHTML(d)):'remembered, not connected';
     body.append(nm,sp);
     const rm=document.createElement('button');rm.className='mini';rm.textContent='✕';rm.title='Remove from table';
     rm.onclick=()=>send({type:'table.unassign',table:t.token,role});
@@ -277,13 +282,13 @@ function renderRunning(){
     const row=document.createElement('div');row.className='grow';
     const left=document.createElement('div');
     const nm=document.createElement('div');nm.className='gnm';nm.textContent=t.name||'unnamed table';
+    const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
-    sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
+    sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
     const vb=document.createElement('button');vb.className='mini';vb.textContent='View';vb.onclick=()=>openView(t);acts.append(vb);
-    const camDev=devById(t.camera);
-    if(camDev&&camDev.online){                                // live camera -> remote controls
+    if(camDev&&camDev.online){                                // live camera -> remote controls (camDev declared above)
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
       const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');
       fb.textContent=cs.flashNote?'Flash —':('Flash '+(cs.flash?'on':'off'));

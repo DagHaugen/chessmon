@@ -71,12 +71,17 @@ function ready(){
   $('title').innerHTML='<span class="dot"></span>Connected';
   $('msg').textContent='Connected — added to Unused devices on the console. Set it up there whenever you like.';
 }
+let battMgr=null;
+function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
+function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
+setupBattery();
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{
     ready();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,plat:navigator.platform,landing:true,
       screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
+    pushBattery();
   };
   ws.onmessage=e=>{
     const m=JSON.parse(e.data);

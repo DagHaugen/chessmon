@@ -65,7 +65,7 @@ async def broadcast_state(s):
 
 
 def dev_public(d):
-    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam", "plat")}
+    return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam", "plat", "battery")}
 
 
 def tables_public():
@@ -266,9 +266,9 @@ async def ws_endpoint(ws: WebSocket):
                             await send(ws, {"type": "assign", "role": "clock", "table": sess.table_token})
                         elif sess is not None:
                             await send(ws, {"type": "assign", "role": "camera", "pair": sess.pair_token})
-            elif t == "device.meta":                              # extra device info (e.g. camera capture res)
+            elif t == "device.meta":                              # extra device info (camera res, live battery)
                 if dev_id in devices:
-                    for k in ("screen", "cam"):
+                    for k in ("screen", "cam", "battery"):
                         if data.get(k):
                             devices[dev_id][k] = data[k]
                     await broadcast_devices()

@@ -112,9 +112,13 @@ async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type
 
 $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the set-up board to the clock
 
+let battMgr=null;
+function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
+function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
+setupBattery();
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');
+  ws.onopen=()=>{$('dot').classList.add('on');pushBattery();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,role:'camera',plat:navigator.platform,screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
     if(camRes)ws.send(JSON.stringify({type:'device.meta',cam:camRes}));
     if(pair){ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));log('paired, joining…')}else log('registered — waiting to be paired')};
