@@ -112,9 +112,11 @@
   .crow button.sec{background:transparent;border:1px solid var(--line);color:var(--mut)}
   .crow.oside button{background:#262b34;border:1px solid var(--accent);color:var(--ink)}
   .hidden{display:none}
+  body.offline .addbar{display:none}                    /* server down / connecting -> hide the QR (a dead server can't serve the landing page) */
+  body.offline .section{opacity:.4;pointer-events:none} /* ...and disable everything else until we're live */
 </style>
 </head>
-<body>
+<body class="offline">
 <div class="wrap">
   <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
     <span class="sub" id="sub">connecting…</span></div>
@@ -362,6 +364,7 @@ function renderMoveList(moves){let html='';
 
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
+  setLive(true);                                            // any message means the server is alive -> leave the offline state
   if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
   else if(m.type==='tables'){tabs=m.tables||[];render();}      // live moves/result without a full devices push
   else if(m.type==='camera.controlled'){const cs=camState[m.table];if(cs){   // ack from the camera
@@ -418,15 +421,16 @@ document.querySelectorAll('#caloside button').forEach(b=>b.onclick=()=>{
   send({type:'admin.orient',table:calibTable,side:b.dataset.side});$('calhint').textContent='Orienting…'});
 
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function setLive(on){document.body.classList.toggle('offline',!on)}   // offline -> hide the QR + disable the lists
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
-  ws.onclose=()=>{$('dot').classList.remove('on');$('sub').textContent='reconnecting…';setTimeout(connect,1500)};
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};   // stays offline until the first data arrives
+  ws.onclose=()=>{$('dot').classList.remove('on');setLive(false);$('sub').textContent='server offline · reconnecting…';setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 (function(){const url=location.origin+'/app/';$('addurl').textContent=url;   // static QR -> the device landing page
   if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:url,width:118,height:118});})();
-render();connect();
+connect();                                                 // no initial render -> no flash of "0 tables / 0 devices" before data
 setInterval(()=>send({type:'ping'}),20000);
 </script>
 </body>
