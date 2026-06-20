@@ -482,6 +482,13 @@ async def ws_endpoint(ws: WebSocket):
                     await send(a, {"type": "camera.controlled", "table": s.table_token,
                                    "what": data.get("what"), "on": bool(data.get("on")),
                                    "ok": bool(data.get("ok")), "reason": data.get("reason", "")})
+            elif t == "camera.status":                            # camera -> console: its actual flash/screen state on connect/link
+                if s is not None:
+                    for a in list(admins):
+                        await send(a, {"type": "camera.status", "table": s.table_token,
+                                       "flash": bool(data.get("flash")),
+                                       "flashAvail": bool(data.get("flashAvail", True)),
+                                       "screen": bool(data.get("screen", True))})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)

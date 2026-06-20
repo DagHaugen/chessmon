@@ -74,19 +74,21 @@ async function startCam(){
     status('camera ready — mount it straight down over the board')
   }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
 }
-let zoom=1,camRes=null,camTrack=null;                   // digital-zoom factor; capture resolution; the live video track (torch)
+let zoom=1,camRes=null,camTrack=null,flashOn=false,screenOn=true;   // digital-zoom factor; capture resolution; live video track (torch); flash/screen state for the console
 function applyControl(what,on){                         // remote control from the console
   if(what==='flash'){
     const caps=camTrack&&camTrack.getCapabilities?camTrack.getCapabilities():{};
     if(!camTrack||!caps.torch){log('no controllable torch on this camera');ctlAck('flash',on,false,'no torch (iOS Safari has none)');return}
-    camTrack.applyConstraints({advanced:[{torch:!!on}]}).then(()=>{log('flashlight '+(on?'on':'off'));ctlAck('flash',on,true)}).catch(e=>{log('flash failed: '+e.message);ctlAck('flash',on,false,e.message)});
+    camTrack.applyConstraints({advanced:[{torch:!!on}]}).then(()=>{flashOn=!!on;log('flashlight '+(on?'on':'off'));ctlAck('flash',on,true)}).catch(e=>{log('flash failed: '+e.message);ctlAck('flash',on,false,e.message)});
   }else if(what==='screen'){
-    $('screenoff').classList.toggle('hidden', !!on);    // off -> black overlay (the camera keeps capturing behind it)
+    $('screenoff').classList.toggle('hidden', !!on);screenOn=!!on;    // off -> black overlay (the camera keeps capturing behind it)
     log('screen '+(on?'on':'off'));ctlAck('screen',on,true);
   }
 }
 function ctlAck(what,on,ok,reason){if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'camera.controlled',what,on,ok,reason:reason||''}))
 }
+function sendCamStatus(){if(!camTrack||!ws||ws.readyState!==1)return;const caps=camTrack.getCapabilities?camTrack.getCapabilities():{};   // report actual flash/screen state to the console on connect/link
+  ws.send(JSON.stringify({type:'camera.status',flash:flashOn,flashAvail:!!caps.torch,screen:screenOn}))}
 function setupZoom(track){
   const set=track.getSettings?track.getSettings():{};
   if(set.width){camRes={w:set.width,h:set.height};
@@ -103,6 +105,7 @@ function setupZoom(track){
     log('zoom: digital (camera exposes no zoom control)');
   }
   $('zoomval').textContent=(+sl.value).toFixed(1)+'×';$('zoomrow').classList.remove('hidden');
+  sendCamStatus();                                       // torch capability is now known -> tell the console
 }
 function grab(){return new Promise(res=>{const vw=v.videoWidth||1280,vh=v.videoHeight||960;
   cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;                       // central crop for digital zoom
@@ -131,7 +134,7 @@ function connect(){
     else if(m.type==='orient.ask'){status('now tap which side White is on, on the clock','ok')}
     else if(m.type==='session.baselined'){status('calibrated · armed — a frame is sent on every move','ok')}
     else if(m.type==='assign'){if(m.role==='camera'){pair=m.pair;localStorage.setItem('cm_pair',pair);
-      ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));status('paired from the console','ok')}
+      ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));sendCamStatus();status('paired from the console','ok')}
       else if(m.role==='clock'){location.href='clock.html?table='+m.table}}
     else if(m.type==='unassigned'){localStorage.removeItem('cm_pair');location.href='index.html'}  // pulled off its table -> back to landing
     else if(m.type==='camera.control'){applyControl(m.what,m.on)}                                  // console: screen on/off, flashlight

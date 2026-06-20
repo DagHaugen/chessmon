@@ -374,6 +374,9 @@ function handle(m){
     if(m.what==='flash'){cs.flash=m.ok?m.on:false;cs.flashNote=m.ok?'':(m.reason||'unavailable');}
     else if(m.what==='screen'){cs.screen=m.on;}
     render();}}
+  else if(m.type==='camera.status'){                          // camera reported its actual flash/screen on connect/link
+    camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':''};
+    render();}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
