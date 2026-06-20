@@ -443,20 +443,22 @@ class CameraGame:
         # none can leave. 'Consistent' (viable, not merely legal) is the fix for h1-h4 with the h2 pawn
         # still up: h4 IS a legal pawn landing, but h2-h4 is contradicted by the pawn still on h2, so h4
         # is not a VIABLE arrival and the stray rook is caught. (Likewise Bc1-c3: nothing viable vacates c1.)
-        # ILLEGAL gate -- checked BEFORE we'd ever offer guesses. The squares we can TRUST (a clearly-
-        # visible piece LEFT a square -- white on dark / dark on light -- or LANDED on an empty one) must
-        # ALL be explained by a SINGLE viable move; if no one move covers them, it's illegal. This catches
-        # g1-g3 (g1 is a legal knight origin AND g3 a legal pawn landing, but NO move does both), as well as
-        # Bc1-c3 and Rh1-h4. We require that a piece really LEFT a square the camera had seen it on (`moved`),
-        # so a lone stray flicker / shadow on an empty square stays 'unseen' instead of being flagged.
+        # ILLEGAL gate -- checked BEFORE we'd ever offer guesses. Of the squares that actually CHANGED vs
+        # the baseline, the ones we can TRUST -- a clearly-visible piece that LEFT a square it held in the
+        # baseline (white on dark / dark on light, now empty), or LANDED high-contrast on a baseline-empty
+        # square -- must ALL be explained by a SINGLE viable move; if no one move covers them, it's illegal
+        # (catches g1-g3, Bc1-c3, Rh1-h4). CRITICAL: this works off the DELTA, so a PERSISTENT mis-read --
+        # a low-contrast piece, a leaning/parallax piece, a standing shadow, present in BOTH the baseline
+        # and now -- never counts and never blocks a legal move. `moved` = a piece really left a seen square.
         moved = any(self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY for r, c in zip(*np.where(delta)))
         hc = set()
-        for r, c in zip(*np.where((believed != Cell.EMPTY) & (obs == Cell.EMPTY))):
-            if (believed[r, c] == Cell.LIGHT) != _square_is_light(r, c):
+        for r, c in zip(*np.where(delta)):
+            if (self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY
+                    and (self.prev[r, c] == Cell.LIGHT) != _square_is_light(r, c)):
                 hc.add((int(r), int(c)))                  # a clearly-visible piece LEFT this square
-        for r, c in zip(*np.where((believed == Cell.EMPTY) & (obs != Cell.EMPTY))):
-            if (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c):
-                hc.add((int(r), int(c)))                  # a clearly-visible piece LANDED on this empty square
+            elif (self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY
+                    and (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c)):
+                hc.add((int(r), int(c)))                  # a clearly-visible piece LANDED here
         if moved and hc and not any(hc <= ch for ch in viable_changed):
             return ("error", "illegal move", delta)
         if not viable:

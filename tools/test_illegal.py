@@ -80,6 +80,17 @@ for label, (vac, land) in {"f5 (clean)": ((0, 2), (3, 5)), "g6 (parallax)": ((0,
     assert kc == "error", f"illegal Bc8-f5 [{label}] not flagged: {kc} ({sanc})"
     print(f"illegal Bc8-f5 [{label}] -> {kc} / {sanc}")
 
+# REGRESSION: a PERSISTENT high-contrast mis-read (the camera always sees a dark blob on empty e6 --
+# a leaning piece / standing shadow / bad calib) must NOT make legal moves illegal. Only CHANGES count,
+# and a persistent blob sits in both the baseline and now, so it never enters the high-contrast set.
+gp = CameraGame(chess.Board())
+base = board_to_grid(chess.Board()); base[2][4] = Cell.DARK     # a ghost on e6 (r=2,c=4), present AT baseline
+gp.observe(base)                                                # baseline includes the ghost
+op = base.copy(); op[6][4] = Cell.EMPTY; op[4][4] = Cell.LIGHT  # e2-e4 (legal), ghost still on e6
+kp, sanp, _ = gp.observe(op)
+assert kp == "move" and sanp == "e4", f"legal e2-e4 with a persistent ghost must be a move, got {kp} {sanp}"
+print(f"legal e2-e4 despite a persistent e6 ghost -> {kp} / {sanp}")
+
 # legal e2-e4 from the start must still register as a move (e4 IS a legal landing square)
 g2 = CameraGame(chess.Board())
 s2 = board_to_grid(g2.board); g2.observe(s2)
