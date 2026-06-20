@@ -391,10 +391,11 @@ class CameraGame:
         if gesture is not None:                  # (checked before move-matching so it is
             return ("gesture", gesture, None)    # never squeezed into a bogus king move)
         delta = self.prev != obs                 # the squares we actually saw change
+        believed = board_to_grid(self.board)     # the position we BELIEVE is on the board (the game state)
         viable, viable_arrivals, viable_vacates = [], set(), set()   # squares a move CONSISTENT with the image can fill / clear
         for m in self.board.legal_moves:
             is_cast = self.board.is_castling(m)
-            before = board_to_grid(self.board)
+            before = believed
             self.board.push(m)
             after = board_to_grid(self.board)
             self.board.pop()
@@ -440,16 +441,23 @@ class CameraGame:
         # none can leave. 'Consistent' (viable, not merely legal) is the fix for h1-h4 with the h2 pawn
         # still up: h4 IS a legal pawn landing, but h2-h4 is contradicted by the pawn still on h2, so h4
         # is not a VIABLE arrival and the stray rook is caught. (Likewise Bc1-c3: nothing viable vacates c1.)
+        # ILLEGAL gates -- checked BEFORE we'd ever offer guesses:
+        # (1) a clearly-visible piece LANDED where no viable move lands (something also LEFT, so a lone
+        #     arrival ghost isn't flagged).
         vacated = any(self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY for r, c in zip(*np.where(delta)))
-        arrived = any(self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY for r, c in zip(*np.where(delta)))
         for r, c in zip(*np.where(delta)):
             rc = (int(r), int(c))
             if (vacated and self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY
                     and (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in viable_arrivals):
                 return ("error", "illegal move", delta)       # landed where nothing consistent lands
-            if (arrived and self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY
-                    and (self.prev[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in viable_vacates):
-                return ("error", "illegal move", delta)       # left a square nothing consistent leaves
+        # (2) a clearly-visible piece (white on a dark square, or dark on a light square) LEFT its square,
+        #     but NO viable move leaves that square -> illegal. A high-contrast square's empty reading is
+        #     reliable, so the piece that left must be the origin of a suggested move; otherwise flag it
+        #     instead of guessing -- we don't also need to see where it landed.
+        for r, c in zip(*np.where((believed != Cell.EMPTY) & (obs == Cell.EMPTY))):
+            rc = (int(r), int(c))
+            if (believed[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in viable_vacates:
+                return ("error", "illegal move", delta)       # left a square no legal move leaves
         if not viable:
             return ("error", "illegal move", delta)   # a clean change that no legal move fits
         distinct = {(v[3].from_square, v[3].to_square) for v in viable}

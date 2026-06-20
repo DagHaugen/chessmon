@@ -43,6 +43,17 @@ kh, sanh, _ = gh.observe(oh)
 assert kh == "error", f"illegal Rh1-h4 not flagged: {kh} ({sanh})"
 print(f"illegal Rh1-h4 (h2 still up, h4 unreachable) -> {kh} / {sanh}")
 
+# illegal: a high-contrast piece LEFT its square but its move is illegal and the landing isn't visible.
+# White bishop on c1 (white on a DARK square -> its empty square is reliably seen). No legal move leaves
+# c1 (blocked), so the clear vacate ALONE must flag it -- even though no arrival is shown.
+gv = CameraGame(chess.Board())
+sv = board_to_grid(gv.board); gv.observe(sv)
+ov = sv.copy()
+ov[7][2] = Cell.EMPTY        # c1 vacates (r = 8-1 = 7, c = 2); destination low-contrast / unseen
+kv, sanv, _ = gv.observe(ov)
+assert kv == "error", f"vacate-only illegal (c1 emptied, no landing) not flagged: {kv} ({sanv})"
+print(f"illegal vacate-only (c1 emptied, landing unseen) -> {kv} / {sanv}")
+
 # legal e2-e4 from the start must still register as a move (e4 IS a legal landing square)
 g2 = CameraGame(chess.Board())
 s2 = board_to_grid(g2.board); g2.observe(s2)
