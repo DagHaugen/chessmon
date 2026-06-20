@@ -279,25 +279,29 @@ function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // 
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
 function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
-function updateWait(){                                  // server/camera lost -> WAIT overlay + paused clocks
+function updateWait(){                                  // the board overlay + status: START / WAIT / PAUSE
   const reason = serverDown ? 'Server offline'
     : (!camLinked ? (phase==='run' ? 'Camera offline' : (phase==='ready' ? 'Camera not ready' : null)) : null);
   waiting = !!reason;
-  if(phase==='ready' || (phase==='run' && waiting)){   // overlay shown at ready, or covering a blocked game
+  let ov=null, status=null;
+  if(phase==='paused'){ ov='PAUSE'; status='PAUSE: Press Resume to continue'; }
+  else if(waiting){ ov='WAIT'; status=reason; }
+  else if(phase==='ready'){ ov='START'; status='Ready — press START'; }
+  else if(phase==='run'){ status=(clk.active==='white'?'White':'Black')+' to move'; }
+  if(ov!==null){
     show('startov',true);
-    $('startov').classList.toggle('wait', waiting);
-    $('startov').querySelector('span').textContent = waiting ? 'WAIT' : 'START';
-  } else if(phase==='run'){ show('startov',false); }
+    $('startov').classList.toggle('wait', ov!=='START');   // WAIT/PAUSE are muted; START is green
+    $('startov').querySelector('span').textContent = ov;
+  } else { show('startov',false); }
   if(phase==='run') clk.running = !waiting;            // blocked -> clocks pause; cleared -> resume
-  if(waiting){ $('report').className='report'; $('report').textContent = reason; }
-  else if(phase==='ready'){ $('report').className='report'; $('report').textContent = 'Ready — press START'; }
+  if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
 }
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();send({type:'game.start'});goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
-  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}
+  if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').textContent='Pause';paint();updateWait()}}
 function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
@@ -452,7 +456,7 @@ document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-s
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
-$('startov').onclick=()=>{if(phase==='ready'&&camLinked&&!serverDown)startGame()};$('pausebtn').onclick=togglePause;   // WAIT does nothing
+$('startov').onclick=()=>{if(phase==='ready'&&camLinked&&!serverDown)startGame();else if(phase==='paused')togglePause()};$('pausebtn').onclick=togglePause;   // tap PAUSE to resume; WAIT does nothing
 $('resetbtn').onclick=()=>{if(confirm('Reset the game?\nMove all the pieces back to the start position first.'))resetGame()};
 $('rotbtn').onclick=()=>{rotMode=(rotMode+1)%3;localStorage.setItem('cm_rot',rotMode);applyRot()};   // cycle 0->1->2
 applyRot();

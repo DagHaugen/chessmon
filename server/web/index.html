@@ -61,7 +61,9 @@ const devName=deviceName();
 $('nameinp').value=localStorage.getItem('cm_devname')||'';   // a friendly name the operator can set right here
 $('did').textContent=devName+' · New device '+devId.slice(0,6);
 $('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
-  if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));};
+  if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));
+  if(v)$('msg').textContent='Named “'+v+'”. Now pick it on the chessmon console and drop it into a table.';};
+$('nameinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('nameinp').blur();}});  // phone: Enter closes the keyboard (no form to submit)
 
 let ws;
 function ready(){
