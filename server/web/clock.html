@@ -88,9 +88,9 @@
   .rail button{width:30px;box-sizing:border-box;background:rgba(29,32,38,.92);border:1px solid var(--line);color:var(--mut);   /* fixed narrow width: no writing-mode on the <button> (Safari flips the .lbl 180deg if both nest), so pin width so it can't bloat */
     border-radius:9px 0 0 9px;padding:13px 4px;font-size:11px;font-weight:600;letter-spacing:.06em;cursor:pointer}
   .rail button .lbl{transform:rotate(-90deg)}   /* vertical text lives on a child span -- old WebKit ignores text-orientation on the <button> itself */
-  .rrail{position:fixed;right:0;top:0;bottom:0;width:64px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0}   /* col 4: doubled width so the report can wrap to a 2nd column */
+  .rrail{position:fixed;right:0;top:0;bottom:0;width:64px;display:flex;align-items:center;justify-content:center;z-index:6;padding:8px 0;background:rgba(29,32,38,.85)}   /* col 4: doubled width + visible background so the column is obvious even when empty */
   .rrail .report{transform:rotate(-90deg);background:none;border:none;padding:0;
-    font-size:22px;font-weight:600;max-height:94%;overflow:hidden}  /* faces the board; wraps to a 2nd column in the doubled rail */
+    font-size:22px;font-weight:600;white-space:nowrap}  /* faces the board; NO max-height%/overflow -- those blanked the text on old WebKit (the side clocks lack them and render fine) */
   .btn{appearance:none;border:none;border-radius:14px;font-size:19px;font-weight:700;padding:18px;
     width:100%;cursor:pointer;color:#0b1020;background:var(--good)}
   .btn:active{transform:translateY(1px)} .btn[disabled]{opacity:.4}
