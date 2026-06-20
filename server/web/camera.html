@@ -29,6 +29,7 @@
   .log{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;max-height:130px;overflow:auto;
     white-space:pre-wrap;background:#11141a;border:1px solid var(--line);border-radius:10px;padding:8px}
   .screenoff{position:fixed;inset:0;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center;color:#1b1b1b;font-size:13px}
+  .screenoff.hidden{display:none}                     /* .hidden is defined earlier, so its display:none loses by source order -> force it here */
 </style>
 </head>
 <body>
