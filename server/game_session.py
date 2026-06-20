@@ -39,7 +39,7 @@ class Session:
         self.started_at = None             # epoch seconds of the first move (a "running game")
         self.corners = None                # last calibration corners (fractions 0..1) so the console can re-show / edit them
         self.status = ""                   # clock-reported game status (running / paused / waiting) for the console
-        self.calibrations = {}             # per-camera calibration memory: camera devId -> (board_reader, corners)
+        self.calibrations = {}             # the remembered calibration {camera devId: (reader, corners)} -- at most one; a new calibration replaces it (old camera moved away)
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -103,8 +103,8 @@ class Session:
         `orient.ask` and the clock asks the operator which side White is on."""
         rb = RealBoard.from_start(frame, corners=corners)
         self.board_reader = rb
-        if self.camera_dev:                            # remember this camera's calibration so a swap-back skips re-calibration
-            self.calibrations[self.camera_dev] = (rb, self.corners)
+        if self.camera_dev:                            # the calibration belongs to THIS camera; a new calibration replaces the old (you moved the old camera away)
+            self.calibrations = {self.camera_dev: (rb, self.corners)}
         self._calib_frame = frame
         t = rb.calibrate_orientation_auto(frame)
         if t is not None:

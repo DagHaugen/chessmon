@@ -280,28 +280,29 @@ async def test_started():
 
 
 def test_calib_memory():
-    print("calibration memory: a table remembers a calibration PER camera across swaps")
+    print("calibration memory: tied to the last-calibrated camera; a new calibration replaces the old")
     s = SessionManager().create_table(name="Cal")
     s.camera_dev = "camA"
     s.corners = [[.1, .1], [.9, .1], [.9, .9], [.1, .9]]
     s.board_reader = "READER_A"
-    s.calibrations["camA"] = (s.board_reader, s.corners)        # simulate calibrating camera A
+    s.calibrations = {"camA": (s.board_reader, s.corners)}      # calibrate camera A
 
-    s.camera_dev = "camB"
+    s.camera_dev = "camB"                                       # console reassigns to a different camera (A not physically moved)
     s.activate_calibration()
-    check(s.board_reader is None, "swap to an uncalibrated camera -> not calibrated")
+    check(s.board_reader is None, "a different camera -> not calibrated")
 
+    s.camera_dev = "camA"                                       # reassign back to A without re-calibrating
+    s.activate_calibration()
+    check(s.board_reader == "READER_A" and s.corners[0][0] == .1, "assignment swapped back to A -> still calibrated")
+
+    s.camera_dev = "camB"                                       # now actually calibrate B (you moved A away)
     s.board_reader = "READER_B"
     s.corners = [[.2, .2], [.8, .2], [.8, .8], [.2, .8]]
-    s.calibrations["camB"] = (s.board_reader, s.corners)        # calibrate camera B too
+    s.calibrations = {"camB": (s.board_reader, s.corners)}      # a new calibration REPLACES A's
 
     s.camera_dev = "camA"
     s.activate_calibration()
-    check(s.board_reader == "READER_A" and s.corners[0][0] == .1, "swap back to camera A -> its calibration is restored")
-
-    s.camera_dev = "camB"
-    s.activate_calibration()
-    check(s.board_reader == "READER_B", "camera B's calibration is remembered too")
+    check(s.board_reader is None, "after calibrating a new camera, the old one needs re-calibration")
 
 
 test_persistence()
