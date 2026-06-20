@@ -391,7 +391,7 @@ class CameraGame:
         if gesture is not None:                  # (checked before move-matching so it is
             return ("gesture", gesture, None)    # never squeezed into a bogus king move)
         delta = self.prev != obs                 # the squares we actually saw change
-        viable, legal_arrivals, legal_vacates = [], set(), set()   # squares some legal move can fill / clear
+        viable, viable_arrivals, viable_vacates = [], set(), set()   # squares a move CONSISTENT with the image can fill / clear
         for m in self.board.legal_moves:
             is_cast = self.board.is_castling(m)
             before = board_to_grid(self.board)
@@ -399,11 +399,12 @@ class CameraGame:
             after = board_to_grid(self.board)
             self.board.pop()
             changed = before != after
-            for rr, cc in zip(*np.where(changed)):           # where this move puts / clears a piece
+            arrivals_m, vacates_m = set(), set()             # where THIS move puts / clears a piece
+            for rr, cc in zip(*np.where(changed)):
                 if before[rr, cc] == Cell.EMPTY and after[rr, cc] != Cell.EMPTY:
-                    legal_arrivals.add((int(rr), int(cc)))
+                    arrivals_m.add((int(rr), int(cc)))
                 elif before[rr, cc] != Cell.EMPTY and after[rr, cc] == Cell.EMPTY:
-                    legal_vacates.add((int(rr), int(cc)))
+                    vacates_m.add((int(rr), int(cc)))
             hard, soft, seen = False, 0, 0
             for r, c in zip(*np.where(changed)):
                 want, got = after[r, c], obs[r, c]
@@ -431,20 +432,24 @@ class CameraGame:
             if hard:
                 continue
             unexplained = int(np.count_nonzero(delta & ~changed))
+            viable_arrivals |= arrivals_m        # only a move consistent with the image makes a square 'reachable'
+            viable_vacates |= vacates_m
             viable.append((soft, unexplained, seen, m))
         # STRONG illegal signal -- needs a real move (a piece both LEFT and LANDED, not a lone flicker):
-        # a clearly-visible piece LANDED where no legal move lands, OR LEFT a square no legal move leaves.
-        # (e.g. Bc1-c3: c3 is a legal landing for Nc3 so the arrival looks fine, but nothing legal vacates c1.)
+        # a clearly-visible piece LANDED where no move CONSISTENT with the image lands, or LEFT a square
+        # none can leave. 'Consistent' (viable, not merely legal) is the fix for h1-h4 with the h2 pawn
+        # still up: h4 IS a legal pawn landing, but h2-h4 is contradicted by the pawn still on h2, so h4
+        # is not a VIABLE arrival and the stray rook is caught. (Likewise Bc1-c3: nothing viable vacates c1.)
         vacated = any(self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY for r, c in zip(*np.where(delta)))
         arrived = any(self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY for r, c in zip(*np.where(delta)))
         for r, c in zip(*np.where(delta)):
             rc = (int(r), int(c))
             if (vacated and self.prev[r, c] == Cell.EMPTY and obs[r, c] != Cell.EMPTY
-                    and (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in legal_arrivals):
-                return ("error", "illegal move", delta)       # landed where nothing legal lands
+                    and (obs[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in viable_arrivals):
+                return ("error", "illegal move", delta)       # landed where nothing consistent lands
             if (arrived and self.prev[r, c] != Cell.EMPTY and obs[r, c] == Cell.EMPTY
-                    and (self.prev[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in legal_vacates):
-                return ("error", "illegal move", delta)       # left a square nothing legal leaves
+                    and (self.prev[r, c] == Cell.LIGHT) != _square_is_light(r, c) and rc not in viable_vacates):
+                return ("error", "illegal move", delta)       # left a square nothing consistent leaves
         if not viable:
             return ("error", "illegal move", delta)   # a clean change that no legal move fits
         distinct = {(v[3].from_square, v[3].to_square) for v in viable}

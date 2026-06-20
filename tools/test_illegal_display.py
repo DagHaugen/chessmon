@@ -48,5 +48,21 @@ check(b.piece_at(chess.E5) is not None and b.piece_at(chess.E5).piece_type == ch
       "display board: the pawn sits on e5 (where it is)")
 check(b.piece_at(chess.E2) is None, "display board: e2 is empty (not where it was)")
 
+# the user's exact case: rook h1 -> h4 as the FIRST move (h2 pawn still up). Previously fell through to
+# 'unseen' guesses; now flagged with just the from/to and the rook shown where it sits.
+s2 = Session("t-ill2")
+s2.seed_baseline(board_to_grid(chess.Board()))
+o2 = board_to_grid(chess.Board()).copy()
+o2[rc("h1")] = Cell.EMPTY
+o2[rc("h4")] = Cell.LIGHT                      # white rook on dark h4 (high contrast, clearly seen)
+v2 = s2.ingest_grid(o2)
+print("rook h1->h4 (first move, h2 still up):", v2.get("type"), v2.get("squares"))
+check(v2["type"] == "move.unclear" and set(v2.get("squares", [])) == {"h1", "h4"},
+      "Rh1-h4 flagged illegal with just from/to (h1,h4), not wild guesses")
+b2 = chess.Board()
+b2.set_board_fen(v2["fen"])
+check(b2.piece_at(chess.H4) is not None and b2.piece_at(chess.H4).piece_type == chess.ROOK
+      and b2.piece_at(chess.H1) is None, "display board: the rook sits on h4 (where it is)")
+
 print("ALL ILLEGAL-DISPLAY TESTS OK" if not FAIL else f"{FAIL} CHECK(S) FAILED")
 sys.exit(1 if FAIL else 0)
