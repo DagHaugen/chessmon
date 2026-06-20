@@ -135,6 +135,7 @@
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
   @supports (writing-mode:vertical-rl){   /* where it works, use real vertical text; old browsers keep the rotate(-90deg) base */
     .cstrip .ct,.cstrip .ctname,.rail button .lbl,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
+  @supports (writing-mode:vertical-rl){.rail button{writing-mode:vertical-rl}}   /* narrow box on the BUTTON itself -- old WebKit won't shrink-wrap a writing-mode .lbl child, so the button bloated and pushed the right rail off-screen. No rotate here (the .lbl rotates). */
 </style>
 </head>
 <body>
