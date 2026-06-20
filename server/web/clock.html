@@ -225,6 +225,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
+const SHOW_PAIR_QR=false;     // clock-side "scan with the camera phone" QR: kept but HIDDEN (pairing is console-driven now). Flip to true to re-enable.
 let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
@@ -400,13 +401,14 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
-      camLinked=m.cameraLinked;updateWait();
+      camLinked=m.cameraLinked;updateWait();                    // no camera -> WAIT ("Camera not ready"), not the QR
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
-      if(m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){ // only when no camera is linked yet (else skip the QR)
+      if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){ // only when no camera is linked yet (else skip the QR)
         show('pair',true);$('paircode').textContent=m.pairToken;
         const qr=$('qr');qr.innerHTML='';                       // clear so reconnects don't stack QRs
         const link=location.origin+'/app/camera.html?pair='+m.pairToken;
         if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
+      else show('pair',false);
       break;
     case 'camera.linked': camLinked=true;show('pair',false);updateWait();break;   // a camera joined -> drop the QR, flip WAIT->START
     case 'camera.offline': camLinked=false;updateWait();break;                     // camera dropped mid-game -> pause + WAIT
