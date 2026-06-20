@@ -333,6 +333,7 @@ async def ws_endpoint(ws: WebSocket):
                             await send(dev["ws"], {"type": "assign", "role": "clock", "table": sess.table_token})
                     else:
                         sess.camera_dev = dev["id"]
+                        sess.activate_calibration()                  # restore this camera's remembered calibration (or none)
                         if dev.get("ws"):
                             await send(dev["ws"], {"type": "assign", "role": "camera", "pair": sess.pair_token})
                     dev["table"] = sess.table_token
@@ -348,6 +349,7 @@ async def ws_endpoint(ws: WebSocket):
                         sess.clock_dev = None
                     else:
                         sess.camera_dev = None
+                        sess.activate_calibration()                  # camera removed -> no active calibration
                     dev = devices.get(devid)
                     if dev is not None:
                         dev["table"] = None

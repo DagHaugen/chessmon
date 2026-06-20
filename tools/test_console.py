@@ -279,7 +279,33 @@ async def test_started():
     await clk.close()
 
 
+def test_calib_memory():
+    print("calibration memory: a table remembers a calibration PER camera across swaps")
+    s = SessionManager().create_table(name="Cal")
+    s.camera_dev = "camA"
+    s.corners = [[.1, .1], [.9, .1], [.9, .9], [.1, .9]]
+    s.board_reader = "READER_A"
+    s.calibrations["camA"] = (s.board_reader, s.corners)        # simulate calibrating camera A
+
+    s.camera_dev = "camB"
+    s.activate_calibration()
+    check(s.board_reader is None, "swap to an uncalibrated camera -> not calibrated")
+
+    s.board_reader = "READER_B"
+    s.corners = [[.2, .2], [.8, .2], [.8, .8], [.2, .8]]
+    s.calibrations["camB"] = (s.board_reader, s.corners)        # calibrate camera B too
+
+    s.camera_dev = "camA"
+    s.activate_calibration()
+    check(s.board_reader == "READER_A" and s.corners[0][0] == .1, "swap back to camera A -> its calibration is restored")
+
+    s.camera_dev = "camB"
+    s.activate_calibration()
+    check(s.board_reader == "READER_B", "camera B's calibration is remembered too")
+
+
 test_persistence()
+test_calib_memory()
 try:
     asyncio.run(test_started())
     asyncio.run(test_ws())

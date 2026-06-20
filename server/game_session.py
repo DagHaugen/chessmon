@@ -39,6 +39,7 @@ class Session:
         self.started_at = None             # epoch seconds of the first move (a "running game")
         self.corners = None                # last calibration corners (fractions 0..1) so the console can re-show / edit them
         self.status = ""                   # clock-reported game status (running / paused / waiting) for the console
+        self.calibrations = {}             # per-camera calibration memory: camera devId -> (board_reader, corners)
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -60,9 +61,11 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", "")):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {})):
             if not hasattr(self, k):
                 setattr(self, k, v)
+        if self.board_reader is not None and self.camera_dev and not self.calibrations:   # migrate a pre-existing single-camera calibration
+            self.calibrations[self.camera_dev] = (self.board_reader, self.corners)
 
     def session_info(self):
         return {"name": self.name, "white": self.white, "black": self.black, "variant": self.variant}
@@ -100,6 +103,8 @@ class Session:
         `orient.ask` and the clock asks the operator which side White is on."""
         rb = RealBoard.from_start(frame, corners=corners)
         self.board_reader = rb
+        if self.camera_dev:                            # remember this camera's calibration so a swap-back skips re-calibration
+            self.calibrations[self.camera_dev] = (rb, self.corners)
         self._calib_frame = frame
         t = rb.calibrate_orientation_auto(frame)
         if t is not None:
@@ -205,6 +210,18 @@ class Session:
         """Clock pressed START -> the game counts as 'running' even before the first move lands."""
         if self.started_at is None:
             self.started_at = time.time()
+
+    def activate_calibration(self):
+        """Point board_reader/corners at whatever calibration is remembered for the CURRENT camera (or none).
+        Swapping a table's camera deactivates the calibration; swapping back to a calibrated camera restores it."""
+        cal = self.calibrations.get(self.camera_dev)
+        new_reader = cal[0] if cal else None
+        if new_reader is not self.board_reader:        # a different camera -> the move-detection baseline is stale
+            self.game.prev = None                      # re-baseline off the new camera's next frame
+        if cal:
+            self.board_reader, self.corners = cal
+        else:
+            self.board_reader, self.corners = None, None
 
     def undo_move(self):
         """Take back the last accepted move (a misread / wrong move). Pops the game + move list; the
