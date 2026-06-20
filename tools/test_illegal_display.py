@@ -47,6 +47,7 @@ b.set_board_fen(v["fen"])
 check(b.piece_at(chess.E5) is not None and b.piece_at(chess.E5).piece_type == chess.PAWN,
       "display board: the pawn sits on e5 (where it is)")
 check(b.piece_at(chess.E2) is None, "display board: e2 is empty (not where it was)")
+check(np.array_equal(s._last_grid, start), "illegal reverts the snapshot to the last valid move (stray frame dropped)")
 
 # the user's exact case: rook h1 -> h4 as the FIRST move (h2 pawn still up). Previously fell through to
 # 'unseen' guesses; now flagged with just the from/to and the rook shown where it sits.

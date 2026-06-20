@@ -93,9 +93,6 @@
   .cand{width:100%;height:100%;background:#262b34;border:1px solid var(--accent);color:var(--ink);
     border-radius:11px;font-size:18px;font-weight:600;cursor:pointer}
   .cand:active{transform:translateY(1px)}
-  .act .cancel{flex:0 0 auto;background:#262b34;border:1px solid var(--line);color:var(--mut);
-    border-radius:9px;padding:9px;font-size:14px;font-weight:600;cursor:pointer}
-  .act .cancel:active{transform:translateY(1px)}
   .report{background:#11141a;border:1px solid var(--line);border-radius:11px;padding:10px;font-size:13px;
     text-align:center;color:var(--mut)} .report.over{color:var(--good);font-weight:600}
   .report.warn{color:var(--bad);border-color:var(--bad);font-weight:800;text-transform:uppercase}
@@ -274,16 +271,18 @@ function updateQrBtn(){show('qrjoinbtn',phase!=='run'&&phase!=='paused')}  // vi
 $('qrjoinbtn').onclick=()=>showJoinQR(true);
 $('qrjoin').onclick=()=>showJoinQR(false);
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
-function showCands(cands){const c=$('cands-'+clk.active);c.innerHTML='';     // candidates fill the fixed box
+let candList=[], candAll=false;
+function showCands(cands){candList=cands||[];candAll=false;renderCands()}
+function renderCands(){const c=$('cands-'+clk.active);c.innerHTML='';     // up to 4 guesses + Other + Cancel fill the fixed box
   const h=document.createElement('div');h.className='chead';h.textContent=warnMsg||'pick your move:';c.appendChild(h);
   const g=document.createElement('div');g.className='cgrid';
-  (cands||[]).forEach(x=>{const b=document.createElement('button');b.className='cand';b.textContent=x.san;
-    b.onclick=()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}};g.appendChild(b)});
-  c.appendChild(g);
-  const cancel=document.createElement('button');cancel.className='cancel';cancel.textContent='✕ Cancel';
-  cancel.onclick=()=>{warnMsg=null;reading=false;markBad([]);clearCands();paint()};   // dismiss the guesses -> back to Confirm; fix the board and retry
-  c.appendChild(cancel);
-  $('act-'+clk.active).classList.add('resolving')}
+  const LIM=4, shown=(candAll||candList.length<=LIM)?candList:candList.slice(0,LIM);
+  const mk=(txt,fn)=>{const b=document.createElement('button');b.className='cand';b.textContent=txt;b.onclick=fn;g.appendChild(b)};
+  shown.forEach(x=>mk(x.san,()=>{if(x.uci){send({type:'move.resolve',uci:x.uci});warnMsg=null;reading=true;clearCands();paint()}}));
+  if(!candAll && candList.length>LIM)mk('Other…',()=>{candAll=true;renderCands()});   // reveal the rest of the guesses
+  mk('✕ Cancel',cancelMove);                                                          // give up: set the piece back, play a real move
+  c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
+function cancelMove(){send({type:'move.cancel'});warnMsg=null;reading=false;markBad([]);clearCands();paint()}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
 function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
 function updateWait(){                                  // the board overlay + status: START / WAIT / PAUSE
@@ -474,7 +473,7 @@ function connect(){
 $('cdone').onclick=sendCorners;
 document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-step: White's side -> orient
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
-$('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
+$('refreshbtn').onclick=()=>{goFullscreen();send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
 $('startov').onclick=()=>{if(phase==='ready'&&camLinked&&!serverDown)startGame();else if(phase==='paused')togglePause()};$('pausebtn').onclick=togglePause;   // tap PAUSE to resume; WAIT does nothing
 $('resetbtn').onclick=()=>{if(confirm('Reset the game?\nMove all the pieces back to the start position first.'))resetGame()};

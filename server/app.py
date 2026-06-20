@@ -444,6 +444,10 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "move.resolve":
                 await send(hub(s.table_token)["clock"], s.resolve(data["uci"]))
                 await broadcast_state(s)
+            elif t == "move.cancel":                              # clock gave up on the guesses -> retry
+                if s is not None:
+                    s.revert_to_valid()                           # re-anchor to the last valid move (player sets the piece back)
+                    await broadcast_state(s)
             elif t == "flag":                                     # a clock hit 0 -> loss on time
                 result = "1-0" if data.get("side") == "black" else "0-1"
                 await send(hub(s.table_token)["clock"], s.end(result))

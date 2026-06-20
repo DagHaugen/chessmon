@@ -363,6 +363,7 @@ class Session:
                 fen = self._displaced_fen(frm, to)     # render the piece where the camera sees it, not where it was
                 if fen:
                     msg["fen"] = fen
+            self.revert_to_valid()                     # keep the baseline at the last valid move (player will set the piece back)
             return msg
         return {"type": "move.unclear", "reason": "no legal move matches"}
 
@@ -426,6 +427,15 @@ class Session:
         if self._last_grid is not None:
             self.game.prev = self._last_grid
         return self._record(san)
+
+    def revert_to_valid(self):
+        """Cancel / illegal move: re-anchor the detector to the last VALID move and drop the bad attempt's
+        frame. observe never advances the baseline (prev) on illegal/ambiguous/unseen, so prev is still
+        the last accepted position; this just forgets the stray grid (which resolve() would otherwise
+        re-baseline onto) so nothing downstream re-uses it. The player is expected to put the piece back
+        and play a real move from here, which the next frame measures against the restored baseline."""
+        if self.game.prev is not None:
+            self._last_grid = self.game.prev
 
     def end(self, result):
         self.result = result
