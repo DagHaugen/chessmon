@@ -84,6 +84,7 @@
   .grow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--panel);
     border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-bottom:8px}
   .grow .gnm{font-weight:600}
+  .gstat{font-size:12px;font-weight:700;margin-left:6px}.gstat.pause{color:var(--accent)}.gstat.wait{color:var(--bad)}
   .grow .gsub{font-size:12px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
   .grow .gres{font-size:12px;font-weight:700;color:var(--cam)}
 
@@ -127,11 +128,6 @@
   </div>
 
   <div class="section">
-    <h2>Unused devices <span class="cnt" id="ucnt"></span></h2>
-    <div id="unused"></div>
-  </div>
-
-  <div class="section">
     <h2>Configured tables <button class="add" id="newtable">+ New table</button></h2>
     <div id="tables"></div>
   </div>
@@ -139,6 +135,11 @@
   <div class="section">
     <h2>Running games <span class="cnt" id="rcnt"></span></h2>
     <div id="running"></div>
+  </div>
+
+  <div class="section">
+    <h2>Unused devices <span class="cnt" id="ucnt"></span></h2>
+    <div id="unused"></div>
   </div>
 
   <div class="modal hidden" id="calmodal"><div class="card">
@@ -158,6 +159,13 @@
     <div class="vboard" id="vboard"></div>
     <div class="vmoves" id="vmoves"></div>
     <div class="crow"><button class="sec" id="vclose">Close</button></div>
+  </div></div>
+
+  <div class="modal hidden" id="snapmodal"><div class="card">
+    <h2 id="snaptitle">Camera</h2>
+    <p id="snaphint">Asking the camera for a frame…</p>
+    <div class="ccwrap"><img id="snapimg" alt="camera snapshot"></div>
+    <div class="crow"><button class="sec" id="snapclose">Close</button></div>
   </div></div>
 </div>
 <script src="qrcode.min.js"></script>
@@ -281,20 +289,22 @@ function renderRunning(){
   list.forEach(t=>{
     const row=document.createElement('div');row.className='grow';
     const left=document.createElement('div');
-    const nm=document.createElement('div');nm.className='gnm';nm.textContent=t.name||'unnamed table';
+    const nm=document.createElement('div');nm.className='gnm';
+    nm.innerHTML=(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''));
     const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
-    const vb=document.createElement('button');vb.className='mini';vb.textContent='View';vb.onclick=()=>openView(t);acts.append(vb);
-    if(camDev&&camDev.online){                                // live camera -> remote controls (camDev declared above)
+    const vb=document.createElement('button');vb.className='mini';vb.textContent='View game';vb.onclick=()=>openView(t);acts.append(vb);
+    if(camDev&&camDev.online){                                // live camera -> snapshot + remote controls (camDev declared above)
+      const vsb=document.createElement('button');vsb.className='mini';vsb.textContent='View screen';vsb.onclick=()=>openSnap(t);acts.append(vsb);
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
       const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');
-      fb.textContent=cs.flashNote?'Flash —':('Flash '+(cs.flash?'on':'off'));
+      fb.textContent=cs.flashNote?'Flash: —':('Flash: '+(cs.flash?'on':'off'));
       fb.title=cs.flashNote?('Flashlight: '+cs.flashNote):'Toggle the camera flashlight';
       fb.onclick=()=>{cs.flash=!cs.flash;send({type:'camera.control',table:t.token,what:'flash',on:cs.flash});render()};
-      const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen '+(cs.screen?'on':'off');
+      const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen: '+(cs.screen?'on':'off');
       sb.onclick=()=>{cs.screen=!cs.screen;send({type:'camera.control',table:t.token,what:'screen',on:cs.screen});render()};
       acts.append(fb,sb);
     }
@@ -317,6 +327,12 @@ function openView(t){watchTable=t.token;$('vtitle').textContent=t.name||('Table 
   send({type:'admin.watch',table:t.token});show('viewmodal',true);}
 function closeView(){if(watchTable)send({type:'admin.unwatch',table:watchTable});watchTable=null;show('viewmodal',false);}
 $('vclose').onclick=closeView;
+let snapTable=null;
+function openSnap(t){snapTable=t.token;$('snaptitle').textContent=(t.name||'Table')+' — camera';
+  $('snaphint').textContent='Asking the camera for a frame…';$('snapimg').removeAttribute('src');
+  show('snapmodal',true);send({type:'admin.snap',table:t.token});}
+function closeSnap(){show('snapmodal',false);snapTable=null}
+$('snapclose').onclick=closeSnap;
 function addVSq(b,r,c,ch){const d=document.createElement('div');d.className='vsq '+((r+c)%2?'dark':'light');
   if(ch){d.textContent=VGLYPH[ch.toLowerCase()];d.classList.add(ch===ch.toUpperCase()?'wp':'bp');}b.appendChild(d);}
 function renderMiniBoard(fen){const b=$('vboard');b.innerHTML='';
@@ -340,6 +356,7 @@ function handle(m){
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
   else if(m.type==='state'){if(m.table===watchTable){renderMiniBoard(m.fen);renderMoveList(m.moves||[]);
     $('vturn').textContent=m.result?('game over · '+m.result):(m.turn+' to move');}}
+  else if(m.type==='snap.image'){if(m.table===snapTable){$('snapimg').src=m.image;$('snaphint').textContent='Latest frame — Close when done.'}}
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';

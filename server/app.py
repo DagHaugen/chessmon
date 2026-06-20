@@ -72,7 +72,7 @@ def tables_public():
     """The configured tables (each persists its unit assignments + name + calibration)."""
     return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
              "calibrated": s.board_reader is not None, "moves": len(s.moves),
-             "started_at": s.started_at, "result": s.result}
+             "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
 
 
@@ -191,6 +191,13 @@ async def ws_endpoint(ws: WebSocket):
                             cv2.imwrite(os.path.join(OUT, f"cam_{step}.png"), frame)
                         except Exception:
                             pass
+                    if step == "snap" and frame is not None:       # console "View screen" -> relay a live frame to admins
+                        s._calib_step = None
+                        _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                        durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
+                        for a in list(admins):
+                            await send(a, {"type": "snap.image", "table": s.table_token, "image": durl})
+                        continue
                     if step == "corners" and frame is not None:    # relay to the clock for the corner-tap UI
                         s._calib_step, s._calib_frame = None, frame
                         _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
@@ -362,6 +369,11 @@ async def ws_endpoint(ws: WebSocket):
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
                     hub(sess.table_token)["spectators"].discard(ws)
+            elif t == "admin.snap":                               # console "View screen" -> ask the camera for a live frame
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    sess.set_calib_step("snap")
+                    await send(hub(sess.table_token)["camera"], {"type": "capture.req"})
             elif t == "admin.calib":                              # console triggers a calibration frame
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
@@ -433,6 +445,9 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "game.start":                               # clock pressed START -> mark the game running
                 s.mark_started()
                 await broadcast_state(s)
+            elif t == "game.status":                              # clock reports running / paused / waiting
+                s.status = data.get("status", "")
+                await broadcast_tables()
             elif t == "game.reset":                               # operator reset the pieces to the start
                 s.reset_game()
                 mgr.save(SESSIONS_FILE)

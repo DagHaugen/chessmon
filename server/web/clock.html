@@ -296,9 +296,17 @@ function updateWait(){                                  // the board overlay + s
   if(phase==='run') clk.running = !waiting;            // blocked -> clocks pause; cleared -> resume
   if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
+  reportStatus();
+}
+let lastGameStatus=null;
+function reportStatus(){                                // tell the server running/paused/waiting -> the console shows it
+  let st='';
+  if(phase==='run') st=waiting?'waiting':'running';
+  else if(phase==='paused') st='paused';
+  if(st!==lastGameStatus){lastGameStatus=st;if(ws&&ws.readyState===1)send({type:'game.status',status:st})}
 }
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
-  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();send({type:'game.start'});goFullscreen()}
+  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint();updateWait()}

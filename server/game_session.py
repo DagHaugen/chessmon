@@ -38,6 +38,7 @@ class Session:
         self.camera_dev = None             # persisted so it survives the units going offline)
         self.started_at = None             # epoch seconds of the first move (a "running game")
         self.corners = None                # last calibration corners (fractions 0..1) so the console can re-show / edit them
+        self.status = ""                   # clock-reported game status (running / paused / waiting) for the console
         self.white, self.black, self.variant = white, black, variant
         if start_fen:
             board = chess.Board(start_fen)
@@ -59,7 +60,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None)):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", "")):
             if not hasattr(self, k):
                 setattr(self, k, v)
 
@@ -197,6 +198,7 @@ class Session:
         self.moves = []
         self.result = None
         self.started_at = None
+        self.status = ""
         self._pending = None
 
     def mark_started(self):

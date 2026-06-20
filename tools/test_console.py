@@ -260,6 +260,20 @@ async def test_started():
                 break
     check(running, "game.start sets started_at so the table shows as running (no moves needed)")
 
+    await clk.send(json.dumps({"type": "game.status", "status": "paused"}))
+    paused = False
+    for _ in range(8):
+        try:
+            mm2 = json.loads(await asyncio.wait_for(admin.recv(), 2))
+        except asyncio.TimeoutError:
+            break
+        if mm2.get("type") in ("tables", "devices"):
+            t2 = next((x for x in (mm2.get("tables") or []) if x["token"] == tok), None)
+            if t2 and t2.get("status") == "paused":
+                paused = True
+                break
+    check(paused, "clock game.status -> the table's status reaches the console")
+
     await admin.send(json.dumps({"type": "table.remove", "table": tok}))
     await admin.close()
     await clk.close()
