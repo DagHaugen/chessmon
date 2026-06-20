@@ -294,7 +294,7 @@ function updateWait(){                                  // server/camera lost ->
   paint();
 }
 function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
-  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();goFullscreen()}
+  show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').textContent='Pause';clearCands();paint();send({type:'game.start'});goFullscreen()}
 function goFullscreen(){const e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen().catch(()=>{})}
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').textContent='Resume';paint()}

@@ -199,6 +199,11 @@ class Session:
         self.started_at = None
         self._pending = None
 
+    def mark_started(self):
+        """Clock pressed START -> the game counts as 'running' even before the first move lands."""
+        if self.started_at is None:
+            self.started_at = time.time()
+
     def undo_move(self):
         """Take back the last accepted move (a misread / wrong move). Pops the game + move list; the
         detector re-anchors to the reverted position from the next camera frame (a 'refresh')."""

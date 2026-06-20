@@ -233,8 +233,41 @@ async def test_watch():
     await admin.close()
 
 
+async def test_started():
+    print("game.start: the clock pressing START marks the table running (started_at) -> console list")
+    admin = await websockets.connect(URL)
+    await admin.send(json.dumps({"type": "admin.join"}))
+    await next_devices(admin)
+    await admin.send(json.dumps({"type": "table.create", "name": "Run Table"}))
+    m = await next_devices(admin)
+    tok = next(x["token"] for x in m["tables"] if x["name"] == "Run Table")
+
+    clk = await websockets.connect(URL)
+    await clk.send(json.dumps({"type": "table.join", "tableToken": tok}))
+    await asyncio.sleep(0.2)
+    await clk.send(json.dumps({"type": "game.start"}))         # START pressed, no moves yet
+
+    running = False
+    for _ in range(8):
+        try:
+            mm = json.loads(await asyncio.wait_for(admin.recv(), 2))
+        except asyncio.TimeoutError:
+            break
+        if mm.get("type") in ("tables", "devices"):
+            t = next((x for x in (mm.get("tables") or []) if x["token"] == tok), None)
+            if t and t.get("started_at"):
+                running = True
+                break
+    check(running, "game.start sets started_at so the table shows as running (no moves needed)")
+
+    await admin.send(json.dumps({"type": "table.remove", "table": tok}))
+    await admin.close()
+    await clk.close()
+
+
 test_persistence()
 try:
+    asyncio.run(test_started())
     asyncio.run(test_ws())
     asyncio.run(test_landing())
     asyncio.run(test_camera_offline())

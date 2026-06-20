@@ -268,7 +268,7 @@ function renderTables(){
 }
 
 function renderRunning(){
-  const list=tabs.filter(t=>t.moves>0&&!t.result)           // active = has moves and not yet finished (history comes later)
+  const list=tabs.filter(t=>(t.started_at||t.moves>0)&&!t.result)   // active = started (or has moves) and not finished
                  .sort((a,b)=>(b.started_at||0)-(a.started_at||0));
   $('rcnt').textContent=list.length?('— '+list.length):'';
   const L=$('running');L.innerHTML='';
@@ -322,6 +322,7 @@ function renderMoveList(moves){let html='';
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
+  else if(m.type==='tables'){tabs=m.tables||[];render();}      // live moves/result without a full devices push
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}

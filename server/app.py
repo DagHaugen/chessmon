@@ -60,6 +60,7 @@ async def broadcast_state(s):
     h = hub(s.table_token)
     for ws in [h["clock"], *list(h["spectators"])]:
         await send(ws, snap)
+    await broadcast_tables()        # keep the console's Running-games list live (moves / result)
     mgr.save(SESSIONS_FILE)         # a move or calibration changed the session -> persist
 
 
@@ -82,6 +83,13 @@ def admin_state():
 async def broadcast_devices():
     save_devices()
     msg = admin_state()
+    for ws in list(admins):
+        await send(ws, msg)
+
+
+async def broadcast_tables():
+    """Just the table list (live moves / started / result) -> the console, without re-saving devices."""
+    msg = {"type": "tables", "tables": tables_public()}
     for ws in list(admins):
         await send(ws, msg)
 
@@ -422,6 +430,9 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "refresh":                                  # clock wants a fresh read (board moved?)
                 s.set_calib_step("refresh")
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
+            elif t == "game.start":                               # clock pressed START -> mark the game running
+                s.mark_started()
+                await broadcast_state(s)
             elif t == "game.reset":                               # operator reset the pieces to the start
                 s.reset_game()
                 mgr.save(SESSIONS_FILE)
