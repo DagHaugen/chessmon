@@ -76,12 +76,15 @@ async function startCam(){
 let zoom=1,camRes=null,camTrack=null;                   // digital-zoom factor; capture resolution; the live video track (torch)
 function applyControl(what,on){                         // remote control from the console
   if(what==='flash'){
-    if(!camTrack)return;
-    camTrack.applyConstraints({advanced:[{torch:!!on}]}).then(()=>log('flashlight '+(on?'on':'off'))).catch(()=>log('flashlight not supported on this camera'));
+    const caps=camTrack&&camTrack.getCapabilities?camTrack.getCapabilities():{};
+    if(!camTrack||!caps.torch){log('no controllable torch on this camera');ctlAck('flash',on,false,'no torch (iOS Safari has none)');return}
+    camTrack.applyConstraints({advanced:[{torch:!!on}]}).then(()=>{log('flashlight '+(on?'on':'off'));ctlAck('flash',on,true)}).catch(e=>{log('flash failed: '+e.message);ctlAck('flash',on,false,e.message)});
   }else if(what==='screen'){
     $('screenoff').classList.toggle('hidden', !!on);    // off -> black overlay (the camera keeps capturing behind it)
-    log('screen '+(on?'on':'off'));
+    log('screen '+(on?'on':'off'));ctlAck('screen',on,true);
   }
+}
+function ctlAck(what,on,ok,reason){if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'camera.controlled',what,on,ok,reason:reason||''}))
 }
 function setupZoom(track){
   const set=track.getSettings?track.getSettings():{};

@@ -285,7 +285,9 @@ function renderRunning(){
     const camDev=devById(t.camera);
     if(camDev&&camDev.online){                                // live camera -> remote controls
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
-      const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');fb.textContent='Flash '+(cs.flash?'on':'off');
+      const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');
+      fb.textContent=cs.flashNote?'Flash —':('Flash '+(cs.flash?'on':'off'));
+      fb.title=cs.flashNote?('Flashlight: '+cs.flashNote):'Toggle the camera flashlight';
       fb.onclick=()=>{cs.flash=!cs.flash;send({type:'camera.control',table:t.token,what:'flash',on:cs.flash});render()};
       const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen '+(cs.screen?'on':'off');
       sb.onclick=()=>{cs.screen=!cs.screen;send({type:'camera.control',table:t.token,what:'screen',on:cs.screen});render()};
@@ -323,6 +325,10 @@ function renderMoveList(moves){let html='';
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
   else if(m.type==='tables'){tabs=m.tables||[];render();}      // live moves/result without a full devices push
+  else if(m.type==='camera.controlled'){const cs=camState[m.table];if(cs){   // ack from the camera
+    if(m.what==='flash'){cs.flash=m.ok?m.on:false;cs.flashNote=m.ok?'':(m.reason||'unavailable');}
+    else if(m.what==='screen'){cs.screen=m.on;}
+    render();}}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}

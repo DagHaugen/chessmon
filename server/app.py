@@ -449,6 +449,11 @@ async def ws_endpoint(ws: WebSocket):
                     if cam is not None and s.board_reader is not None:
                         s.set_calib_step("refresh")               # re-anchor to the reverted position
                         await send(cam, {"type": "capture.req"})
+            elif t == "camera.controlled":                        # camera -> console: did the screen/torch control apply?
+                for a in list(admins):
+                    await send(a, {"type": "camera.controlled", "table": s.table_token,
+                                   "what": data.get("what"), "on": bool(data.get("on")),
+                                   "ok": bool(data.get("ok")), "reason": data.get("reason", "")})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)
