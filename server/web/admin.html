@@ -61,11 +61,12 @@
   .thead input{flex:1;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
     border-radius:9px;padding:8px 11px;font-size:15px;font-weight:600}
   .thead input:focus{outline:none;border-color:var(--accent)}
-  .pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
-  .pill.ok{color:var(--good);border-color:var(--good)}
+  .pill{font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap}   /* plain grey status text, not a button */
+  .pill.ok{color:var(--ink)}
   .cal{background:transparent;border:1px solid var(--good);color:var(--good);border-radius:8px;
     padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
   .cal:disabled{border-color:var(--line);color:var(--mut);cursor:default}
+  .cal.amber{border-color:var(--cam);color:var(--cam)}   /* "Calibrate" (not yet calibrated) = amber; "Re-calibrate" stays green */
   .slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media(max-width:560px){.slots{grid-template-columns:1fr}}
   .slot{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:62px;
@@ -241,7 +242,10 @@ function slotEl(t,role){
     body.append(nm,sp);
     const rm=document.createElement('button');rm.className='mini';rm.textContent='✕';rm.title='Remove from table';
     rm.onclick=()=>send({type:'table.unassign',table:t.token,role});
-    wrap.append(rl,dot,body,rm);
+    if(role==='camera'&&d&&d.online){                         // live camera -> "View" the current frame (moved here from Running games)
+      const vb=document.createElement('button');vb.className='mini';vb.textContent='View';vb.title='View the live camera frame';vb.onclick=()=>openSnap(t);
+      wrap.append(rl,dot,body,vb,rm);
+    }else wrap.append(rl,dot,body,rm);
   }else{
     const sel=document.createElement('select');
     const o0=document.createElement('option');o0.value='';o0.textContent='+ add '+role+'…';sel.appendChild(o0);
@@ -268,7 +272,7 @@ function renderTables(){
     const pill=document.createElement('span');pill.className='pill'+(t.calibrated?' ok':'');
     pill.textContent=t.calibrated?'calibrated':'not calibrated';
     const camDev=devById(t.camera);
-    const cal=document.createElement('button');cal.className='cal';cal.textContent=t.calibrated?'Re-calibrate':'Calibrate';
+    const cal=document.createElement('button');cal.className='cal'+(t.calibrated?'':' amber');cal.textContent=t.calibrated?'Re-calibrate':'Calibrate';
     cal.disabled=!(t.camera&&camDev&&camDev.online);
     cal.title=cal.disabled?'Add an online camera first':(t.calibrated?'View the current corners, then adjust or re-register':'Capture a frame and mark the corners');
     cal.onclick=()=>startCalib(t.token);
@@ -301,9 +305,8 @@ function renderRunning(){
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
-    const vb=document.createElement('button');vb.className='mini';vb.textContent='View board';vb.onclick=()=>openView(t);acts.append(vb);
-    if(camDev&&camDev.online){                                // live camera -> snapshot + remote controls (camDev declared above)
-      const vsb=document.createElement('button');vsb.className='mini';vsb.textContent='View screen';vsb.onclick=()=>openSnap(t);acts.append(vsb);
+    const vb=document.createElement('button');vb.className='mini';vb.textContent='View';vb.title='View the detected board';vb.onclick=()=>openView(t);acts.append(vb);
+    if(camDev&&camDev.online){                                // live camera -> remote flash/screen controls (View screen moved to the camera slot)
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
       const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');
       fb.textContent=cs.flashNote?'Flash: —':('Flash: '+(cs.flash?'on':'off'));
