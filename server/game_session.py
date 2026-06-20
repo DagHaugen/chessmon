@@ -379,23 +379,34 @@ class Session:
         return chr(97 + int(rc[1])) + str(8 - int(rc[0]))
 
     def _illegal_move(self, obs):
-        """Pin an illegal move to a single from/to from the believed baseline (prev) vs the grid now:
-        the ORIGIN = a square that clearly held a piece at baseline and now reads empty; the LANDING =
-        a changed square now showing a piece CONTRASTING its own colour (so it's really there), preferring
-        one the believed board thought was empty. Either may be None when it can't be seen. Lets the clock
-        flag just those two squares (not the whole noisy change-mask) and show the piece where it sits."""
+        """Pin an illegal move to a single from/to. Reference the BELIEVED board (the game state), not the
+        camera baseline, so a stale piece left in the baseline is ignored: the FROM is a believed-occupied
+        square the camera now reads empty (the piece that moved); the TO is a believed-empty square now
+        showing a piece CONTRASTING its own colour (a piece really landed). With several candidates (camera
+        noise / a stray piece elsewhere) pair the from to the to of the SAME colour that's CLOSEST, so a
+        far-off stray (e.g. an h4 ghost) isn't mistaken for the real landing. Lets the clock flag just those
+        two squares and show the piece where it sits. Either may be None when it can't be seen."""
         prev = self.game.prev
         if prev is None:
             return (None, None)
         obs = np.asarray(obs)
-        delta = prev != obs
         bel = board_to_grid(self.game.board)
-        froms = [(int(r), int(c)) for r, c in zip(*np.where(delta & (prev != Cell.EMPTY) & (obs == Cell.EMPTY)))]
-        tos = [(int(r), int(c)) for r, c in zip(*np.where(delta & (obs != Cell.EMPTY)))
+        delta = prev != obs
+        froms = [(int(r), int(c)) for r, c in zip(*np.where(delta & (bel != Cell.EMPTY) & (obs == Cell.EMPTY)))]
+        tos = [(int(r), int(c)) for r, c in zip(*np.where(delta & (bel == Cell.EMPTY) & (obs != Cell.EMPTY)))
                if (obs[int(r), int(c)] == Cell.LIGHT) != _square_is_light(int(r), int(c))]
-        frm = next((rc for rc in froms if bel[rc[0], rc[1]] != Cell.EMPTY), froms[0] if froms else None)
-        to = next((rc for rc in tos if bel[rc[0], rc[1]] == Cell.EMPTY), tos[0] if tos else None)
-        return (self._sq(frm) if frm else None, self._sq(to) if to else None)
+        if not froms or not tos:                       # only one end visible -> report what we have
+            frm = froms[0] if froms else None
+            to = tos[0] if tos else None
+            return (self._sq(frm) if frm else None, self._sq(to) if to else None)
+        best = None                                    # pick the from->to pair: same colour first, then closest
+        for f in froms:
+            for t in tos:
+                rank = (0 if obs[t[0], t[1]] == bel[f[0], f[1]] else 1, abs(f[0] - t[0]) + abs(f[1] - t[1]))
+                if best is None or rank < best[0]:
+                    best = (rank, f, t)
+        _, frm, to = best
+        return (self._sq(frm), self._sq(to))
 
     def _displaced_fen(self, frm, to):
         """The believed position with the moved piece relocated from->to (an ILLEGAL placement, for

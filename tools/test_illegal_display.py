@@ -65,5 +65,18 @@ b2.set_board_fen(v2["fen"])
 check(b2.piece_at(chess.H4) is not None and b2.piece_at(chess.H4).piece_type == chess.ROOK
       and b2.piece_at(chess.H1) is None, "display board: the rook sits on h4 (where it is)")
 
+# Bc1-c3 (illegal) with a STRAY high-contrast piece on h4 (noise / a piece left from an earlier test).
+# Must flag the bishop's c1->c3, NOT the far-off h4.
+s3 = Session("t-ill3")
+s3.seed_baseline(board_to_grid(chess.Board()))
+o3 = board_to_grid(chess.Board()).copy()
+o3[rc("c1")] = Cell.EMPTY                      # bishop leaves c1
+o3[rc("c3")] = Cell.LIGHT                      # white bishop on c3 (dark square -> high contrast)
+o3[rc("h4")] = Cell.LIGHT                      # a stray high-contrast piece on h4 (dark square) -> must be ignored
+v3 = s3.ingest_grid(o3)
+print("Bc1-c3 (+ stray on h4):", v3.get("type"), v3.get("squares"))
+check(v3["type"] == "move.unclear" and set(v3.get("squares", [])) == {"c1", "c3"},
+      "Bc1-c3 flags c1,c3 (the bishop), NOT the far stray on h4")
+
 print("ALL ILLEGAL-DISPLAY TESTS OK" if not FAIL else f"{FAIL} CHECK(S) FAILED")
 sys.exit(1 if FAIL else 0)
