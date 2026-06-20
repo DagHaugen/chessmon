@@ -207,11 +207,38 @@ async def test_camera_offline():
     await clk.close()
 
 
+async def test_watch():
+    print("watch board: admin.watch returns the live snapshot (fen + moves) for a table")
+    admin = await websockets.connect(URL)
+    await admin.send(json.dumps({"type": "admin.join"}))
+    await next_devices(admin)
+    await admin.send(json.dumps({"type": "table.create", "name": "Watch Table"}))
+    m = await next_devices(admin)
+    tok = next(x["token"] for x in m["tables"] if x["name"] == "Watch Table")
+
+    await admin.send(json.dumps({"type": "admin.watch", "table": tok}))
+    st = None
+    for _ in range(6):
+        try:
+            mm = json.loads(await asyncio.wait_for(admin.recv(), 2))
+        except asyncio.TimeoutError:
+            break
+        if mm.get("type") == "state":
+            st = mm
+            break
+    check(st is not None and st.get("table") == tok and "fen" in st and "moves" in st,
+          "admin.watch returns a state snapshot with fen + moves")
+    await admin.send(json.dumps({"type": "admin.unwatch", "table": tok}))
+    await admin.send(json.dumps({"type": "table.remove", "table": tok}))
+    await admin.close()
+
+
 test_persistence()
 try:
     asyncio.run(test_ws())
     asyncio.run(test_landing())
     asyncio.run(test_camera_offline())
+    asyncio.run(test_watch())
 except Exception as e:                                          # noqa: BLE001
     check(False, f"WS flow raised: {e!r}")
 print("\n" + ("CONSOLE TESTS FAILED: " + "; ".join(_FAIL) if _FAIL else "ALL CONSOLE TESTS OK"))

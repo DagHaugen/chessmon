@@ -345,6 +345,15 @@ async def ws_endpoint(ws: WebSocket):
                 if sess is not None:
                     await send(hub(sess.table_token)["camera"],
                                {"type": "camera.control", "what": data.get("what"), "on": bool(data.get("on"))})
+            elif t == "admin.watch":                              # console opens the live board for a running game
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    hub(sess.table_token)["spectators"].add(ws)
+                    await send(ws, {"type": "state", **sess.snapshot()})
+            elif t == "admin.unwatch":
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    hub(sess.table_token)["spectators"].discard(ws)
             elif t == "admin.calib":                              # console triggers a calibration frame
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
@@ -442,6 +451,8 @@ async def ws_endpoint(ws: WebSocket):
                 if role == "camera":                          # tell the clock its camera dropped -> WAIT
                     await send(h["clock"], {"type": "camera.offline"})
         admins.discard(ws)
+        for hb in conns.values():
+            hb["spectators"].discard(ws)                # an admin that was watching a board
         if dev_id in devices and devices[dev_id].get("ws") is ws:
             devices[dev_id]["online"] = False
             devices[dev_id]["ws"] = None

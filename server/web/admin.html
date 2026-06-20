@@ -91,6 +91,13 @@
   .modal .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:560px;width:100%;text-align:center}
   .modal h2{font-size:15px;margin:0 0 4px}
   .modal p{font-size:13px;color:var(--mut);margin:4px 0 12px}
+  .vboard{display:grid;grid-template-columns:repeat(8,1fr);width:min(320px,78vw);aspect-ratio:1;margin:6px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .vsq{display:flex;align-items:center;justify-content:center;font-size:min(7.4vw,30px);line-height:1}
+  .vsq.light{background:#c7cdd7}.vsq.dark{background:#7f8896}
+  .vsq.wp{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}.vsq.bp{color:#16181d}
+  .vmoves{margin-top:12px;font-size:13px;color:var(--ink);max-height:120px;overflow:auto;text-align:left;line-height:1.7}
+  .vmoves .mvn{color:var(--mut);margin-left:4px}
+  .vturn{color:var(--mut);font-size:13px;margin:2px 0 4px}
   .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
   .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px}
   .ccwrap.marking img{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2346d369' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%2346d369'/%3E%3Cline x1='16' y1='1' x2='16' y2='6' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='16' y1='26' x2='16' y2='31' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='1' y1='16' x2='6' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='26' y1='16' x2='31' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3C/svg%3E") 16 16, crosshair}
@@ -142,6 +149,14 @@
     <div class="crow oside hidden" id="caloside">
       <button data-side="top">▲ Top</button><button data-side="bottom">▼ Bottom</button>
       <button data-side="left">◀ Left</button><button data-side="right">Right ▶</button></div>
+  </div></div>
+
+  <div class="modal hidden" id="viewmodal"><div class="card">
+    <h2 id="vtitle">Table</h2>
+    <p class="vturn" id="vturn"></p>
+    <div class="vboard" id="vboard"></div>
+    <div class="vmoves" id="vmoves"></div>
+    <div class="crow"><button class="sec" id="vclose">Close</button></div>
   </div></div>
 </div>
 <script src="qrcode.min.js"></script>
@@ -266,6 +281,7 @@ function renderRunning(){
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s');
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
+    const vb=document.createElement('button');vb.className='mini';vb.textContent='View';vb.onclick=()=>openView(t);acts.append(vb);
     const camDev=devById(t.camera);
     if(camDev&&camDev.online){                                // live camera -> remote controls
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
@@ -286,6 +302,23 @@ function renderRunning(){
 $('newtable').onclick=()=>{const n=prompt('Name for the new table:','Table '+(tabs.length+1));
   if(n!==null)send({type:'table.create',name:n.trim()})};
 
+/* ---- live board + moves view ---- */
+let watchTable=null;
+const VGLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+function openView(t){watchTable=t.token;$('vtitle').textContent=t.name||('Table '+t.token.slice(0,6));
+  $('vturn').textContent='';$('vmoves').innerHTML='';$('vboard').innerHTML='';
+  send({type:'admin.watch',table:t.token});show('viewmodal',true);}
+function closeView(){if(watchTable)send({type:'admin.unwatch',table:watchTable});watchTable=null;show('viewmodal',false);}
+$('vclose').onclick=closeView;
+function addVSq(b,r,c,ch){const d=document.createElement('div');d.className='vsq '+((r+c)%2?'dark':'light');
+  if(ch){d.textContent=VGLYPH[ch.toLowerCase()];d.classList.add(ch===ch.toUpperCase()?'wp':'bp');}b.appendChild(d);}
+function renderMiniBoard(fen){const b=$('vboard');b.innerHTML='';
+  fen.split(' ')[0].split('/').forEach((row,r)=>{let c=0;
+    for(const ch of row){if(/\d/.test(ch)){for(let i=0;i<+ch;i++){addVSq(b,r,c,'');c++}}else{addVSq(b,r,c,ch);c++}}});}
+function renderMoveList(moves){let html='';
+  for(let i=0;i<moves.length;i+=2){html+='<span class="mvn">'+(i/2+1)+'.</span> '+moves[i].san+' '+(moves[i+1]?moves[i+1].san+' ':'');}
+  $('vmoves').innerHTML=html||'<span style="color:var(--mut)">no moves yet</span>';}
+
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
   if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];render();}
@@ -293,6 +326,8 @@ function handle(m){
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}
+  else if(m.type==='state'){if(m.table===watchTable){renderMiniBoard(m.fen);renderMoveList(m.moves||[]);
+    $('vturn').textContent=m.result?('game over · '+m.result):(m.turn+' to move');}}
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
