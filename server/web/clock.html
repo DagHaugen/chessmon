@@ -356,7 +356,7 @@ function updateWait(){                                  // the board overlay + s
     $('startov').classList.toggle('wait', ov!=='START');   // WAIT/PAUSE are muted; START is green
     $('startov').querySelector('span').textContent = ov;
   } else { show('startov',false); }
-  if(phase==='run') clk.running = !waiting && !needsResume;   // pause while blocked OR awaiting a manual resume
+  if(phase==='run') clk.running = !waiting && !needsResume && $('calib').classList.contains('hidden');   // pause while blocked, awaiting a manual resume, OR the Camera dialog is open
   show('cambtn', camLinked);                                  // "Camera" rail button -> calibration dialog (only with a live camera)
   if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
@@ -438,7 +438,7 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
 let consoleCalibrating=false,camFlashOn=false,curCorners=null;   // curCorners: the table's current calibration, to seed the markers
 function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
 function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
-  show('game',false);$('calib').classList.remove('orienting');$('calib').classList.add('preview');
+  show('game',false);clk.running=false;$('calib').classList.remove('orienting');$('calib').classList.add('preview');   // pause the game while calibrating
   $('ctitle').textContent='Camera — '+$('tid').textContent;
   $('cimg').removeAttribute('src');camFlashOn=false;camFlashLabel();
   $('ccalibrate').disabled=consoleCalibrating;$('ccalibrate').classList.toggle('amber',!calibrated);
