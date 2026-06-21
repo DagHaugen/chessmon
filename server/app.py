@@ -265,6 +265,7 @@ async def ws_endpoint(ws: WebSocket):
                 dev_id = data.get("devId")
                 if dev_id:
                     landing = bool(data.get("landing"))           # the /app landing page is role-agnostic
+                    known = dev_id in devices                     # already registered before this hello? (server recognises it)
                     d = devices.setdefault(dev_id, {"id": dev_id, "userName": "", "table": None})
                     d.update({"name": data.get("name", d.get("name", "device")), "online": True, "ws": ws})
                     if not landing:                               # a clock/camera page declares its role; the landing must not clobber it
@@ -273,7 +274,9 @@ async def ws_endpoint(ws: WebSocket):
                         if data.get(k):
                             d[k] = data[k]
                     await broadcast_devices()
-                    if landing:                                   # already configured? bounce it straight to its role page
+                    if landing:                                   # tell the landing what the server already knows (name + recognised)
+                        await send(ws, {"type": "welcome", "known": known, "userName": d.get("userName", "")})
+                        # already configured? bounce it straight to its role page
                         sess = next((s for s in mgr._by_table.values()
                                      if s.clock_dev == dev_id or s.camera_dev == dev_id), None)
                         if sess is not None and sess.clock_dev == dev_id:

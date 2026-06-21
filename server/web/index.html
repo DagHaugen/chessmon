@@ -59,7 +59,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
 $('nameinp').value=localStorage.getItem('cm_devname')||'';   // a friendly name the operator can set right here
-$('did').textContent=devName+' · New device '+devId.slice(0,6);
+$('did').textContent=devName+' · '+devId.slice(0,6);          // "New device" is added back only if the server says it's unknown (welcome)
 $('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
   if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));showConnected();}};  // reflect the new name in the title
 $('nameinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('nameinp').blur();}});  // phone: Enter closes the keyboard (no form to submit)
@@ -88,7 +88,14 @@ function connect(){
   };
   ws.onmessage=e=>{
     const m=JSON.parse(e.data);
-    if(m.type==='assign'){                                   // the console gave this device a role -> go there
+    if(m.type==='welcome'){                                  // the server tells us what it already knows about this device
+      const local=(localStorage.getItem('cm_devname')||'').trim();
+      if(m.userName){$('nameinp').value=m.userName;localStorage.setItem('cm_devname',m.userName);}   // server has a name (e.g. set in the console) -> adopt it
+      else if(local){ws.send(JSON.stringify({type:'device.rename',devId,userName:local}));}          // we have a local name the server lost -> push it up
+      if(!m.known)$('did').textContent=devName+' · New device · '+devId.slice(0,6);                   // only an unrecognised device is flagged "New"
+      showConnected();
+    }
+    else if(m.type==='assign'){                              // the console gave this device a role -> go there
       if(m.role==='clock'&&m.table){location.href='clock.html?table='+m.table;}
       else if(m.role==='camera'&&m.pair){location.href='camera.html?pair='+m.pair;}
     }
