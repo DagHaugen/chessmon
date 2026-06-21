@@ -35,7 +35,8 @@
   .bigicon{width:132px;height:132px;flex:none}          /* the chessmon mark, QR-sized, at the left of the bar */
   .qrwrap{flex:none}
   .reconmsg{display:none;width:132px;height:132px;align-items:center;justify-content:center;text-align:center;color:var(--mut);font-size:13px;border:1px dashed var(--line);border-radius:9px}
-  .addtxt{flex:1;min-width:0}
+  .addtxt{flex:1;min-width:0;text-align:center}
+  .offmsg{display:none;flex:1;text-align:center;font-size:16px;font-weight:600;color:var(--bad)}   /* replaces the add-a-device text when the server is offline */
   .addhd{font-weight:700;font-size:14px;margin-bottom:3px}
   .addtxt p{font-size:12.5px;color:var(--mut);margin:0 0 7px;line-height:1.45}
   .addtxt code{font-size:12px;color:var(--accent);word-break:break-all}
@@ -118,6 +119,9 @@
   .hidden{display:none}
   body.offline .qrbox{display:none}                     /* server down -> hide the QR (a dead server can't serve the landing page)... */
   body.offline .reconmsg{display:flex}                  /* ...and show "reconnecting…" where the QR was */
+  body.offline .addtxt{display:none}                    /* ...hide the add-a-device text... */
+  body.offline .offmsg{display:block}                   /* ...show "Server offline" in its place... */
+  body.offline .sub{display:none}                       /* ...and drop the now-redundant top status */
   body.offline .section{opacity:.4;pointer-events:none} /* ...and disable everything else until we're live */
 </style>
 </head>
@@ -130,9 +134,10 @@
     <img src="icon.svg" class="bigicon" alt="chessmon">
     <div class="addtxt">
       <div class="addhd">Add a device</div>
-      <p>Scan with a phone or tablet, then bookmark the page. It shows up under Unused, ready to drop into a table.</p>
+      <p>Scan with a phone or tablet, then bookmark the page.<br>It shows up under Unused, ready to drop into a table.</p>
       <code id="addurl"></code>
     </div>
+    <div class="offmsg">Server offline</div>
     <div class="qrwrap">
       <div id="qr" class="qrbox"></div>
       <div class="reconmsg" id="reconmsg">reconnecting…</div>
@@ -441,7 +446,7 @@ function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   const sock=ws,guard=setTimeout(()=>{if(sock.readyState===0){try{sock.close()}catch(_){}}},4000);  // a CONNECTING socket that hangs (SYN/upgrade to a restarting server) -> abort & retry fast, don't wait ~30s for the TCP timeout
   ws.onopen=()=>{clearTimeout(guard);$('dot').classList.add('on');send({type:'admin.join'})};   // stays offline until the first data arrives
-  ws.onclose=()=>{clearTimeout(guard);$('dot').classList.remove('on');setLive(false);$('sub').textContent='server offline · reconnecting…';setTimeout(connect,1500)};
+  ws.onclose=()=>{clearTimeout(guard);$('dot').classList.remove('on');setLive(false);setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 (function(){const url=location.origin+'/app/';$('addurl').textContent=url;   // static QR -> the device landing page
