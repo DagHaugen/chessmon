@@ -61,15 +61,18 @@ const devName=deviceName();
 $('nameinp').value=localStorage.getItem('cm_devname')||'';   // a friendly name the operator can set right here
 $('did').textContent=devName+' · New device '+devId.slice(0,6);
 $('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
-  if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));
-  if(v)$('msg').textContent='Named “'+v+'” — listed under Unused on the console, ready when you are.';};
+  if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));showConnected();}};  // reflect the new name in the title
 $('nameinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('nameinp').blur();}});  // phone: Enter closes the keyboard (no form to submit)
 
 let ws;
+function showConnected(){                                    // connected + waiting: show the device's name and the next step
+  const nm=(localStorage.getItem('cm_devname')||'').trim();
+  $('title').innerHTML='<span class="dot"></span>';$('title').appendChild(document.createTextNode(nm||'Connected'));   // text node = no HTML injection, works on old browsers
+  $('msg').innerHTML='Connected — waiting to be set up. On the chessmon console it’s under <b>Unused devices</b>; add it to a table as a <b>camera</b> or a <b>clock</b>.';
+}
 function ready(){
   $('card').classList.add('ready');
-  $('title').innerHTML='<span class="dot"></span>Connected';
-  $('msg').textContent='Connected — added to Unused devices on the console. Set it up there whenever you like.';
+  showConnected();
 }
 let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
