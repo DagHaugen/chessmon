@@ -21,7 +21,8 @@
   .section{margin-bottom:24px}
   .section h2{font-size:13px;color:var(--mut);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
     margin:0 0 11px;display:flex;align-items:center;gap:10px}
-  .section h2 .cnt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--mut);margin-left:8px}
+  .section h2 .cnt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--mut)}
+  .section h2 .cnt:not(:empty)::before{content:'•';margin:0 8px}   /* bullet with equal space on both sides */
   .add{margin-left:auto;background:var(--accent);color:#0b1020;border:none;border-radius:9px;
     padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer}
   .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);
@@ -150,12 +151,12 @@
   </div>
 
   <div class="section">
-    <h2>Running games <span class="cnt" id="rcnt"></span></h2>
+    <h2>Running games<span class="cnt" id="rcnt"></span></h2>
     <div id="running"></div>
   </div>
 
   <div class="section">
-    <h2>Unused devices <span class="cnt" id="ucnt"></span></h2>
+    <h2>Unused devices<span class="cnt" id="ucnt"></span></h2>
     <div id="unused"></div>
   </div>
 
@@ -220,7 +221,7 @@ function renderUnused(){
   const used=usedIds();
   const list=devs.filter(d=>!used.has(d.id))
                  .sort((a,b)=>(b.online-a.online)||nameOf(a).localeCompare(nameOf(b)));
-  $('ucnt').textContent=list.length?('• '+list.length):'';
+  $('ucnt').textContent=list.length?String(list.length):'';
   const L=$('unused');L.innerHTML='';
   if(!list.length){L.innerHTML='<div class="empty">No unused devices.<br>Open the chessmon page on a phone or tablet — it shows up here, ready to drop into a table.</div>';return}
   list.forEach(d=>{
@@ -293,9 +294,13 @@ function renderTables(){
     rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
       if((!t.clock&&!t.camera)||confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))
         send({type:'table.remove',table:t.token})};
-    head.append(nm,pill);
-    if(t.moved){const mv=document.createElement('span');mv.className='gstat wait';mv.textContent='⚠ moved';mv.title='The camera or board looks like it shifted since calibration — re-calibrate.';head.append(mv);}
-    head.append(cal,rm);
+    head.append(nm);
+    if(t.camera){                                            // calibration only applies once a camera is assigned to the table
+      head.append(pill);
+      if(t.moved){const mv=document.createElement('span');mv.className='gstat wait';mv.textContent='⚠ moved';mv.title='The camera or board looks like it shifted since calibration — re-calibrate.';head.append(mv);}
+      head.append(cal);
+    }
+    head.append(rm);
     const slots=document.createElement('div');slots.className='slots';
     slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
     card.append(head,slots);L.appendChild(card);
@@ -304,8 +309,8 @@ function renderTables(){
 
 function renderRunning(){
   const list=tabs.filter(t=>(t.started_at||t.moves>0)&&!t.result)   // active = started (or has moves) and not finished
-                 .sort((a,b)=>(b.started_at||0)-(a.started_at||0));
-  $('rcnt').textContent=list.length?('• '+list.length):'';
+                 .sort((a,b)=>(a.name||'').localeCompare(b.name||''));   // by table name, like the Configured list
+  $('rcnt').textContent=list.length?String(list.length):'';
   const L=$('running');L.innerHTML='';
   if(!list.length){L.innerHTML='<div class="empty">No games in progress.</div>';return}
   list.forEach(t=>{
