@@ -289,8 +289,8 @@ async def ws_endpoint(ws: WebSocket):
                         if data.get(k):
                             d[k] = data[k]
                     await broadcast_devices()
-                    if landing:                                   # tell the landing what the server already knows (name + recognised)
-                        await send(ws, {"type": "welcome", "known": known, "userName": d.get("userName", "")})
+                    await send(ws, {"type": "welcome", "known": known, "userName": d.get("userName", "")})  # the name the device shows (landing + clock both)
+                    if landing:                                   # the landing also gets bounced straight to its role page once configured
                         # already configured? bounce it straight to its role page
                         sess = next((s for s in mgr._by_table.values()
                                      if s.clock_dev == dev_id or s.camera_dev == dev_id), None)

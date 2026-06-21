@@ -115,6 +115,9 @@
     border-radius:10px;padding:8px}
   .pair code{display:block;margin-top:10px;color:var(--accent);font-size:13px;word-break:break-all}
   .pairhint{color:var(--mut);font-size:12px;margin:12px 0 0;line-height:1.45}
+  .pairinp{width:100%;background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 10px;font-size:14px;text-align:center;margin-top:16px}
+  .pairinp:focus{outline:none;border-color:var(--accent)}
+  .pairedit{margin-top:16px;background:none;border:1px solid var(--line);color:var(--mut);border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer}
   .calib{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
   .calib h2{font-size:13px;color:var(--mut);margin:0;text-transform:uppercase;letter-spacing:.08em}
   .calib p{font-size:12px;color:var(--mut);margin:4px 0 10px}
@@ -154,11 +157,12 @@
 
   <div class="pair hidden" id="pair">
     <img src="icon.svg" class="pairicon" alt="chessmon" width="60" height="60">
-    <p class="pairlead">This device is the <b>clock</b> for <b id="pairtable">this table</b>.<br>A camera must be paired before a game can start.</p>
+    <p class="pairlead"><b id="pairdevname">This device</b> is the clock for <b id="pairtable">this table</b>.<br>A camera must be paired before a game can start.</p>
     <h2>Add a camera</h2>
     <div id="qr"></div>
-    <code id="paircode"></code>
     <p class="pairhint">Scan with the camera phone, or pair it from the console.</p>
+    <input class="pairinp hidden" id="pairinp" maxlength="28" autocomplete="off" placeholder="Name this device">
+    <button class="pairedit" id="pairedit">Edit name</button>
   </div>
 
   <div class="calib hidden" id="calib">
@@ -417,13 +421,18 @@ function handle(m){
       updateWait();
       if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){  // on a table, no camera yet -> show ONLY the pairing QR
         show('game',false);show('pair',true);$('report').textContent='';
-        $('pairtable').textContent=$('tid').textContent;                       // "clock for <table>"
-        $('paircode').textContent=m.pairToken;$('qr').innerHTML='';            // clear so reconnects don't stack QRs
+        $('pairtable').textContent=$('tid').textContent;paintDevName();        // "<device> is the clock for <table>"
+        $('qr').innerHTML='';                                                  // clear so reconnects don't stack QRs
         if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+m.pairToken,width:144,height:144});}
       else {show('pair',false);show('game',true);}
       break;
     case 'camera.linked': camLinked=true;show('pair',false);show('game',true);updateWait();break;   // a camera joined -> drop the QR, show the board (START)
     case 'camera.offline': camLinked=false;updateWait();break;                     // camera dropped mid-game -> pause + WAIT
+    case 'welcome':                                                                // server's known name for this device
+      if(m.userName)localStorage.setItem('cm_devname',m.userName);                 // adopt it (e.g. set in the console)
+      else if(devNm())send({type:'device.rename',devId,userName:devNm()});         // server lost it -> push our local name up
+      paintDevName();break;
+    case 'name.updated': localStorage.setItem('cm_devname',m.userName||'');paintDevName();break;   // renamed from the console -> reflect live
     case 'assign':                                              // console assigned this device a role
       if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
         show('setup',false);show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
@@ -494,6 +503,13 @@ let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)send({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}})}
 function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
 setupBattery();
+function devNm(){return (localStorage.getItem('cm_devname')||'').trim();}      // operator-set device name (shared with the landing)
+function paintDevName(){$('pairdevname').textContent=devNm()||'This device';$('pairinp').value=devNm();}
+$('pairedit').onclick=()=>{$('pairinp').classList.remove('hidden');$('pairedit').classList.add('hidden');$('pairinp').focus();};   // reveal the input to rename
+$('pairinp').onblur=()=>{$('pairinp').classList.add('hidden');$('pairedit').classList.remove('hidden');};                          // done -> back to the button
+$('pairinp').onchange=()=>{const v=$('pairinp').value.trim();localStorage.setItem('cm_devname',v);send({type:'device.rename',devId,userName:v});paintDevName();};
+$('pairinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('pairinp').blur();}});
+paintDevName();
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');serverDown=false;updateWait();keepAwake();pushBattery();
