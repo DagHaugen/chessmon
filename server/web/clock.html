@@ -58,7 +58,7 @@
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
-  .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:none;opacity:1}   /* warped real-board photo over the digital board */
+  .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:auto;cursor:pointer;opacity:1}   /* warped real-board photo; tap to refresh */
   .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
   .qrjoinbtn{position:fixed;top:98px;left:10px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;   /* under the fullscreen X; sits below the dim button */
     background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
@@ -353,14 +353,14 @@ function warpBoardCam(){                                       // map the 4 cali
   img.style.transform='matrix3d('+[t[0],t[3],0,t[6], t[1],t[4],0,t[7], 0,0,1,0, t[2],t[5],0,t[8]].join(',')+')';
 }
 $('boardcam').onload=warpBoardCam;
-$('dimbtn').onclick=()=>{                                      // toggle the real-board overlay
-  const on=$('dimbtn').classList.toggle('lit');
-  show('camoverlay',on);
-  if(!on)return;
-  if(lastFrame&&$('boardcam').getAttribute('src')!==lastFrame)$('boardcam').src=lastFrame;   // (re)load -> onload warps
-  else warpBoardCam();                                                                        // already loaded / no frame yet -> warp now
-  if(!lastFrame||!curCorners)send({type:'admin.calib',table});                                // nothing cached -> fetch a frame + corners
-};
+function refreshCam(){                                         // (re)grab the real board so the overlay reflects the latest moves
+  if(!camOn())return;
+  if(lastFrame&&$('boardcam').getAttribute('src')!==lastFrame)$('boardcam').src=lastFrame;   // swap in the cached frame instantly
+  warpBoardCam();                                                                             // warp whatever is loaded
+  send({type:'admin.calib',table});                                                           // pull a fresh frame -> arrives as calib.image
+}
+$('dimbtn').onclick=()=>{const on=$('dimbtn').classList.toggle('lit');show('camoverlay',on);if(on)refreshCam();};   // toggle overlay; turning it on grabs a fresh frame
+$('camoverlay').onclick=refreshCam;                           // tap the overlay to refresh it
 function hideCam(){if(camOn()){$('dimbtn').classList.remove('lit');show('camoverlay',false);}}   // dismiss the overlay (e.g. after a move)
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
 let candList=[], candAll=false;
