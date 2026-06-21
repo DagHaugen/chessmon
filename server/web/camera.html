@@ -19,6 +19,8 @@
   .zoom{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut)}
   .zoom input[type=range]{flex:1}
   .zoom .zv{min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+  .movechk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin-top:10px;cursor:pointer}
+  .movechk input{width:18px;height:18px}
   .hidden{display:none}
   .steps{display:flex;gap:8px}
   .btn{flex:1;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
@@ -39,6 +41,7 @@
   <div class="zoom hidden" id="zoomrow"><span>Zoom</span>
     <input type="range" id="zoom" min="1" max="3" step="0.1" value="1">
     <span class="zv" id="zoomval">1.0×</span></div>
+  <label class="movechk"><input type="checkbox" id="motionchk"> Detect movement</label>
   <div class="steps">
     <button class="btn" id="b-cal">Calibrate — board set up</button>
   </div>
@@ -133,15 +136,15 @@ function onMotion(e){
   if(mag>20){const now=Date.now();if(now-lastMovedSig>300){lastMovedSig=now;sendMoved()}   // throttle while moving
     clearTimeout(motionSettleT);motionSettleT=setTimeout(sendMoved,500);}                  // one more once it settles
 }
-function setupMotion(){
-  if(typeof DeviceMotionEvent==='undefined'){log('no motion sensor on this device');return}
-  if(DeviceMotionEvent.requestPermission){               // iOS 13+ : needs one tap to grant
-    const ask=()=>{document.removeEventListener('click',ask);document.removeEventListener('touchend',ask);
-      DeviceMotionEvent.requestPermission().then(r=>{if(r==='granted'){window.addEventListener('devicemotion',onMotion);log('motion sensing on')}else log('motion permission denied')}).catch(()=>{})};
-    document.addEventListener('click',ask);document.addEventListener('touchend',ask);log('tap the screen once to enable move-to-refresh');
-  }else{window.addEventListener('devicemotion',onMotion);log('motion sensing on')}   // Android / older iOS: no gate
-}
-setupMotion();
+function motionEnable(){window.addEventListener('devicemotion',onMotion);log('movement detection on')}
+function motionDisable(){window.removeEventListener('devicemotion',onMotion);clearTimeout(motionSettleT);log('movement detection off')}
+$('motionchk').onchange=()=>{                             // ticking the box is the user gesture iOS needs for the motion-permission prompt
+  if(!$('motionchk').checked){motionDisable();return}
+  if(typeof DeviceMotionEvent==='undefined'){log('no motion sensor on this device');$('motionchk').checked=false;return}
+  if(DeviceMotionEvent.requestPermission){               // iOS 13+ : prompt on the first tick
+    DeviceMotionEvent.requestPermission().then(r=>{if(r==='granted')motionEnable();else{$('motionchk').checked=false;log('motion permission denied')}}).catch(()=>{$('motionchk').checked=false});
+  }else motionEnable();                                   // Android / older iOS: no gate
+};
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');pushBattery();
