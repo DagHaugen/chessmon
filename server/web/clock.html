@@ -58,9 +58,9 @@
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
-  .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:none;opacity:.8}   /* warped real-board photo over the digital board */
+  .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:none;opacity:1}   /* warped real-board photo over the digital board */
   .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
-  .qrjoinbtn{position:fixed;top:98px;left:12px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;   /* under the fullscreen X; sits below the dim button */
+  .qrjoinbtn{position:fixed;top:98px;left:-12px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;   /* under the fullscreen X; sits below the dim button */
     background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
     display:flex;align-items:center;justify-content:center}
   .qrjoinbtn svg{display:block}
@@ -347,7 +347,8 @@ function warpBoardCam(){                                       // map the 4 cali
   const S=$('board').clientWidth; if(!S)return;
   $('camoverlay').style.transform=getComputedStyle($('board')).transform;     // follow the board's rotation mode (m1 = -90deg)
   const W=img.naturalWidth,H=img.naturalHeight;
-  const src=curCorners.map(c=>[c[0]*W,c[1]*H]),dst=[[0,0],[S,0],[S,S],[0,S]]; // calibrated quad (px) -> board square (TL,TR,BR,BL)
+  const sq=[[0,0],[S,0],[S,S],[0,S]],dst=[sq[1],sq[2],sq[3],sq[0]];           // board square, rotated +90deg to match the camera (swap to [sq[3],sq[0],sq[1],sq[2]] for -90)
+  const src=curCorners.map(c=>[c[0]*W,c[1]*H]);                               // calibrated quad in image px -> dst
   const t=hgProj(src,dst);for(let i=0;i<9;i++)t[i]/=t[8];
   img.style.transform='matrix3d('+[t[0],t[3],0,t[6], t[1],t[4],0,t[7], 0,0,1,0, t[2],t[5],0,t[8]].join(',')+')';
 }
@@ -360,6 +361,7 @@ $('dimbtn').onclick=()=>{                                      // toggle the rea
   else warpBoardCam();                                                                        // already loaded / no frame yet -> warp now
   if(!lastFrame||!curCorners)send({type:'admin.calib',table});                                // nothing cached -> fetch a frame + corners
 };
+function hideCam(){if(camOn()){$('dimbtn').classList.remove('lit');show('camoverlay',false);}}   // dismiss the overlay (e.g. after a move)
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
 let candList=[], candAll=false;
 function showCands(cands){candList=cands||[];candAll=false;renderCands()}
@@ -569,7 +571,7 @@ function handle(m){
       if(m.fen)renderBoard(m.fen);
       showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
       $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
-      reading=false;warnMsg=null;gameResult=null;clearCands();paint();break;
+      reading=false;warnMsg=null;gameResult=null;clearCands();paint();hideCam();break;   // a move landed -> drop the real-board overlay
     case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
     case 'move.unclear': case 'move.nochange':
