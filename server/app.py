@@ -308,11 +308,12 @@ async def ws_endpoint(ws: WebSocket):
                 role = "admin"
                 admins.add(ws)
                 await send(ws, admin_state())
-            elif t == "device.rename":                            # console set a user-defined name
+            elif t == "device.rename":                            # console (or the device itself) set a user-defined name
                 d = devices.get(data.get("devId"))
                 if d is not None:
                     d["userName"] = data.get("userName", "")
                     await broadcast_devices()
+                    await send(d.get("ws"), {"type": "name.updated", "userName": d["userName"]})  # reflect it on the device's landing page
             elif t == "device.remove":                            # console forgot a device (stale / phantom)
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()

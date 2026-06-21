@@ -27,7 +27,13 @@
   .dot{width:9px;height:9px;border-radius:50%;background:var(--good);display:inline-block;vertical-align:middle;margin-right:6px}
   h1{font-size:18px;margin:0 0 6px}
   .msg{font-size:13.5px;color:var(--mut);margin:0 0 18px;line-height:1.5}
-  .dev{border-top:1px solid var(--line);padding-top:16px;margin-top:4px}
+  .dev{border-top:1px solid var(--line);padding-top:16px;margin-top:4px;display:none}   /* device controls — shown once registered */
+  .card.ready .dev{display:block}
+  .btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .dbtn{background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer}
+  .dbtn:disabled{color:var(--mut);cursor:default}
+  .dbtn.on{border-color:var(--good);color:var(--good)}
+  .hidden{display:none}
   .nameinp{width:100%;background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;
     padding:9px 11px;font-size:14px;text-align:center}
   .nameinp:focus{outline:none;border-color:var(--accent)}
@@ -44,10 +50,13 @@
       <h1 id="title">Connecting…</h1>
       <p class="msg" id="msg">Reaching the chessmon server.</p>
       <div class="dev">
-        <input id="nameinp" class="nameinp" placeholder="Name this device — e.g. Table 1 clock" maxlength="28" autocomplete="off">
+        <div class="btns" id="btns">
+          <button class="dbtn" id="editbtn">Edit name</button>
+          <button class="dbtn" id="flashbtn">Flash: off</button>
+        </div>
+        <input id="nameinp" class="nameinp hidden" placeholder="Name this device — e.g. Table 1 clock" maxlength="28" autocomplete="off">
         <div class="did" id="did"></div>
       </div>
-      <p class="hint" id="hint">Name it so it's easy to spot in the console, then bookmark this page on this device.</p>
     </div>
   </div>
 <script>
@@ -65,6 +74,30 @@ $('did').textContent=devName+' · '+devId.slice(0,6);          // "New device" i
 $('nameinp').onchange=()=>{const v=$('nameinp').value.trim();localStorage.setItem('cm_devname',v);
   if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'device.rename',devId,userName:v}));showConnected();}};  // reflect the new name in the title
 $('nameinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('nameinp').blur();}});  // phone: Enter closes the keyboard (no form to submit)
+$('editbtn').onclick=()=>{$('nameinp').classList.remove('hidden');$('btns').classList.add('hidden');$('nameinp').focus();};   // reveal the input to rename
+$('nameinp').onblur=()=>{$('nameinp').classList.add('hidden');$('btns').classList.remove('hidden');};                          // done editing -> back to the buttons
+
+let flashTrack=null,flashOn=false;                          // toggle this device's own torch
+async function toggleFlash(){
+  const b=$('flashbtn');
+  try{
+    if(flashOn){if(flashTrack){flashTrack.stop();flashTrack=null;}flashOn=false;b.textContent='Flash: off';b.classList.remove('on');return;}
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    flashTrack=s.getVideoTracks()[0];
+    const caps=flashTrack.getCapabilities?flashTrack.getCapabilities():{};
+    if(!caps.torch){flashTrack.stop();flashTrack=null;b.textContent='No flash';b.disabled=true;return;}   // e.g. iOS Safari / front camera
+    await flashTrack.applyConstraints({advanced:[{torch:true}]});
+    flashOn=true;b.textContent='Flash: on';b.classList.add('on');
+  }catch(e){if(flashTrack){flashTrack.stop();flashTrack=null;}flashOn=false;b.textContent='Camera blocked';b.disabled=true;}
+}
+$('flashbtn').onclick=toggleFlash;
+(function camPerm(){                                         // grey out Flash up-front when the camera is blocked (where the permission API exists; Safari just tries on click)
+  try{navigator.permissions.query({name:'camera'}).then(p=>{
+    const upd=()=>{const b=$('flashbtn');
+      if(p.state==='denied'&&!flashOn){b.textContent='Camera blocked';b.disabled=true;}
+      else if(p.state!=='denied'&&b.disabled&&b.textContent==='Camera blocked'){b.textContent='Flash: off';b.disabled=false;}};
+    upd();p.onchange=upd;}).catch(()=>{});}catch(e){}
+})();
 
 let ws;
 function showConnected(){                                    // connected + waiting: show the device's name and the next step
@@ -96,6 +129,9 @@ function connect(){
       else if(local){ws.send(JSON.stringify({type:'device.rename',devId,userName:local}));}          // we have a local name the server lost -> push it up
       if(!m.known)$('did').textContent=devName+' · New device · '+devId.slice(0,6);                   // only an unrecognised device is flagged "New"
       showConnected();
+    }
+    else if(m.type==='name.updated'){                        // the console renamed this device -> reflect it live
+      localStorage.setItem('cm_devname',m.userName||'');$('nameinp').value=m.userName||'';showConnected();
     }
     else if(m.type==='assign'){                              // the console gave this device a role -> go there
       if(m.role==='clock'&&m.table){location.href='clock.html?table='+m.table;}
