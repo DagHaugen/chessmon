@@ -243,7 +243,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
 const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the camera-pairing QR (scan to pair, or pair from the console). Set false to hide.
-let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
 
@@ -415,22 +415,28 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
     return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
   send({type:'calib.corners',corners});show('calib',false);$('report').textContent='registering…';}
 
+function showPairScreen(){                                  // the "Add a camera" screen (board hidden, status rail gone)
+  show('game',false);show('pair',true);$('report').textContent='';document.body.classList.add('pairing');
+  $('pairtable').textContent=$('tid').textContent;paintDevName();
+  $('qr').innerHTML='';                                    // clear so reconnects don't stack QRs
+  if(typeof QRCode!=='undefined'&&pairToken)new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+pairToken,width:144,height:144});
+}
 function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
       camLinked=m.cameraLinked;
+      if(m.pairToken)pairToken=m.pairToken;                                    // remember it -> can re-show the QR if the camera later leaves
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
       updateWait();
-      if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){  // on a table, no camera yet -> show ONLY the pairing QR
-        show('game',false);show('pair',true);$('report').textContent='';document.body.classList.add('pairing');
-        $('pairtable').textContent=$('tid').textContent;paintDevName();        // "<device> is the clock for <table>"
-        $('qr').innerHTML='';                                                  // clear so reconnects don't stack QRs
-        if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+m.pairToken,width:144,height:144});}
+      if(SHOW_PAIR_QR&&pairToken&&!started&&!m.calibrated&&!m.cameraLinked)showPairScreen();   // on a table, no camera yet -> show ONLY the pairing QR
       else {show('pair',false);show('game',true);document.body.classList.remove('pairing');}
       break;
-    case 'camera.linked': camLinked=true;show('pair',false);show('game',true);document.body.classList.remove('pairing');updateWait();break;   // a camera joined -> drop the QR, show the board (START)
-    case 'camera.offline': camLinked=false;updateWait();break;                     // camera dropped mid-game -> pause + WAIT
+    case 'camera.linked': camLinked=true;show('pair',false);show('game',true);document.body.classList.remove('pairing');
+      if(started)updateWait();else enterReady();break;                           // a camera joined -> resume keeps the game; a fresh pairing -> START
+    case 'camera.offline': camLinked=false;
+      if(!started&&SHOW_PAIR_QR&&pairToken)showPairScreen();                      // camera left before a game began -> back to "Add a camera"
+      else updateWait();break;                                                   // mid-game -> "Camera offline", keep the game waiting for it to return
     case 'welcome':                                                                // server's known name for this device
       if(m.userName)localStorage.setItem('cm_devname',m.userName);                 // adopt it (e.g. set in the console)
       else if(devNm())send({type:'device.rename',devId,userName:devNm()});         // server lost it -> push our local name up
