@@ -263,6 +263,7 @@ async def ws_endpoint(ws: WebSocket):
                 hub(s.table_token)["camera"] = ws
                 await send(hub(s.table_token)["clock"], {"type": "camera.linked"})  # clock drops the QR
                 if dev_id in devices:
+                    s.camera_dev = dev_id                            # record the pairing so the console shows the camera on this table
                     devices[dev_id]["table"] = s.table_token
                     await broadcast_devices()
                 await send(ws, {"type": "session.ready", "role": "camera",
@@ -370,6 +371,7 @@ async def ws_endpoint(ws: WebSocket):
                 sess = mgr.by_table(data.get("table"))
                 role2 = data.get("role")
                 if sess is not None and role2 in ("clock", "camera"):
+                    game_on = bool(sess.started_at or sess.moves) and not sess.result   # a game is in progress on this table
                     devid = sess.clock_dev if role2 == "clock" else sess.camera_dev
                     if role2 == "clock":
                         sess.clock_dev = None
@@ -381,6 +383,14 @@ async def ws_endpoint(ws: WebSocket):
                         dev["table"] = None
                         if dev.get("ws"):
                             await send(dev["ws"], {"type": "unassigned"})
+                    if role2 == "camera" and game_on and sess.clock_dev:   # camera pulled mid-game -> the game can't continue; send the clock home too
+                        clk = devices.get(sess.clock_dev)
+                        sess.clock_dev = None                        # clear first so the reconnecting clock isn't bounced back to the table
+                        sess.reset_game()
+                        if clk is not None:
+                            clk["table"] = None
+                            if clk.get("ws"):
+                                await send(clk["ws"], {"type": "unassigned"})
                     mgr.save(SESSIONS_FILE)
                     await broadcast_devices()
             elif t == "camera.control":                           # console -> the table's camera: screen on/off, flashlight
