@@ -40,6 +40,14 @@
   .nameinp:focus{outline:none;border-color:var(--accent)}
   .did{font-size:12px;color:var(--mut);font-family:ui-monospace,monospace;margin-top:9px}
   .hint{font-size:12px;color:var(--mut);margin:16px 0 0;line-height:1.5}
+  .scanbtn{display:none;width:100%;margin:2px 0 6px;background:var(--accent);border:none;color:#fff;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer}
+  .card.ready .scanbtn{display:block}
+  .scan{position:fixed;top:0;left:0;right:0;bottom:0;z-index:90;background:#000}
+  .scan.hidden{display:none}
+  #scanvid{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+  .scanframe{position:absolute;top:50%;left:50%;width:240px;height:240px;margin:-120px 0 0 -120px;border:3px solid rgba(255,255,255,.92);border-radius:20px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+  .scanmsg{position:absolute;left:0;right:0;bottom:104px;text-align:center;color:#fff;font-size:14.5px;padding:0 26px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+  .scancancel{position:absolute;left:50%;bottom:34px;margin-left:-70px;width:140px;background:#fff;color:#15171c;border:none;border-radius:11px;padding:12px;font-size:15px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -50,6 +58,7 @@
       <img src="icon.svg" class="appicon" alt="chessmon" width="72" height="72">
       <h1 id="title">Connecting…</h1>
       <p class="msg" id="msg">Reaching the chessmon server.</p>
+      <button class="scanbtn" id="scanbtn">Scan a clock’s QR to use this as its camera</button>
       <div class="dev">
         <div class="btns" id="btns">
           <button class="dbtn" id="editbtn">Edit name</button>
@@ -60,6 +69,13 @@
         <div class="did" id="did"></div>
       </div>
     </div>
+  </div>
+  <div class="scan hidden" id="scan">
+    <video id="scanvid" playsinline muted autoplay></video>
+    <canvas id="scancanvas" class="hidden"></canvas>
+    <div class="scanframe"></div>
+    <div class="scanmsg" id="scanmsg">Point at the QR on a clock screen</div>
+    <button class="scancancel" id="scancancel">Cancel</button>
   </div>
 <script>
 function $(id){return document.getElementById(id)}
@@ -106,11 +122,54 @@ $('flashbtn').onclick=toggleFlash;
     upd();p.onchange=upd;}).catch(explain);}catch(e){explain();}   // no permission API (Safari) -> just explain up front
 })();
 
+// ---- in-app QR scanner: scan a clock's pairing QR to become that table's camera ----
+let scanStream=null,scanTimer=null,barcodeDet=null;
+function setScanMsg(t){$('scanmsg').textContent=t;}
+function loadJsQR(){return new Promise((res,rej)=>{if(window.jsQR)return res();const s=document.createElement('script');s.src='jsqr.min.js';s.onload=()=>res();s.onerror=()=>rej(new Error('load'));document.head.appendChild(s);});}
+async function openScanner(){
+  if(flashTrack){flashTrack.stop();flashTrack=null;flashOn=false;$('flashbtn').textContent='Flash: off';$('flashbtn').classList.remove('on');}  // free the camera if the torch was on
+  $('scan').classList.remove('hidden');setScanMsg('Point at the QR on a clock screen');
+  if('BarcodeDetector' in window){try{barcodeDet=new BarcodeDetector({formats:['qr_code']});}catch(_){barcodeDet=null;}}  // native fast path (Android)
+  if(!barcodeDet){try{await loadJsQR();}catch(_){setScanMsg('Couldn’t load the scanner — scan the clock’s QR with your Camera app instead.');return;}}  // iOS/Firefox -> jsQR
+  try{scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});}
+  catch(e){setScanMsg('Camera blocked — allow it, or scan the clock’s QR with your Camera app.');return;}
+  const v=$('scanvid');v.srcObject=scanStream;try{await v.play();}catch(_){}
+  scanTimer=setTimeout(scanTick,300);
+}
+async function scanTick(){
+  if(!scanStream)return;
+  const v=$('scanvid');let raw=null;
+  try{
+    if(barcodeDet){const codes=await barcodeDet.detect(v);if(codes&&codes.length)raw=codes[0].rawValue;}
+    else if(window.jsQR&&v.videoWidth){
+      const c=$('scancanvas');c.width=v.videoWidth;c.height=v.videoHeight;
+      const x=c.getContext('2d');x.drawImage(v,0,0,c.width,c.height);
+      const d=x.getImageData(0,0,c.width,c.height);
+      const r=jsQR(d.data,d.width,d.height,{inversionAttempts:'dontInvert'});if(r)raw=r.data;
+    }
+  }catch(_){}
+  if(raw&&handleScanResult(raw))return;
+  scanTimer=setTimeout(scanTick,barcodeDet?200:250);
+}
+function handleScanResult(raw){
+  let tok=null;
+  try{const url=new URL(String(raw),location.href);if(/camera\.html$/.test(url.pathname))tok=url.searchParams.get('pair');}catch(_){}
+  if(!tok){setScanMsg('That isn’t a clock pairing QR — point at the code on a clock screen.');return false;}
+  closeScanner();location.href='camera.html?pair='+encodeURIComponent(tok);return true;
+}
+function closeScanner(){
+  if(scanTimer){clearTimeout(scanTimer);scanTimer=null;}
+  if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
+  $('scan').classList.add('hidden');
+}
+$('scanbtn').onclick=openScanner;
+$('scancancel').onclick=closeScanner;
+
 let ws;
 function showConnected(){                                    // connected + waiting: show the device's name and the next step
   const nm=(localStorage.getItem('cm_devname')||'').trim();
   $('title').innerHTML='<span class="dot"></span>';$('title').appendChild(document.createTextNode(nm||'Connected'));   // text node = no HTML injection, works on old browsers
-  $('msg').innerHTML='Connected — waiting to be set up. On the chessmon console it’s under <b>Unused devices</b>; add it to a table as a <b>camera</b> or a <b>clock</b>.';
+  $('msg').innerHTML='Connected. Add it from the console (under <b>Unused devices</b>) as a <b>camera</b> or <b>clock</b> — or scan a clock’s QR to use this as that table’s camera.';
 }
 function ready(){
   $('card').classList.add('ready');

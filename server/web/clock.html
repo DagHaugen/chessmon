@@ -111,6 +111,7 @@
   #qr{display:flex;justify-content:center;margin:0 auto;width:160px;height:160px;background:#fff;
     border-radius:10px;padding:8px}
   .pair code{display:block;margin-top:10px;color:var(--accent);font-size:13px;word-break:break-all}
+  .pairhint{color:var(--mut);font-size:12px;margin:12px 0 0;line-height:1.45}
   .calib{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
   .calib h2{font-size:13px;color:var(--mut);margin:0;text-transform:uppercase;letter-spacing:.08em}
   .calib p{font-size:12px;color:var(--mut);margin:4px 0 10px}
@@ -149,9 +150,10 @@
   <div class="rrail"><span class="report" id="report"></span></div>
 
   <div class="pair hidden" id="pair">
-    <h2>Scan with the camera phone</h2>
+    <h2>Add a camera</h2>
     <div id="qr"></div>
     <code id="paircode"></code>
+    <p class="pairhint">Scan with the camera phone, or pair it from the console.</p>
   </div>
 
   <div class="calib hidden" id="calib">
@@ -228,7 +230,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Android/.test(u))return/Mobile/.test(u)?'Android phone':'Android tablet';
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
-const SHOW_PAIR_QR=false;     // clock-side "scan with the camera phone" QR: kept but HIDDEN (pairing is console-driven now). Flip to true to re-enable.
+const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the camera-pairing QR (scan to pair, or pair from the console). Set false to hide.
 let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
@@ -405,16 +407,16 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
-      camLinked=m.cameraLinked;updateWait();                    // no camera -> WAIT ("Camera not ready"), not the QR
+      camLinked=m.cameraLinked;
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
-      if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){ // only when no camera is linked yet (else skip the QR)
-        show('pair',true);$('paircode').textContent=m.pairToken;
-        const qr=$('qr');qr.innerHTML='';                       // clear so reconnects don't stack QRs
-        const link=location.origin+'/app/camera.html?pair='+m.pairToken;
-        if(typeof QRCode!=='undefined')new QRCode(qr,{text:link,width:144,height:144});}
-      else show('pair',false);
+      updateWait();
+      if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){  // on a table, no camera yet -> show ONLY the pairing QR
+        show('game',false);show('pair',true);$('report').textContent='';
+        $('paircode').textContent=m.pairToken;$('qr').innerHTML='';            // clear so reconnects don't stack QRs
+        if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+m.pairToken,width:144,height:144});}
+      else {show('pair',false);show('game',true);}
       break;
-    case 'camera.linked': camLinked=true;show('pair',false);updateWait();break;   // a camera joined -> drop the QR, flip WAIT->START
+    case 'camera.linked': camLinked=true;show('pair',false);show('game',true);updateWait();break;   // a camera joined -> drop the QR, show the board (START)
     case 'camera.offline': camLinked=false;updateWait();break;                     // camera dropped mid-game -> pause + WAIT
     case 'assign':                                              // console assigned this device a role
       if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
@@ -433,7 +435,7 @@ function handle(m){
         $('report').textContent='game over · '+m.result;$('report').className='report over';
         const w=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);if(w)$('s-'+w).classList.add('win');}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
-        started=true;show('pair',false);show('calib',false);show('refreshbtn',true);
+        started=true;show('pair',false);show('game',true);show('calib',false);show('refreshbtn',true);
         const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
         if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();
