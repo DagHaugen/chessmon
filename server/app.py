@@ -19,6 +19,7 @@ Run:  uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -44,6 +45,20 @@ mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
+
+
+def _quiet_conn_reset(loop, context):
+    # Windows' Proactor loop raises ConnectionResetError/AbortedError (WinError 10054/10053) from its
+    # transport-cleanup callback when a client drops the socket abruptly (phone sleeps, a WS reconnects,
+    # a tab closes). It's harmless and already handled in the ws loop -- swallow it, log everything else.
+    if isinstance(context.get("exception"), (ConnectionResetError, ConnectionAbortedError)):
+        return
+    loop.default_exception_handler(context)
+
+
+@app.on_event("startup")
+async def _install_loop_handler():
+    asyncio.get_running_loop().set_exception_handler(_quiet_conn_reset)
 
 
 def hub(token):
