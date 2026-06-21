@@ -1,7 +1,7 @@
-const C = 'chessmon-clock-v65';
+const C = 'chessmon-clock-v66';
 const PIECES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
   .map(p => 'pieces/' + p + '.svg');
-const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'qrcode.min.js', ...PIECES];
+const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'icon-maskable.svg', 'qrcode.min.js', ...PIECES];
 
 self.addEventListener('install', e =>
   e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
