@@ -34,6 +34,7 @@
   .dbtn:disabled{color:var(--mut);cursor:default}
   .dbtn.on{border-color:var(--good);color:var(--good)}
   .hidden{display:none}
+  .camnote{font-size:12px;color:var(--mut);margin-top:11px;line-height:1.45;display:none}
   .nameinp{width:100%;background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;
     padding:9px 11px;font-size:14px;text-align:center}
   .nameinp:focus{outline:none;border-color:var(--accent)}
@@ -55,6 +56,7 @@
           <button class="dbtn" id="flashbtn">Flash: off</button>
         </div>
         <input id="nameinp" class="nameinp hidden" placeholder="Name this device — e.g. Table 1 clock" maxlength="28" autocomplete="off">
+        <div class="camnote" id="camnote"></div>
         <div class="did" id="did"></div>
       </div>
     </div>
@@ -78,25 +80,30 @@ $('editbtn').onclick=()=>{$('nameinp').classList.remove('hidden');$('btns').clas
 $('nameinp').onblur=()=>{$('nameinp').classList.add('hidden');$('btns').classList.remove('hidden');};                          // done editing -> back to the buttons
 
 let flashTrack=null,flashOn=false;                          // toggle this device's own torch
+function setCamNote(t){const n=$('camnote');n.textContent=t||'';n.style.display=t?'block':'none';}
+const PRIME='Flash uses the camera — the browser will ask permission the first time.';
+const BLOCKED='Camera access is blocked. Refresh the page to allow it and try again.';
 async function toggleFlash(){
   const b=$('flashbtn');
   try{
     if(flashOn){if(flashTrack){flashTrack.stop();flashTrack=null;}flashOn=false;b.textContent='Flash: off';b.classList.remove('on');return;}
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
-    flashTrack=s.getVideoTracks()[0];
+    flashTrack=s.getVideoTracks()[0];setCamNote('');                                                       // allowed -> drop the explanation
     const caps=flashTrack.getCapabilities?flashTrack.getCapabilities():{};
-    if(!caps.torch){flashTrack.stop();flashTrack=null;b.textContent='No flash';b.disabled=true;return;}   // e.g. iOS Safari / front camera
+    if(!caps.torch){flashTrack.stop();flashTrack=null;b.textContent='No flash';b.disabled=true;setCamNote('This camera has no flashlight.');return;}   // e.g. iOS Safari / front camera
     await flashTrack.applyConstraints({advanced:[{torch:true}]});
     flashOn=true;b.textContent='Flash: on';b.classList.add('on');
-  }catch(e){if(flashTrack){flashTrack.stop();flashTrack=null;}flashOn=false;b.textContent='Camera blocked';b.disabled=true;}
+  }catch(e){if(flashTrack){flashTrack.stop();flashTrack=null;}flashOn=false;b.textContent='Camera blocked';b.disabled=true;setCamNote(BLOCKED);}
 }
 $('flashbtn').onclick=toggleFlash;
-(function camPerm(){                                         // grey out Flash up-front when the camera is blocked (where the permission API exists; Safari just tries on click)
+(function camPerm(){                                         // reflect camera permission: explain before the ask, clear once allowed, hint to refresh if blocked
+  function explain(){if(!flashOn)setCamNote(PRIME);}
   try{navigator.permissions.query({name:'camera'}).then(p=>{
     const upd=()=>{const b=$('flashbtn');
-      if(p.state==='denied'&&!flashOn){b.textContent='Camera blocked';b.disabled=true;}
-      else if(p.state!=='denied'&&b.disabled&&b.textContent==='Camera blocked'){b.textContent='Flash: off';b.disabled=false;}};
-    upd();p.onchange=upd;}).catch(()=>{});}catch(e){}
+      if(p.state==='granted'){if(b.disabled&&b.textContent==='Camera blocked'){b.textContent='Flash: off';b.disabled=false;}if(!flashOn)setCamNote('');}
+      else if(p.state==='denied'){b.textContent='Camera blocked';b.disabled=true;setCamNote(BLOCKED);}
+      else explain();};                                     // 'prompt'
+    upd();p.onchange=upd;}).catch(explain);}catch(e){explain();}   // no permission API (Safari) -> just explain up front
 })();
 
 let ws;
