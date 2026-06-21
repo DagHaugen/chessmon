@@ -64,6 +64,7 @@ const devName=deviceName();
 const v=document.getElementById('v'),cv=document.getElementById('cv');
 let ws;
 function $(id){return document.getElementById(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function status(t,cls){const s=$('status');s.textContent=t;s.className='status'+(cls?' '+cls:'')}
 function log(t){const l=$('log');l.textContent=(new Date().toLocaleTimeString()+'  '+t+'\n')+l.textContent}
 

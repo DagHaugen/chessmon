@@ -271,6 +271,7 @@ let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = 
 function applyRot(){$('board').className='board m'+rotMode}
 
 function $(id){return document.getElementById(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 

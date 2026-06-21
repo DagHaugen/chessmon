@@ -79,6 +79,7 @@
   </div>
 <script>
 function $(id){return document.getElementById(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 let devId=localStorage.getItem('cm_devid');                 // a stable per-device id (shared with clock/camera)
 if(!devId){devId=(crypto.randomUUID&&crypto.randomUUID())||('d'+Date.now().toString(36)+Math.random().toString(36).slice(2));localStorage.setItem('cm_devid',devId)}
 function deviceName(){const u=navigator.userAgent;
