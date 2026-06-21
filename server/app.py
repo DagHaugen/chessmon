@@ -514,6 +514,10 @@ async def ws_endpoint(ws: WebSocket):
                                        "zoom": data.get("zoom"),
                                        "zoomMin": data.get("zoomMin"),
                                        "zoomMax": data.get("zoomMax")})
+            elif t == "camera.moved":                             # camera's gyro felt movement -> nudge the console to re-grab the calibration frame
+                if s is not None:
+                    for a in list(admins):
+                        await send(a, {"type": "camera.moved", "table": s.table_token})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)

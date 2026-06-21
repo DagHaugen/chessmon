@@ -400,6 +400,7 @@ function handle(m){
     camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':'', zoom:m.zoom, zoomMin:m.zoomMin, zoomMax:m.zoomMax};
     render();}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
+  else if(m.type==='camera.moved'){if(calibTable&&m.table===calibTable)recapCalib()}      // camera moved -> refresh the live frame
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
   else if(m.type==='calib.failed'){if(m.table===calibTable)$('calhint').textContent='Failed: '+m.reason}

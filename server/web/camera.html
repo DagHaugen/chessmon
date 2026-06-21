@@ -125,6 +125,23 @@ let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
 function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
 setupBattery();
+let lastMovedSig=0,motionSettleT=null;                   // gyro -> nudge the console to refresh the calibration frame while the camera is being moved
+function sendMoved(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'camera.moved'}))}
+function onMotion(e){
+  const rr=e.rotationRate;if(!rr)return;
+  const mag=Math.abs(rr.alpha||0)+Math.abs(rr.beta||0)+Math.abs(rr.gamma||0);   // total rotation rate, deg/s
+  if(mag>20){const now=Date.now();if(now-lastMovedSig>300){lastMovedSig=now;sendMoved()}   // throttle while moving
+    clearTimeout(motionSettleT);motionSettleT=setTimeout(sendMoved,500);}                  // one more once it settles
+}
+function setupMotion(){
+  if(typeof DeviceMotionEvent==='undefined'){log('no motion sensor on this device');return}
+  if(DeviceMotionEvent.requestPermission){               // iOS 13+ : needs one tap to grant
+    const ask=()=>{document.removeEventListener('click',ask);document.removeEventListener('touchend',ask);
+      DeviceMotionEvent.requestPermission().then(r=>{if(r==='granted'){window.addEventListener('devicemotion',onMotion);log('motion sensing on')}else log('motion permission denied')}).catch(()=>{})};
+    document.addEventListener('click',ask);document.addEventListener('touchend',ask);log('tap the screen once to enable move-to-refresh');
+  }else{window.addEventListener('devicemotion',onMotion);log('motion sensing on')}   // Android / older iOS: no gate
+}
+setupMotion();
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');pushBattery();
