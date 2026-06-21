@@ -243,7 +243,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
 const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the camera-pairing QR (scan to pair, or pair from the console). Set false to hide.
-let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,calibrated=false,camAssigned=false,needsResume=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
 
@@ -322,14 +322,17 @@ function renderCands(){const c=$('cands-'+clk.active);c.innerHTML='';     // up 
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
 function cancelMove(){send({type:'move.cancel'});warnMsg=null;reading=false;markBad([]);clearCands();paint()}
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
+function enterReady(){phase='ready';needsResume=false;clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
 function updateWait(){                                  // the board overlay + status: START / WAIT / PAUSE
   const reason = serverDown ? 'Server offline'
-    : (!camLinked ? (phase==='run' ? 'Camera offline' : (phase==='ready' ? 'Camera not ready' : null)) : null);
+    : (!camLinked ? 'Camera offline'                    // a camera is assigned but its connection is down
+    : (!calibrated ? 'Camera not calibrated' : null));  // online but the board isn't registered yet
   waiting = !!reason;
+  if(phase==='run' && !serverDown && reason) needsResume=true;   // a running game blocked by the camera -> resume by hand (server blips auto-resume on reconnect)
   let ov=null, status=null;
   if(phase==='paused'){ ov='PAUSE'; status='PAUSE: Press Resume to continue'; }
   else if(waiting){ ov='WAIT'; status=reason; }
+  else if(phase==='run' && needsResume){ ov='START'; status='Camera ready — press START to resume'; }   // back mid-game
   else if(phase==='ready'){ ov='START'; status='Ready — press START'; }
   else if(phase==='run'){ status=(clk.active==='white'?'White':'Black')+' to move'; }
   if(ov!==null){
@@ -337,7 +340,7 @@ function updateWait(){                                  // the board overlay + s
     $('startov').classList.toggle('wait', ov!=='START');   // WAIT/PAUSE are muted; START is green
     $('startov').querySelector('span').textContent = ov;
   } else { show('startov',false); }
-  if(phase==='run') clk.running = !waiting;            // blocked -> clocks pause; cleared -> resume
+  if(phase==='run') clk.running = !waiting && !needsResume;   // pause while blocked OR awaiting a manual resume
   if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
   reportStatus();
@@ -349,7 +352,7 @@ function reportStatus(){                                // tell the server runni
   else if(phase==='paused') st='paused';
   if(st!==lastGameStatus){lastGameStatus=st;if(ws&&ws.readyState===1)send({type:'game.status',status:st})}
 }
-function startGame(){phase='run';clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
+function startGame(){phase='run';needsResume=false;clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
 function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen||e.webkitRequestFullscreen||e.webkitRequestFullScreen||e.mozRequestFullScreen||e.msRequestFullscreen;if(!fn)return;try{const r=fn.call(e);if(r&&r.catch)r.catch(()=>{});}catch(_){}}  // webkit-prefixed too: old WebKit (Android 8) lacks unprefixed requestFullscreen
 function togglePause(){
@@ -416,7 +419,7 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
   send({type:'calib.corners',corners});show('calib',false);$('report').textContent='registering…';}
 
 function showPairScreen(){                                  // the "Add a camera" screen (board hidden, status rail gone)
-  show('game',false);show('pair',true);$('report').textContent='';document.body.classList.add('pairing');
+  show('game',false);show('pair',true);clk.running=false;$('report').textContent='';document.body.classList.add('pairing');   // no camera -> the game (if any) is paused
   $('pairtable').textContent=$('tid').textContent;paintDevName();
   $('qr').innerHTML='';                                    // clear so reconnects don't stack QRs
   if(typeof QRCode!=='undefined'&&pairToken)new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+pairToken,width:144,height:144});
@@ -425,18 +428,18 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
-      camLinked=m.cameraLinked;
+      camLinked=m.cameraLinked;calibrated=!!m.calibrated;camAssigned=!!m.cameraAssigned;
       if(m.pairToken)pairToken=m.pairToken;                                    // remember it -> can re-show the QR if the camera later leaves
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
-      updateWait();
-      if(SHOW_PAIR_QR&&pairToken&&!started&&!m.calibrated&&!m.cameraLinked)showPairScreen();   // on a table, no camera yet -> show ONLY the pairing QR
-      else {show('pair',false);show('game',true);document.body.classList.remove('pairing');}
+      if(SHOW_PAIR_QR&&pairToken&&!camAssigned)showPairScreen();               // no camera assigned -> show ONLY the pairing QR
+      else {show('pair',false);show('game',true);document.body.classList.remove('pairing');updateWait();}   // camera assigned (maybe offline/uncalibrated) -> board + WAIT/START
       break;
-    case 'camera.linked': camLinked=true;show('pair',false);show('game',true);document.body.classList.remove('pairing');
-      if(started)updateWait();else enterReady();break;                           // a camera joined -> resume keeps the game; a fresh pairing -> START
-    case 'camera.offline': camLinked=false;
-      if(!started&&SHOW_PAIR_QR&&pairToken)showPairScreen();                      // camera left before a game began -> back to "Add a camera"
-      else updateWait();break;                                                   // mid-game -> "Camera offline", keep the game waiting for it to return
+    case 'camera.linked': camLinked=true;camAssigned=true;if('calibrated' in m)calibrated=!!m.calibrated;
+      show('pair',false);show('game',true);document.body.classList.remove('pairing');
+      if(started)updateWait();else enterReady();break;                           // camera back -> updateWait shows START / "Camera not calibrated"; fresh -> ready
+    case 'camera.offline': camLinked=false;if('cameraAssigned' in m)camAssigned=!!m.cameraAssigned;
+      if(!camAssigned&&SHOW_PAIR_QR&&pairToken)showPairScreen();                  // camera removed from the table -> back to "Add a camera"
+      else updateWait();break;                                                   // camera just dropped (recharge/replace) -> WAIT "Camera offline", keep the game
     case 'welcome':                                                                // server's known name for this device
       if(m.userName)localStorage.setItem('cm_devname',m.userName);                 // adopt it (e.g. set in the console)
       else if(devNm())send({type:'device.rename',devId,userName:devNm()});         // server lost it -> push our local name up
@@ -459,20 +462,20 @@ function handle(m){
         $('report').textContent='game over · '+m.result;$('report').className='report over';
         const w=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);if(w)$('s-'+w).classList.add('win');}
       else if(m.calibrated||(m.moves&&m.moves.length)){         // calibrated -> resume (skip QR / recalibration)
-        started=true;show('pair',false);show('game',true);show('calib',false);show('refreshbtn',true);
+        started=true;calibrated=!!m.calibrated;show('pair',false);show('game',true);show('calib',false);show('refreshbtn',true);
         const last=(m.moves||[]).slice(-1)[0];                  // restore the clocks from the last move
         if(last){if(last.clock_white!=null)clk.white=last.clock_white;if(last.clock_black!=null)clk.black=last.clock_black;}
         clk.active=m.turn.toLowerCase();
-        if(m.moves&&m.moves.length){phase='run';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
-          show('startov',false);show('rotbtn',false);showCtrls(true);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();
-          $('report').className='report';$('report').textContent=(camLinked?'':'reopen the camera — ')+m.turn+' to move';}
+        if(m.moves&&m.moves.length){phase='run';needsResume=false;clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
+          show('rotbtn',false);showCtrls(true);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();updateWait();}   // updateWait -> WAIT if the camera's down, else "X to move"
         else if(phase==='run'){$('report').className='report';$('report').textContent=m.turn+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
         else{enterReady();}}                                 // enterReady -> updateWait sets Ready / Camera not ready
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
-      started=true;show('pair',false);show('calib',false);
-      if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}break;   // a move that re-seeded the baseline mustn't yank a running game back to START
+      started=true;calibrated=true;show('pair',false);show('calib',false);
+      if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}
+      else updateWait();break;   // mid-game re-baseline (e.g. replaced camera, now calibrated) -> refresh overlay, START to resume   // a move that re-seeded the baseline mustn't yank a running game back to START
     case 'calib.image': showCalib(m.image); break;
     case 'orient.ask': showOrient(); break;
     case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
@@ -533,7 +536,11 @@ document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-s
   send({type:'orient.pick',side:b.dataset.side});show('calib',false);$('report').textContent='orienting…'});
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
-$('startov').onclick=()=>{if(phase==='ready'&&camLinked&&!serverDown)startGame();else if(phase==='paused')togglePause()};$('pausebtn').onclick=togglePause;   // tap PAUSE to resume; WAIT does nothing
+$('startov').onclick=()=>{
+  if(phase==='ready'&&camLinked&&calibrated&&!serverDown)startGame();                              // start a fresh game
+  else if(phase==='run'&&needsResume&&camLinked&&calibrated&&!serverDown){needsResume=false;clk.last=Date.now();updateWait();}   // camera back mid-game -> resume
+  else if(phase==='paused')togglePause();};                                                        // WAIT does nothing
+$('pausebtn').onclick=togglePause;
 let _dlgOk=null;                                          // custom in-page confirm (keeps fullscreen, unlike confirm())
 function showDialog(msg,okLabel,onOk){$('dlgmsg').textContent=msg;$('dlgok').textContent=okLabel||'OK';_dlgOk=onOk;show('dlg',true)}
 $('dlgok').onclick=()=>{show('dlg',false);const f=_dlgOk;_dlgOk=null;if(f)f()};

@@ -253,6 +253,7 @@ async def ws_endpoint(ws: WebSocket):
                 await send(ws, {"type": "session.ready", "pairToken": s.pair_token,
                                 "calibrated": s.board_reader is not None,
                                 "cameraLinked": hub(s.table_token)["camera"] is not None,
+                                "cameraAssigned": s.camera_dev is not None,
                                 **s.session_info()})
                 await send(ws, {"type": "state", **s.snapshot()})  # restore view on reconnect
             elif t == "pair.join":
@@ -261,7 +262,7 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown pairing"})
                     continue
                 hub(s.table_token)["camera"] = ws
-                await send(hub(s.table_token)["clock"], {"type": "camera.linked"})  # clock drops the QR
+                await send(hub(s.table_token)["clock"], {"type": "camera.linked", "calibrated": s.board_reader is not None})  # clock drops the QR
                 if dev_id in devices:
                     s.camera_dev = dev_id                            # record the pairing so the console shows the camera on this table
                     devices[dev_id]["table"] = s.table_token
@@ -519,8 +520,8 @@ async def ws_endpoint(ws: WebSocket):
                 h["spectators"].discard(ws)
             elif h.get(role) is ws:
                 h[role] = None
-                if role == "camera":                          # tell the clock its camera dropped -> WAIT
-                    await send(h["clock"], {"type": "camera.offline"})
+                if role == "camera":                          # tell the clock its camera dropped -> WAIT (or "removed" if it was unassigned)
+                    await send(h["clock"], {"type": "camera.offline", "cameraAssigned": s.camera_dev is not None})
         admins.discard(ws)
         for hb in conns.values():
             hb["spectators"].discard(ws)                # an admin that was watching a board
