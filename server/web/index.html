@@ -20,8 +20,9 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px}
   .ring{width:54px;height:54px;margin:0 auto 18px;border-radius:50%;border:3px solid var(--line);
     border-top-color:var(--accent);animation:spin 1s linear infinite}
-  .card.ready .ring{border:3px solid rgba(62,207,142,.25);border-top-color:var(--good);animation:none;position:relative}
-  .card.ready .ring::after{content:"";position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .appicon{width:72px;height:72px;margin:0 auto 18px;display:none}     /* the chessmon mark — shown once registered */
+  .card.ready .ring{display:none}                                      /* registered: hide the spinner... */
+  .card.ready .appicon{display:block}                                  /* ...and show the icon */
   @keyframes spin{to{transform:rotate(360deg)}}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--good);display:inline-block;vertical-align:middle;margin-right:6px}
   h1{font-size:18px;margin:0 0 6px}
@@ -39,6 +40,7 @@
     <div class="logo">chess<span class="on">mon</span></div>
     <div class="card" id="card">
       <div class="ring"></div>
+      <img src="icon.svg" class="appicon" alt="chessmon" width="72" height="72">
       <h1 id="title">Connecting…</h1>
       <p class="msg" id="msg">Reaching the chessmon server.</p>
       <div class="dev">
