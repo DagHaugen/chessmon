@@ -99,6 +99,9 @@
   .modal .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:560px;width:100%;text-align:center}
   .modal h2{font-size:15px;margin:0 0 4px}
   .modal p{font-size:13px;color:var(--mut);margin:4px 0 12px}
+  .calzoom{display:flex;align-items:center;gap:10px;margin:12px 0 0;font-size:13px;color:var(--mut)}
+  .calzoom input{flex:1}
+  .calzoom .zv{min-width:42px;text-align:right;font-variant-numeric:tabular-nums}
   .vboard{display:grid;grid-template-columns:repeat(8,1fr);width:min(320px,78vw);aspect-ratio:1;margin:6px auto 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .vsq{display:flex;align-items:center;justify-content:center;font-size:min(7.4vw,30px);line-height:1}
   .vsq.light{background:#c7cdd7}.vsq.dark{background:#7f8896}
@@ -164,6 +167,7 @@
     <h2 id="caltitle">Mark the board corners</h2>
     <p id="calhint">Drag the four markers onto the corners of the playing area.</p>
     <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera"></div>
+    <div class="calzoom hidden" id="calzoomrow"><span>Zoom</span><input type="range" id="calzoom" min="1" max="3" step="0.2" value="1"><span class="zv" id="calzoomval">1.0×</span></div>
     <div class="crow" id="crow">
       <button class="sec" id="calcancel">Cancel</button><button class="sec" id="calredo">Redo</button><button id="caldone">Use these corners</button></div>
     <div class="crow oside hidden" id="caloside">
@@ -393,7 +397,7 @@ function handle(m){
     else if(m.what==='screen'){cs.screen=m.on;}
     render();}}
   else if(m.type==='camera.status'){                          // camera reported its actual flash/screen on connect/link
-    camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':''};
+    camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':'', zoom:m.zoom, zoomMin:m.zoomMin, zoomMax:m.zoomMax};
     render();}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
@@ -405,7 +409,12 @@ function handle(m){
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
+  const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range
+  if(cs.zoomMax){z.min=cs.zoomMin||1;z.max=cs.zoomMax;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);}
+  else show('calzoomrow',false);
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
+$('calzoom').oninput=()=>{const v=+$('calzoom').value;$('calzoomval').textContent=v.toFixed(1)+'×';if(calibTable)send({type:'camera.control',table:calibTable,what:'zoom',value:v});};   // live zoom
+$('calzoom').onchange=()=>{if(calibTable)send({type:'admin.calib',table:calibTable});};   // settle -> re-grab a frame at the new zoom
 function onCalImage(durl,corners){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
   $('caltitle').textContent=(corners&&corners.length===4)?'Current calibration':'Mark the board corners';
   img.onload=()=>seedCorners(corners);

@@ -74,8 +74,9 @@ async function startCam(){
     status('camera ready — mount it straight down over the board')
   }catch(e){status('camera blocked: '+e.message+' — needs HTTPS (or localhost)','err')}
 }
-let zoom=1,camRes=null,camTrack=null,flashOn=false,screenOn=true;   // digital-zoom factor; capture resolution; live video track (torch); flash/screen state for the console
-function applyControl(what,on){                         // remote control from the console
+let zoom=1,zoomHW=false,zoomMin=1,zoomMax=3,camRes=null,camTrack=null,flashOn=false,screenOn=true;   // zoom factor + hardware-zoom flag/range; capture resolution; live video track; flash/screen state
+function applyControl(what,on,value){                   // remote control from the console
+  if(what==='zoom'){applyZoom(value);sendCamStatus();return}   // console set the zoom -> apply + report back
   if(what==='flash'){
     const caps=camTrack&&camTrack.getCapabilities?camTrack.getCapabilities():{};
     if(!camTrack||!caps.torch){log('no controllable torch on this camera');ctlAck('flash',on,false,'no torch (iOS Safari has none)');return}
@@ -88,24 +89,28 @@ function applyControl(what,on){                         // remote control from t
 function ctlAck(what,on,ok,reason){if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'camera.controlled',what,on,ok,reason:reason||''}))
 }
 function sendCamStatus(){if(!camTrack||!ws||ws.readyState!==1)return;const caps=camTrack.getCapabilities?camTrack.getCapabilities():{};   // report actual flash/screen state to the console on connect/link
-  ws.send(JSON.stringify({type:'camera.status',flash:flashOn,flashAvail:!!caps.torch,screen:screenOn}))}
+  ws.send(JSON.stringify({type:'camera.status',flash:flashOn,flashAvail:!!caps.torch,screen:screenOn,zoom:+$('zoom').value,zoomMin,zoomMax}))}
+function applyZoom(z){                                   // set zoom from the local slider OR the remote console -- clamped to range
+  const sl=$('zoom');z=Math.max(zoomMin,Math.min(zoomMax,+z||zoomMin));sl.value=z;
+  if(zoomHW&&camTrack)camTrack.applyConstraints({advanced:[{zoom:z}]}).catch(()=>{});   // hardware zoom
+  else{zoom=z;v.style.transform='scale('+z+')';}                                        // digital: crop + scale
+  $('zoomval').textContent=z.toFixed(1)+'×';
+}
 function setupZoom(track){
   const set=track.getSettings?track.getSettings():{};
   if(set.width){camRes={w:set.width,h:set.height};
     if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',cam:camRes}))}
   const caps=track.getCapabilities?track.getCapabilities():{},sl=$('zoom');
-  if(caps.zoom){                                         // real camera zoom (newer iOS Safari exposes it)
-    sl.min=caps.zoom.min;sl.max=caps.zoom.max;sl.step=caps.zoom.step||1;
-    sl.value=(track.getSettings&&track.getSettings().zoom)||caps.zoom.min;
-    sl.oninput=()=>{track.applyConstraints({advanced:[{zoom:+sl.value}]});$('zoomval').textContent=(+sl.value).toFixed(1)+'×'};
-    log('zoom: hardware '+caps.zoom.min+'-'+caps.zoom.max);
-  }else{                                                 // digital fallback: crop + scale (always works)
+  if(caps.zoom){zoomHW=true;zoomMin=caps.zoom.min;zoomMax=caps.zoom.max;               // real camera zoom (newer iOS Safari exposes it)
+    sl.min=zoomMin;sl.max=zoomMax;sl.step=0.2;sl.value=(track.getSettings&&track.getSettings().zoom)||zoomMin;   // 0.2 steps (finer than typical hardware 0.5)
+    log('zoom: hardware '+zoomMin+'-'+zoomMax);
+  }else{zoomHW=false;zoomMin=1;zoomMax=3;                                              // digital fallback: crop + scale (always works)
     sl.min=1;sl.max=3;sl.step=0.1;sl.value=1;
-    sl.oninput=()=>{zoom=+sl.value;v.style.transform='scale('+zoom+')';$('zoomval').textContent=zoom.toFixed(1)+'×'};
     log('zoom: digital (camera exposes no zoom control)');
   }
+  sl.oninput=()=>applyZoom(+sl.value);
   $('zoomval').textContent=(+sl.value).toFixed(1)+'×';$('zoomrow').classList.remove('hidden');
-  sendCamStatus();                                       // torch capability is now known -> tell the console
+  sendCamStatus();                                       // torch capability + zoom range now known -> tell the console
 }
 function grab(){return new Promise(res=>{const vw=v.videoWidth||1280,vh=v.videoHeight||960;
   cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;                       // central crop for digital zoom
@@ -137,7 +142,7 @@ function connect(){
       ws.send(JSON.stringify({type:'pair.join',pairToken:pair}));sendCamStatus();status('paired from the console','ok')}
       else if(m.role==='clock'){location.href='clock.html?table='+m.table}}
     else if(m.type==='unassigned'){localStorage.removeItem('cm_pair');location.href='index.html'}  // pulled off its table -> back to landing
-    else if(m.type==='camera.control'){applyControl(m.what,m.on)}                                  // console: screen on/off, flashlight
+    else if(m.type==='camera.control'){applyControl(m.what,m.on,m.value)}                           // console: screen on/off, flashlight, zoom
     else if(m.type==='session.ready'){if(m.calibrated){$('b-empty').disabled=true;$('b-start').disabled=true;
       status('already calibrated · armed — a frame is sent on every move','ok')}
       else{status('camera ready — capture the empty board, then the start position')}}

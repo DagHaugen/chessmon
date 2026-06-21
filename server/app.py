@@ -262,11 +262,12 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown pairing"})
                     continue
                 hub(s.table_token)["camera"] = ws
-                await send(hub(s.table_token)["clock"], {"type": "camera.linked", "calibrated": s.board_reader is not None})  # clock drops the QR
                 if dev_id in devices:
                     s.camera_dev = dev_id                            # record the pairing so the console shows the camera on this table
+                    s.activate_calibration()                        # restore THIS camera's remembered calibration (same as console-add, so QR/console agree)
                     devices[dev_id]["table"] = s.table_token
                     await broadcast_devices()
+                await send(hub(s.table_token)["clock"], {"type": "camera.linked", "calibrated": s.board_reader is not None})  # clock drops the QR (reflects the restored calibration)
                 await send(ws, {"type": "session.ready", "role": "camera",
                                 "calibrated": s.board_reader is not None})
             elif t == "spectate":
@@ -389,7 +390,7 @@ async def ws_endpoint(ws: WebSocket):
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
                     await send(hub(sess.table_token)["camera"],
-                               {"type": "camera.control", "what": data.get("what"), "on": bool(data.get("on"))})
+                               {"type": "camera.control", "what": data.get("what"), "on": bool(data.get("on")), "value": data.get("value")})
             elif t == "admin.watch":                              # console opens the live board for a running game
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
