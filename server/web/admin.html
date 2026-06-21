@@ -167,7 +167,7 @@
     <h2 id="caltitle">Mark the board corners</h2>
     <p id="calhint">Drag the four markers onto the corners of the playing area.</p>
     <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera"></div>
-    <div class="calzoom hidden" id="calzoomrow"><span>Zoom</span><input type="range" id="calzoom" min="1" max="3" step="0.2" value="1"><span class="zv" id="calzoomval">1.0×</span></div>
+    <div class="calzoom hidden" id="calzoomrow"><span>Zoom</span><input type="range" id="calzoom" min="1" max="5" step="0.1" value="1"><span class="zv" id="calzoomval">1.0×</span></div>
     <div class="crow" id="crow">
       <button class="sec" id="calcancel">Cancel</button><button class="sec" id="calredo">Redo</button><button id="caldone">Use these corners</button></div>
     <div class="crow oside hidden" id="caloside">
@@ -410,7 +410,7 @@ function handle(m){
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
   const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range (default 1-3x until it reports)
-  z.min=cs.zoomMin||1;z.max=cs.zoomMax||3;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);
+  z.min=cs.zoomMin||1;z.max=cs.zoomMax||5;z.step=0.1;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
 let capInFlight=false,capPending=false;                                                    // chase a fresh frame while sliding, without piling up capture requests
 function recapCalib(){if(!calibTable)return;if(capInFlight){capPending=true;return}capInFlight=true;send({type:'admin.calib',table:calibTable})}

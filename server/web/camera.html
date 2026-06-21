@@ -90,10 +90,11 @@ function ctlAck(what,on,ok,reason){if(ws&&ws.readyState===1)ws.send(JSON.stringi
 }
 function sendCamStatus(){if(!camTrack||!ws||ws.readyState!==1)return;const caps=camTrack.getCapabilities?camTrack.getCapabilities():{};   // report actual flash/screen state to the console on connect/link
   ws.send(JSON.stringify({type:'camera.status',flash:flashOn,flashAvail:!!caps.torch,screen:screenOn,zoom:+$('zoom').value,zoomMin,zoomMax}))}
+let zoomSettle=Promise.resolve();                        // resolves once a pending hardware-zoom change has actually landed
 function applyZoom(z){                                   // set zoom from the local slider OR the remote console -- clamped to range
   const sl=$('zoom');z=Math.max(zoomMin,Math.min(zoomMax,+z||zoomMin));sl.value=z;
-  if(zoomHW&&camTrack)camTrack.applyConstraints({advanced:[{zoom:z}]}).catch(()=>{});   // hardware zoom
-  else{zoom=z;v.style.transform='scale('+z+')';}                                        // digital: crop + scale
+  if(zoomHW&&camTrack)zoomSettle=camTrack.applyConstraints({advanced:[{zoom:z}]}).then(()=>new Promise(r=>setTimeout(r,90))).catch(()=>{});   // wait for the constraint + a couple frames
+  else{zoom=z;v.style.transform='scale('+z+')';}                                        // digital: crop + scale (instant)
   $('zoomval').textContent=z.toFixed(1)+'×';
 }
 function setupZoom(track){
@@ -101,21 +102,21 @@ function setupZoom(track){
   if(set.width){camRes={w:set.width,h:set.height};
     if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',cam:camRes}))}
   const caps=track.getCapabilities?track.getCapabilities():{},sl=$('zoom');
-  if(caps.zoom){zoomHW=true;zoomMin=caps.zoom.min;zoomMax=caps.zoom.max;               // real camera zoom (newer iOS Safari exposes it)
-    sl.min=zoomMin;sl.max=zoomMax;sl.step=0.2;sl.value=(track.getSettings&&track.getSettings().zoom)||zoomMin;   // 0.2 steps (finer than typical hardware 0.5)
-    log('zoom: hardware '+zoomMin+'-'+zoomMax);
-  }else{zoomHW=false;zoomMin=1;zoomMax=3;                                              // digital fallback: crop + scale (always works)
-    sl.min=1;sl.max=3;sl.step=0.1;sl.value=1;
+  if(caps.zoom){zoomHW=true;zoomMin=caps.zoom.min;zoomMax=Math.min(5,caps.zoom.max);   // real camera zoom; cap the slider at 5x (hardware often reports ~10)
+    sl.min=zoomMin;sl.max=zoomMax;sl.step=0.1;sl.value=Math.min((track.getSettings&&track.getSettings().zoom)||zoomMin,zoomMax);
+    log('zoom: hardware '+zoomMin+'-'+caps.zoom.max+' (slider capped at '+zoomMax+')');
+  }else{zoomHW=false;zoomMin=1;zoomMax=5;                                              // digital crop + scale, 1-5x
+    sl.min=1;sl.max=5;sl.step=0.1;sl.value=1;
     log('zoom: digital (camera exposes no zoom control)');
   }
   sl.oninput=()=>applyZoom(+sl.value);
   $('zoomval').textContent=(+sl.value).toFixed(1)+'×';$('zoomrow').classList.remove('hidden');
   sendCamStatus();                                       // torch capability + zoom range now known -> tell the console
 }
-function grab(){return new Promise(res=>{const vw=v.videoWidth||1280,vh=v.videoHeight||960;
-  cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;                       // central crop for digital zoom
+async function grab(){await zoomSettle;                                      // a pending zoom must land before we capture
+  const vw=v.videoWidth||1280,vh=v.videoHeight||960;cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;   // central crop for digital zoom
   cv.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,cv.width,cv.height);
-  cv.toBlob(res,'image/jpeg',0.85)})}
+  return new Promise(res=>cv.toBlob(res,'image/jpeg',0.85))}
 async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type:'calib',step}));ws.send(b);log('sent '+step+' frame')}
 
 $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the set-up board to the clock
