@@ -412,9 +412,12 @@ function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range (default 1-3x until it reports)
   z.min=cs.zoomMin||1;z.max=cs.zoomMax||3;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
-$('calzoom').oninput=()=>{const v=+$('calzoom').value;$('calzoomval').textContent=v.toFixed(1)+'×';if(calibTable)send({type:'camera.control',table:calibTable,what:'zoom',value:v});};   // live zoom
-$('calzoom').onchange=()=>{if(calibTable)send({type:'admin.calib',table:calibTable});};   // settle -> re-grab a frame at the new zoom
-function onCalImage(durl,corners){const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
+let capInFlight=false,capPending=false;                                                    // chase a fresh frame while sliding, without piling up capture requests
+function recapCalib(){if(!calibTable)return;if(capInFlight){capPending=true;return}capInFlight=true;send({type:'admin.calib',table:calibTable})}
+$('calzoom').oninput=()=>{const v=+$('calzoom').value;$('calzoomval').textContent=v.toFixed(1)+'×';if(calibTable){send({type:'camera.control',table:calibTable,what:'zoom',value:v});recapCalib();}};   // live zoom + refresh the frame as you slide
+$('calzoom').onchange=()=>recapCalib();                                                     // final frame on release
+function onCalImage(durl,corners){capInFlight=false;if(capPending){capPending=false;recapCalib()}   // a frame landed -> chase the latest zoom if it moved while sliding
+  const img=$('cimg');show('ccwrap',true);$('ccwrap').classList.add('marking');
   $('caltitle').textContent=(corners&&corners.length===4)?'Current calibration':'Mark the board corners';
   img.onload=()=>seedCorners(corners);
   img.src=durl;show('crow',true);show('caloside',false);}
