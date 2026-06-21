@@ -102,7 +102,7 @@
   .calzoom{display:flex;align-items:center;gap:10px;margin:12px 0 0;font-size:13px;color:var(--mut)}
   .calzoom input{flex:1}
   .calzoom .zv{min-width:42px;text-align:right;font-variant-numeric:tabular-nums}
-  .gview{--bs:clamp(190px,40vw,300px);grid-column:1/-1;display:flex;gap:10px}                  /* inline live game: board + scrollable moves */
+  .gview{--bs:clamp(150px,28vw,240px);grid-column:1/-1;display:flex;gap:10px}                  /* inline live game: digital board · moves · camera board */
   .gboard{width:var(--bs);height:var(--bs);flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
   .gboard .sq{display:flex;align-items:center;justify-content:center;font-size:min(5vw,24px);line-height:1;color:#1a1a1a}
   .gboard .sq.l{background:#fff}.gboard .sq.d{background:#d9d9d9}
@@ -110,6 +110,9 @@
   .gmoves{flex:1 1 auto;height:var(--bs);overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:13px;line-height:1.7;text-align:left;font-variant-numeric:tabular-nums}
   .gmoves .mvn{color:var(--mut);margin-right:4px}.gmoves .mvres{margin-top:5px;font-weight:700;color:var(--cam)}.gmoves .mvempty{color:var(--mut)}
   .gcar{display:inline-block;width:1em;color:var(--mut)}
+  .gcam{width:var(--bs);height:var(--bs);flex:0 0 auto;position:relative;overflow:hidden;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:pointer}   /* warped real-board camera view (far right) */
+  .gcam img{position:absolute;top:0;left:0;transform-origin:0 0;-webkit-user-drag:none}
+  .gcam .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:12px;text-align:center;padding:6px}
   #calmodal{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* no iOS callouts / text selection on the calibration dialog */
   .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
   .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px;-webkit-user-drag:none;-webkit-touch-callout:none}
@@ -316,7 +319,7 @@ function renderRunning(){
     const row=document.createElement('div');row.className='grow';
     const open=expanded.has(t.token);
     const left=document.createElement('div');left.style.cursor='pointer';left.title='Show / hide the live board';
-    left.onclick=()=>{open?expanded.delete(t.token):expanded.add(t.token);renderRunning();};
+    left.onclick=()=>{if(open)expanded.delete(t.token);else{expanded.add(t.token);reqCam(t.token);}renderRunning();};
     const nm=document.createElement('div');nm.className='gnm';
     nm.innerHTML='<span class="gcar">'+(open?'▾':'▸')+'</span>'+(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''))+(t.moved?' <span class="gstat wait" title="Camera/board shifted since calibration — re-calibrate.">⚠ CAMERA MOVED</span>':'');
     const camDev=devById(t.camera);
@@ -342,7 +345,11 @@ function renderRunning(){
     if(open){const gv=document.createElement('div');gv.className='gview';
       const bd=document.createElement('div');bd.className='gboard';renderGBoard(bd,t.fen);
       const mv=document.createElement('div');mv.className='gmoves';renderGMoves(mv,t.san||[],t.result);
-      gv.append(bd,mv);row.append(gv);}
+      const cam=document.createElement('div');cam.className='gcam';cam.title='Camera view — tap to refresh';cam.onclick=()=>reqCam(t.token);
+      const img=document.createElement('img');img.alt='';img.draggable=false;img.setAttribute('data-t',t.token);
+      const ph=document.createElement('div');ph.className='ph';ph.textContent=(camDev&&camDev.online)?'loading camera…':'camera offline';cam.append(img,ph);
+      gv.append(bd,mv,cam);row.append(gv);
+      if(camFrames[t.token]){ph.remove();img.onload=()=>warpCam(img,camFrames[t.token].corners);img.src=camFrames[t.token].image;}}
     L.appendChild(row);
   });
 }
@@ -365,6 +372,22 @@ function renderGMoves(el,san,result){let h='';
   for(let i=0;i<san.length;i+=2)h+='<div><span class="mvn">'+(i/2+1)+'.</span>'+san[i]+(san[i+1]?' '+san[i+1]:'')+'</div>';
   if(result)h+='<div class="mvres">'+result+'</div>';
   el.innerHTML=h||'<div class="mvempty">no moves yet</div>';el.scrollTop=el.scrollHeight;}
+/* ---- inline camera board: perspective-warp the last real-board frame into a square ---- */
+const camFrames={};                                        // table token -> {image, corners} from the last grabbed frame
+function hgAdj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
+function hgMul(a,b){const c=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=a[3*i+k]*b[3*k+j];c[3*i+j]=s;}return c;}
+function hgVec(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
+function hgBasis(p){const m=[p[0][0],p[1][0],p[2][0],p[0][1],p[1][1],p[2][1],1,1,1],v=hgVec(hgAdj(m),[p[3][0],p[3][1],1]);return hgMul(m,[v[0],0,0,0,v[1],0,0,0,v[2]]);}
+function hgProj(src,dst){return hgMul(hgBasis(dst),hgAdj(hgBasis(src)));}
+function warpCam(img,corners){const ov=img.parentElement,S=ov.clientWidth;
+  if(!img.naturalWidth||!corners||corners.length!==4||!S)return;
+  const W=img.naturalWidth,H=img.naturalHeight,src=corners.map(c=>[c[0]*W,c[1]*H]);
+  const sq=[[0,0],[S,0],[S,S],[0,S]],dst=[sq[1],sq[2],sq[3],sq[0]];   // +90deg to match the camera, like the clock overlay
+  const t=hgProj(src,dst);for(let i=0;i<9;i++)t[i]/=t[8];
+  img.style.transform='matrix3d('+[t[0],t[3],0,t[6],t[1],t[4],0,t[7],0,0,1,0,t[2],t[5],0,t[8]].join(',')+')';}
+function paintCam(token){const img=document.querySelector('.gcam img[data-t="'+token+'"]'),f=camFrames[token];
+  if(img&&f){const ph=img.parentElement.querySelector('.ph');if(ph)ph.remove();img.onload=()=>warpCam(img,f.corners);img.src=f.image;}}
+function reqCam(token){send({type:'admin.calib',table:token});}   // grab a frame -> arrives as calib.image (carries the table token)
 let snapTable=null;
 function openSnap(t){snapTable=t.token;$('snaptitle').textContent=(t.name||'Table')+' — camera';
   $('snaphint').textContent='Asking the camera for a frame…';$('snapimg').removeAttribute('src');
@@ -399,7 +422,8 @@ function handle(m){
   else if(m.type==='camera.status'){                          // camera reported its actual flash/screen on connect/link
     camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':'', zoom:m.zoom, zoomMin:m.zoomMin, zoomMax:m.zoomMax};
     render();}
-  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
+  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners);
+    if(m.table&&expanded.has(m.table)){camFrames[m.table]={image:m.image,corners:m.corners};paintCam(m.table);}}   // feed the inline camera board
   else if(m.type==='camera.moved'){if(calibTable&&m.table===calibTable)recapCalib()}      // camera moved -> refresh the live frame
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}
