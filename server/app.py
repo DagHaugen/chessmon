@@ -246,6 +246,12 @@ async def ws_endpoint(ws: WebSocket):
                         await broadcast_devices()
                     await send(ws, {"type": "error", "reason": "unknown table"})
                     continue
+                if s.clock_dev != dev_id:                            # not this table's assigned clock (stale cm_table) -> don't let it hijack the table
+                    if dev_id in devices:
+                        devices[dev_id]["table"] = None
+                        await broadcast_devices()
+                    await send(ws, {"type": "unassigned"})           # clears its cm_table and bounces it to the landing
+                    continue
                 hub(s.table_token)["clock"] = ws
                 if dev_id in devices:
                     devices[dev_id]["table"] = s.table_token
