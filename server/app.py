@@ -510,7 +510,10 @@ async def ws_endpoint(ws: WebSocket):
                         await send(a, {"type": "camera.status", "table": s.table_token,
                                        "flash": bool(data.get("flash")),
                                        "flashAvail": bool(data.get("flashAvail", True)),
-                                       "screen": bool(data.get("screen", True))})
+                                       "screen": bool(data.get("screen", True)),
+                                       "zoom": data.get("zoom"),
+                                       "zoomMin": data.get("zoomMin"),
+                                       "zoomMax": data.get("zoomMax")})
             elif t == "grid":                                     # dev/testing without a camera
                 await send(hub(s.table_token)["clock"], s.ingest_grid(data["grid"]))
                 await broadcast_state(s)

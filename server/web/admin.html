@@ -409,9 +409,8 @@ function handle(m){
 }
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
-  const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range
-  if(cs.zoomMax){z.min=cs.zoomMin||1;z.max=cs.zoomMax;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);}
-  else show('calzoomrow',false);
+  const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range (default 1-3x until it reports)
+  z.min=cs.zoomMin||1;z.max=cs.zoomMax||3;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
 $('calzoom').oninput=()=>{const v=+$('calzoom').value;$('calzoomval').textContent=v.toFixed(1)+'×';if(calibTable)send({type:'camera.control',table:calibTable,what:'zoom',value:v});};   // live zoom
 $('calzoom').onchange=()=>{if(calibTable)send({type:'admin.calib',table:calibTable});};   // settle -> re-grab a frame at the new zoom
