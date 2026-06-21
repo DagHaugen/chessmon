@@ -429,14 +429,17 @@ document.querySelectorAll('#caloside button').forEach(b=>b.onclick=()=>{
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function setLive(on){document.body.classList.toggle('offline',!on)}   // offline -> hide the QR + disable the lists
 function connect(){
+  if(ws&&ws.readyState<=1)return;                          // already connecting/open -> don't stack sockets
   ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};   // stays offline until the first data arrives
-  ws.onclose=()=>{$('dot').classList.remove('on');setLive(false);$('sub').textContent='server offline · reconnecting…';setTimeout(connect,1500)};
+  const sock=ws,guard=setTimeout(()=>{if(sock.readyState===0){try{sock.close()}catch(_){}}},4000);  // a CONNECTING socket that hangs (SYN/upgrade to a restarting server) -> abort & retry fast, don't wait ~30s for the TCP timeout
+  ws.onopen=()=>{clearTimeout(guard);$('dot').classList.add('on');send({type:'admin.join'})};   // stays offline until the first data arrives
+  ws.onclose=()=>{clearTimeout(guard);$('dot').classList.remove('on');setLive(false);$('sub').textContent='server offline · reconnecting…';setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 (function(){const url=location.origin+'/app/';$('addurl').textContent=url;   // static QR -> the device landing page
   if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:url,width:118,height:118});})();
 connect();                                                 // no initial render -> no flash of "0 tables / 0 devices" before data
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!ws||ws.readyState>1))connect()});  // tab back in front + socket dead -> reconnect now, don't wait for a throttled timer
 setInterval(()=>send({type:'ping'}),20000);
 </script>
 </body>
