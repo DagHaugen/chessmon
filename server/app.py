@@ -416,6 +416,10 @@ async def ws_endpoint(ws: WebSocket):
                 if sess is not None:
                     sess.set_calib_step("corners")
                     await send(hub(sess.table_token)["camera"], {"type": "capture.req"})
+            elif t == "admin.calib.lock":                         # console opened/closed its calibration modal -> block/unblock the clock's Calibrate
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    await send(hub(sess.table_token)["clock"], {"type": "calib.lock", "on": bool(data.get("on"))})
             elif t == "admin.corners":                            # console returned the 4 tapped corners
                 sess = mgr.by_table(data.get("table"))
                 fr = sess._calib_frame if sess is not None else None

@@ -169,7 +169,7 @@
     <div class="ccwrap" id="ccwrap"><img id="cimg" alt="board from the camera"></div>
     <div class="calzoom hidden" id="calzoomrow"><span>Zoom</span><input type="range" id="calzoom" min="1" max="5" step="0.1" value="1"><span class="zv" id="calzoomval">1.0×</span></div>
     <div class="crow" id="crow">
-      <button class="sec" id="calcancel">Cancel</button><button class="sec" id="calredo">Redo</button><button id="caldone">Use these corners</button></div>
+      <button class="sec" id="calcancel">Cancel</button><button class="sec" id="calredo">Redo</button><button class="sec" id="calflash">Flash: off</button><button id="caldone">Use these corners</button></div>
     <div class="crow oside hidden" id="caloside">
       <button data-side="top">▲ Top</button><button data-side="bottom">▼ Bottom</button>
       <button data-side="left">◀ Left</button><button data-side="right">Right ▶</button></div>
@@ -408,11 +408,14 @@ function handle(m){
     $('vturn').textContent=m.result?('game over · '+m.result):(m.turn+' to move');}}
   else if(m.type==='snap.image'){if(m.table===snapTable){$('snapimg').src=m.image;$('snaphint').textContent='Latest frame — Close when done.';drawCalibGrid(m.corners)}}
 }
-function startCalib(table){calibTable=table;send({type:'admin.calib',table});
+function startCalib(table){calibTable=table;send({type:'admin.calib',table});send({type:'admin.calib.lock',table,on:true});   // block the clock's Calibrate while we're in here
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
   const cs=camState[table]||{},z=$('calzoom');                                            // wire the remote-zoom slider to this camera's range (default 1-3x until it reports)
   z.min=cs.zoomMin||1;z.max=cs.zoomMax||5;z.step=0.1;z.value=cs.zoom||z.min;$('calzoomval').textContent=(+z.value).toFixed(1)+'×';show('calzoomrow',true);
+  calFlashOn=!!cs.flash;$('calflash').textContent='Flash: '+(calFlashOn?'on':'off');$('calflash').classList.toggle('on',calFlashOn);
   show('ccwrap',false);show('crow',true);show('caloside',false);show('calmodal',true);}
+let calFlashOn=false;
+$('calflash').onclick=()=>{calFlashOn=!calFlashOn;if(calibTable)send({type:'camera.control',table:calibTable,what:'flash',on:calFlashOn});$('calflash').textContent='Flash: '+(calFlashOn?'on':'off');$('calflash').classList.toggle('on',calFlashOn);};
 let capInFlight=false,capPending=false;                                                    // chase a fresh frame while sliding, without piling up capture requests
 function recapCalib(){if(!calibTable)return;if(capInFlight){capPending=true;return}capInFlight=true;send({type:'admin.calib',table:calibTable})}
 $('calzoom').oninput=()=>{const v=+$('calzoom').value;$('calzoomval').textContent=v.toFixed(1)+'×';if(calibTable){send({type:'camera.control',table:calibTable,what:'zoom',value:v});recapCalib();}};   // live zoom + refresh the frame as you slide
@@ -424,7 +427,7 @@ function onCalImage(durl,corners){capInFlight=false;if(capPending){capPending=fa
   img.src=durl;show('crow',true);show('caloside',false);}
 function showOrientCal(){$('ccwrap').classList.remove('marking');$('caltitle').textContent='Which side is White on?';
   $('calhint').textContent='Click the side of the image where the white pieces are.';show('crow',false);show('caloside',true);}
-function closeCalib(){show('calmodal',false);calibTable=null}
+function closeCalib(){if(calibTable)send({type:'admin.calib.lock',table:calibTable,on:false});show('calmodal',false);calibTable=null}
 let calCorners=[];
 const CORNER_LABELS=['top-left','top-right','bottom-right','bottom-left'];
 function updateCalHint(){$('calhint').textContent = calCorners.length<4

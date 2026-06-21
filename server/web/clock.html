@@ -134,6 +134,15 @@
   .cmark.sel::before,.cmark.sel::after{background:#ffd23f}
   .calib .btn{margin-top:12px}
   .calib.orienting .cmark{display:none}
+  .calib .crow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+  .cal{background:transparent;border:1px solid var(--good);color:var(--good);border-radius:8px;padding:9px 15px;font-size:14px;font-weight:600;cursor:pointer}
+  .cal.amber{border-color:var(--warn);color:var(--warn)}
+  .cal:disabled{border-color:var(--line);color:var(--mut);cursor:default}
+  .csec{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 15px;font-size:14px;cursor:pointer}
+  .csec.on{border-color:var(--warn);color:var(--warn)}
+  .calib.preview .cmark,.calib.preview #chint,.calib.preview #cdone{display:none}   /* preview: just the frame + Calibrate */
+  .calib:not(.preview) #ccalibrate{display:none}
+  .calib.orienting #cdone,.calib.orienting #ccalibrate{display:none}
   .oside{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
   .obtn{background:#262b34;border:1px solid var(--accent);color:var(--ink);border-radius:11px;
     padding:14px 8px;font-size:15px;font-weight:600;cursor:pointer}
@@ -154,6 +163,7 @@
     <button id="undobtn" class="hidden"><span class="lbl">↶ Undo</span></button>
     <button id="pausebtn" class="hidden"><span class="lbl">Pause</span></button>
     <button id="resetbtn" class="hidden"><span class="lbl">Reset</span></button>
+    <button id="cambtn" class="hidden"><span class="lbl">Camera</span></button>
   </div>
   <div class="rrail"><span class="report" id="report"></span></div>
 
@@ -175,7 +185,12 @@
       <img id="cimg" alt="board from the camera">
       <div class="cmark"></div><div class="cmark"></div><div class="cmark"></div><div class="cmark"></div>
     </div>
-    <button class="btn" id="cdone">Use these corners</button>
+    <div class="crow">
+      <button class="cal" id="ccalibrate">Calibrate</button>
+      <button class="btn" id="cdone">Use these corners</button>
+      <button class="csec" id="cflash">Flash: off</button>
+      <button class="csec" id="cclose">Close</button>
+    </div>
     <div class="oside hidden" id="oside">
       <button class="obtn" data-side="top">▲ Top</button><button class="obtn" data-side="bottom">▼ Bottom</button>
       <button class="obtn" data-side="left">◀ Left</button><button class="obtn" data-side="right">Right ▶</button>
@@ -341,6 +356,7 @@ function updateWait(){                                  // the board overlay + s
     $('startov').querySelector('span').textContent = ov;
   } else { show('startov',false); }
   if(phase==='run') clk.running = !waiting && !needsResume;   // pause while blocked OR awaiting a manual resume
+  show('cambtn', camLinked);                                  // "Camera" rail button -> calibration dialog (only with a live camera)
   if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
   reportStatus();
@@ -416,7 +432,29 @@ function showOrient(){                                       // corners done, st
 function sendCorners(){const r=$('cimg').getBoundingClientRect();
   const corners=[...document.querySelectorAll('.cmark')].map(m=>{const b=m.getBoundingClientRect();
     return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
-  send({type:'calib.corners',corners});show('calib',false);$('report').textContent='registering…';}
+  send({type:'calib.corners',corners});$('report').textContent='registering…';}   // dialog stays open until the verdict
+
+let consoleCalibrating=false,camFlashOn=false;
+function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
+function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
+  show('game',false);$('calib').classList.remove('orienting');$('calib').classList.add('preview');
+  $('ctitle').textContent='Camera — '+$('tid').textContent;
+  $('cimg').removeAttribute('src');camFlashOn=false;camFlashLabel();
+  $('ccalibrate').disabled=consoleCalibrating;$('ccalibrate').classList.toggle('amber',!calibrated);
+  show('calib',true);$('report').textContent=consoleCalibrating?'the console is calibrating this table':'';
+  send({type:'admin.calib',table});                          // request a fresh frame -> arrives as calib.image
+}
+function closeCamDialog(){show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);updateWait()}
+$('cambtn').onclick=openCamDialog;
+$('ccalibrate').onclick=()=>{                                // reveal the corner-marking on the current frame
+  if(consoleCalibrating)return;
+  $('calib').classList.remove('preview');selectMark(null);$('ctitle').textContent='Mark the board corners';
+  const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];       // TL,TR,BR,BL start insets
+  document.querySelectorAll('.cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'});
+  $('report').textContent='tap a corner, then drag to place it';
+};
+$('cflash').onclick=()=>{camFlashOn=!camFlashOn;send({type:'camera.control',table,what:'flash',on:camFlashOn});camFlashLabel()};
+$('cclose').onclick=closeCamDialog;
 
 function showPairScreen(){                                  // the "Add a camera" screen (board hidden, status rail gone)
   show('game',false);show('pair',true);clk.running=false;$('report').textContent='';document.body.classList.add('pairing');   // no camera -> the game (if any) is paused
@@ -473,13 +511,16 @@ function handle(m){
       else{$('report').textContent=m.turn+' to move';}
       break;
     case 'session.baselined':
-      started=true;calibrated=true;show('pair',false);show('calib',false);
+      started=true;calibrated=true;show('pair',false);show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);   // calibration done -> close the Camera dialog
       if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}
       else updateWait();break;   // mid-game re-baseline (e.g. replaced camera, now calibrated) -> refresh overlay, START to resume   // a move that re-seeded the baseline mustn't yank a running game back to START
-    case 'calib.image': showCalib(m.image); break;
+    case 'calib.image': if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;} break;   // clock calibrates via its Camera dialog only
+    case 'calib.lock': consoleCalibrating=!!m.on;$('ccalibrate').disabled=consoleCalibrating;   // console entered/left its calibration -> block ours
+      if(consoleCalibrating&&!$('calib').classList.contains('hidden')&&$('calib').classList.contains('preview'))$('report').textContent='the console is calibrating this table'; break;
     case 'orient.ask': showOrient(); break;
-    case 'calib.ok': show('calib',false);$('report').textContent='board registered — now capture the start position on the camera'; break;
-    case 'calib.failed': show('calib',false);$('report').textContent='calibration: '+m.reason; break;
+    case 'calib.ok': $('report').textContent='board registered — capturing the start position…'; break;
+    case 'calib.failed': $('report').textContent='calibration: '+m.reason;
+      if(!$('calib').classList.contains('hidden'))$('chint').textContent='Failed — '+m.reason+'. Adjust the corners and try again.'; break;
     case 'refreshed': $('report').textContent='board refreshed ✓ · '+(clk.active==='white'?'White':'Black')+' to move'; break;
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
