@@ -434,7 +434,7 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
     return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
   send({type:'calib.corners',corners});$('report').textContent='registering…';}   // dialog stays open until the verdict
 
-let consoleCalibrating=false,camFlashOn=false;
+let consoleCalibrating=false,camFlashOn=false,curCorners=null;   // curCorners: the table's current calibration, to seed the markers
 function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
 function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
   show('game',false);$('calib').classList.remove('orienting');$('calib').classList.add('preview');
@@ -449,7 +449,7 @@ $('cambtn').onclick=openCamDialog;
 $('ccalibrate').onclick=()=>{                                // reveal the corner-marking on the current frame
   if(consoleCalibrating)return;
   $('calib').classList.remove('preview');selectMark(null);$('ctitle').textContent='Mark the board corners';
-  const pos=[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];       // TL,TR,BR,BL start insets
+  const pos=curCorners||[[.12,.12],[.88,.12],[.88,.88],[.12,.88]];   // start at the current calibration if any, else default insets
   document.querySelectorAll('.cmark').forEach((m,i)=>{m.style.left=(pos[i][0]*100)+'%';m.style.top=(pos[i][1]*100)+'%'});
   $('report').textContent='tap a corner, then drag to place it';
 };
@@ -514,7 +514,7 @@ function handle(m){
       started=true;calibrated=true;show('pair',false);show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);   // calibration done -> close the Camera dialog
       if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}
       else updateWait();break;   // mid-game re-baseline (e.g. replaced camera, now calibrated) -> refresh overlay, START to resume   // a move that re-seeded the baseline mustn't yank a running game back to START
-    case 'calib.image': if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;} break;   // clock calibrates via its Camera dialog only
+    case 'calib.image': if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;curCorners=(m.corners&&m.corners.length===4)?m.corners:null;} break;   // clock calibrates via its Camera dialog only
     case 'calib.lock': consoleCalibrating=!!m.on;$('ccalibrate').disabled=consoleCalibrating;   // console entered/left its calibration -> block ours
       if(consoleCalibrating&&!$('calib').classList.contains('hidden')&&$('calib').classList.contains('preview'))$('report').textContent='the console is calibrating this table'; break;
     case 'orient.ask': showOrient(); break;
