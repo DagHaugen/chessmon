@@ -201,8 +201,9 @@ async def ws_endpoint(ws: WebSocket):
                     frame = cv2.imdecode(np.frombuffer(msg["bytes"], np.uint8),
                                          cv2.IMREAD_COLOR)
                     step = s._calib_step or "move"
-                    if frame is not None:                          # save for debugging
-                        try:
+                    if frame is not None:
+                        s._last_frame = frame                      # cache the latest board for preview.req (overlays, no fresh grab)
+                        try:                                       # also save for debugging
                             os.makedirs(OUT, exist_ok=True)
                             cv2.imwrite(os.path.join(OUT, f"cam_{step}.png"), frame)
                         except Exception:
@@ -417,6 +418,13 @@ async def ws_endpoint(ws: WebSocket):
                 if sess is not None:
                     sess.set_calib_step("corners")
                     await send(hub(sess.table_token)["camera"], {"type": "capture.req"})
+            elif t == "preview.req":                              # overlay wants the latest board WITHOUT a fresh grab (avoids the move-detect frame race)
+                sess = mgr.by_table(data.get("table"))
+                f = getattr(sess, "_last_frame", None) if sess is not None else None
+                if f is not None:
+                    _ok, buf = cv2.imencode(".jpg", f, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+                    durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
+                    await send(ws, {"type": "preview.image", "table": sess.table_token, "image": durl, "corners": sess.corners})
             elif t == "admin.calib.lock":                         # console opened/closed its calibration modal -> block/unblock the clock's Calibrate
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:

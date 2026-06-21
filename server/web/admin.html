@@ -387,7 +387,7 @@ function warpCam(img,corners){const ov=img.parentElement,S=ov.clientWidth;
   img.style.transform='matrix3d('+[t[0],t[3],0,t[6],t[1],t[4],0,t[7],0,0,1,0,t[2],t[5],0,t[8]].join(',')+')';}
 function paintCam(token){const img=document.querySelector('.gcam img[data-t="'+token+'"]'),f=camFrames[token];
   if(img&&f){const ph=img.parentElement.querySelector('.ph');if(ph)ph.remove();img.onload=()=>warpCam(img,f.corners);img.src=f.image;}}
-function reqCam(token){send({type:'admin.calib',table:token});}   // grab a frame -> arrives as calib.image (carries the table token)
+function reqCam(token){send({type:'preview.req',table:token});}   // latest cached frame -> preview.image (no grab, no move-read race)
 let snapTable=null;
 function openSnap(t){snapTable=t.token;$('snaptitle').textContent=(t.name||'Table')+' — camera';
   $('snaphint').textContent='Asking the camera for a frame…';$('snapimg').removeAttribute('src');
@@ -422,8 +422,8 @@ function handle(m){
   else if(m.type==='camera.status'){                          // camera reported its actual flash/screen on connect/link
     camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':'', zoom:m.zoom, zoomMin:m.zoomMin, zoomMax:m.zoomMax};
     render();}
-  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners);
-    if(m.table&&expanded.has(m.table)){camFrames[m.table]={image:m.image,corners:m.corners};paintCam(m.table);}}   // feed the inline camera board
+  else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
+  else if(m.type==='preview.image'){if(m.table&&expanded.has(m.table)){camFrames[m.table]={image:m.image,corners:m.corners};paintCam(m.table);}}   // inline camera board (cached frame)
   else if(m.type==='camera.moved'){if(calibTable&&m.table===calibTable)recapCalib()}      // camera moved -> refresh the live frame
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}

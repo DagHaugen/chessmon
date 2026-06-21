@@ -358,7 +358,7 @@ function refreshCam(){                                         // (re)grab the r
   if(!camOn())return;
   if(lastFrame&&$('boardcam').getAttribute('src')!==lastFrame)$('boardcam').src=lastFrame;   // swap in the cached frame instantly
   warpBoardCam();                                                                             // warp whatever is loaded
-  send({type:'admin.calib',table});                                                           // pull a fresh frame -> arrives as calib.image
+  send({type:'preview.req',table});                                                          // latest cached frame -> preview.image (no grab, no move-read race)
 }
 $('dimbtn').onclick=()=>{const on=$('dimbtn').classList.toggle('lit');show('camoverlay',on);if(on)refreshCam();};   // toggle overlay; turning it on grabs a fresh frame
 $('camoverlay').onclick=refreshCam;                           // tap the overlay to refresh it
@@ -558,6 +558,10 @@ function handle(m){
       lastFrame=m.image; curCorners=(m.corners&&m.corners.length===4)?m.corners:null;            // remember for the overlay + the dialog markers
       if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;}  // Camera-dialog preview
       if(camOn())$('boardcam').src=m.image;                                                        // refresh the live overlay
+      break;
+    case 'preview.image':                                                                          // cached real-board frame for the overlay (no grab)
+      lastFrame=m.image; if(m.corners&&m.corners.length===4)curCorners=m.corners;
+      if(camOn())$('boardcam').src=m.image;
       break;
     case 'calib.lock': consoleCalibrating=!!m.on;$('ccalibrate').disabled=consoleCalibrating;   // console entered/left its calibration -> block ours
       if(consoleCalibrating&&!$('calib').classList.contains('hidden')&&$('calib').classList.contains('preview'))$('report').textContent='the console is calibrating this table'; break;
