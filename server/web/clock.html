@@ -58,6 +58,8 @@
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
+  .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:none;opacity:.8}   /* warped real-board photo over the digital board */
+  .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
   .qrjoinbtn{position:fixed;top:98px;left:12px;z-index:7;width:36px;height:36px;padding:0;border-radius:10px;   /* under the fullscreen X; sits below the dim button */
     background:rgba(20,22,28,.85);border:1px solid var(--line);color:var(--ink);cursor:pointer;
     display:flex;align-items:center;justify-content:center}
@@ -218,6 +220,7 @@
       </div>
       <div class="boardwrap">
         <div class="board" id="board"></div>
+        <div class="camoverlay hidden" id="camoverlay"><img id="boardcam" alt="" draggable="false"></div>
         <button class="startov hidden" id="startov"><span>START</span></button>
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
         <button class="qrjoinbtn dimbtn" id="dimbtn" title="Toggle"><img src="icon.svg" alt="" draggable="false"></button>
@@ -320,6 +323,7 @@ function paint(){                                          // big ✓ for the si
     else if(active){cls='cbtn go';txt='✓';dis=false}               // your move -> green check
     b.className=cls;b.textContent=txt;b.disabled=dis;}
   updateQrBtn();
+  if(camOn())warpBoardCam();        // keep the overlay aligned through renders / board-rotation changes
 }
 let joinRendered=false;
 function renderJoinQR(){if(joinRendered)return;                         // the idle "add a device" QR -> the /app landing page
@@ -328,7 +332,34 @@ function showJoinQR(on){if(on)renderJoinQR();show('qrjoin',on);if(on)clk.running
 function updateQrBtn(){show('qrjoinbtn',true)}                          // available any time (gated by the board being visible), incl. during a game
 $('qrjoinbtn').onclick=()=>showJoinQR(true);
 $('qrjoin').onclick=()=>showJoinQR(false);
-$('dimbtn').onclick=()=>$('dimbtn').classList.toggle('lit');   // toggle icon full-colour <-> dimmed (effect TBD)
+// --- real-board overlay: perspective-warp the calibrated quad of the last camera frame onto the digital board ---
+function hgAdj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],
+  m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],
+  m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}              // adjugate of a 3x3
+function hgMul(a,b){const c=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=a[3*i+k]*b[3*k+j];c[3*i+j]=s;}return c;}
+function hgVec(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
+function hgBasis(p){const m=[p[0][0],p[1][0],p[2][0], p[0][1],p[1][1],p[2][1], 1,1,1],v=hgVec(hgAdj(m),[p[3][0],p[3][1],1]);return hgMul(m,[v[0],0,0, 0,v[1],0, 0,0,v[2]]);}
+function hgProj(src,dst){return hgMul(hgBasis(dst),hgAdj(hgBasis(src)));}    // 3x3 homography mapping src quad -> dst quad
+function camOn(){return $('dimbtn').classList.contains('lit');}
+function warpBoardCam(){                                       // map the 4 calibrated corners onto the board square, as a CSS matrix3d
+  const img=$('boardcam');
+  if(!camOn()||!img.naturalWidth||!curCorners||curCorners.length!==4)return;
+  const S=$('board').clientWidth; if(!S)return;
+  $('camoverlay').style.transform=getComputedStyle($('board')).transform;     // follow the board's rotation mode (m1 = -90deg)
+  const W=img.naturalWidth,H=img.naturalHeight;
+  const src=curCorners.map(c=>[c[0]*W,c[1]*H]),dst=[[0,0],[S,0],[S,S],[0,S]]; // calibrated quad (px) -> board square (TL,TR,BR,BL)
+  const t=hgProj(src,dst);for(let i=0;i<9;i++)t[i]/=t[8];
+  img.style.transform='matrix3d('+[t[0],t[3],0,t[6], t[1],t[4],0,t[7], 0,0,1,0, t[2],t[5],0,t[8]].join(',')+')';
+}
+$('boardcam').onload=warpBoardCam;
+$('dimbtn').onclick=()=>{                                      // toggle the real-board overlay
+  const on=$('dimbtn').classList.toggle('lit');
+  show('camoverlay',on);
+  if(!on)return;
+  if(lastFrame&&$('boardcam').getAttribute('src')!==lastFrame)$('boardcam').src=lastFrame;   // (re)load -> onload warps
+  else warpBoardCam();                                                                        // already loaded / no frame yet -> warp now
+  if(!lastFrame||!curCorners)send({type:'admin.calib',table});                                // nothing cached -> fetch a frame + corners
+};
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
 let candList=[], candAll=false;
 function showCands(cands){candList=cands||[];candAll=false;renderCands()}
@@ -440,7 +471,7 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
     return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
   send({type:'calib.corners',corners});$('report').textContent='registering…';}   // dialog stays open until the verdict
 
-let consoleCalibrating=false,camFlashOn=false,curCorners=null;   // curCorners: the table's current calibration, to seed the markers
+let consoleCalibrating=false,camFlashOn=false,curCorners=null,lastFrame=null;   // curCorners: the table's current calibration (also drives the overlay warp); lastFrame: last real-board photo
 function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
 function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
   show('game',false);clk.running=false;$('calib').classList.remove('orienting');$('calib').classList.add('preview');   // pause the game while calibrating
@@ -450,7 +481,7 @@ function openCamDialog(){                                     // "Camera" rail b
   show('calib',true);$('report').textContent=consoleCalibrating?'the console is calibrating this table':'';
   send({type:'admin.calib',table});                          // request a fresh frame -> arrives as calib.image
 }
-function closeCamDialog(){show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);updateWait()}
+function closeCamDialog(){show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);if(camOn())warpBoardCam();updateWait()}
 $('cambtn').onclick=openCamDialog;
 $('ccalibrate').onclick=()=>{                                // reveal the corner-marking on the current frame
   if(consoleCalibrating)return;
@@ -520,7 +551,11 @@ function handle(m){
       started=true;calibrated=true;show('pair',false);show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);   // calibration done -> close the Camera dialog
       if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}
       else updateWait();break;   // mid-game re-baseline (e.g. replaced camera, now calibrated) -> refresh overlay, START to resume   // a move that re-seeded the baseline mustn't yank a running game back to START
-    case 'calib.image': if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;curCorners=(m.corners&&m.corners.length===4)?m.corners:null;} break;   // clock calibrates via its Camera dialog only
+    case 'calib.image':
+      lastFrame=m.image; curCorners=(m.corners&&m.corners.length===4)?m.corners:null;            // remember for the overlay + the dialog markers
+      if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;}  // Camera-dialog preview
+      if(camOn())$('boardcam').src=m.image;                                                        // refresh the live overlay
+      break;
     case 'calib.lock': consoleCalibrating=!!m.on;$('ccalibrate').disabled=consoleCalibrating;   // console entered/left its calibration -> block ours
       if(consoleCalibrating&&!$('calib').classList.contains('hidden')&&$('calib').classList.contains('preview'))$('report').textContent='the console is calibrating this table'; break;
     case 'orient.ask': showOrient(); break;
@@ -603,7 +638,8 @@ if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch((
 function layoutBoard(){const bw=document.querySelector('.boardwrap'),cs=document.querySelector('.cstrip');
   if(!bw||!bw.offsetWidth)return;                                                                  // hidden / not laid out yet
   if(!(window.CSS&&CSS.supports&&CSS.supports('aspect-ratio','1')))bw.style.height=bw.offsetWidth+'px';  // old browsers: no aspect-ratio -> force the board square
-  if(cs)cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px';}                       // col 2 (side clocks) spans exactly the board height
+  if(cs)cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px';                         // col 2 (side clocks) spans exactly the board height
+  if(camOn())warpBoardCam();}                                                                       // re-warp the overlay to the new board size
 window.addEventListener('resize',layoutBoard);
 (function(){const bw=document.querySelector('.boardwrap');
   if(bw&&window.ResizeObserver)new ResizeObserver(layoutBoard).observe(bw);})();
