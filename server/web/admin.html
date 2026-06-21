@@ -109,8 +109,9 @@
   .vmoves{margin-top:12px;font-size:13px;color:var(--ink);max-height:120px;overflow:auto;text-align:left;line-height:1.7}
   .vmoves .mvn{color:var(--mut);margin-left:4px}
   .vturn{color:var(--mut);font-size:13px;margin:2px 0 4px}
-  .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
-  .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px}
+  #calmodal{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* no iOS callouts / text selection on the calibration dialog */
+  .ccwrap{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+  .ccwrap img{display:block;max-width:100%;max-height:58vh;border-radius:8px;-webkit-user-drag:none;-webkit-touch-callout:none}
   .snapgrid{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   .ccwrap.marking img{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2346d369' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%2346d369'/%3E%3Cline x1='16' y1='1' x2='16' y2='6' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='16' y1='26' x2='16' y2='31' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='1' y1='16' x2='6' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3Cline x1='26' y1='16' x2='31' y2='16' stroke='%2346d369' stroke-width='1.5'/%3E%3C/svg%3E") 16 16, crosshair}
   .cdot{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid #46d369;
