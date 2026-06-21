@@ -32,7 +32,10 @@
   .addbar{display:flex;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:14px 16px;margin-bottom:22px}
   .qrbox{background:#fff;padding:7px;border-radius:9px;line-height:0;flex:none}
-  .addtxt{min-width:0}
+  .bigicon{width:132px;height:132px;flex:none}          /* the chessmon mark, QR-sized, at the left of the bar */
+  .qrwrap{flex:none}
+  .reconmsg{display:none;width:132px;height:132px;align-items:center;justify-content:center;text-align:center;color:var(--mut);font-size:13px;border:1px dashed var(--line);border-radius:9px}
+  .addtxt{flex:1;min-width:0}
   .addhd{font-weight:700;font-size:14px;margin-bottom:3px}
   .addtxt p{font-size:12.5px;color:var(--mut);margin:0 0 7px;line-height:1.45}
   .addtxt code{font-size:12px;color:var(--accent);word-break:break-all}
@@ -113,21 +116,26 @@
   .crow button.sec{background:transparent;border:1px solid var(--line);color:var(--mut)}
   .crow.oside button{background:#262b34;border:1px solid var(--accent);color:var(--ink)}
   .hidden{display:none}
-  body.offline .addbar{display:none}                    /* server down / connecting -> hide the QR (a dead server can't serve the landing page) */
+  body.offline .qrbox{display:none}                     /* server down -> hide the QR (a dead server can't serve the landing page)... */
+  body.offline .reconmsg{display:flex}                  /* ...and show "reconnecting…" where the QR was */
   body.offline .section{opacity:.4;pointer-events:none} /* ...and disable everything else until we're live */
 </style>
 </head>
 <body class="offline">
 <div class="wrap">
-  <div class="top"><img src="icon.svg" width="28" height="28" alt="" style="flex:none;border-radius:6px"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
+  <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
     <span class="sub" id="sub">connecting…</span></div>
 
   <div class="addbar">
-    <div id="qr" class="qrbox"></div>
+    <img src="icon.svg" class="bigicon" alt="chessmon">
     <div class="addtxt">
       <div class="addhd">Add a device</div>
       <p>Scan with a phone or tablet, then bookmark the page. It shows up under Unused, ready to drop into a table.</p>
       <code id="addurl"></code>
+    </div>
+    <div class="qrwrap">
+      <div id="qr" class="qrbox"></div>
+      <div class="reconmsg" id="reconmsg">reconnecting…</div>
     </div>
   </div>
 
