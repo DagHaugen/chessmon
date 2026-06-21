@@ -320,8 +320,8 @@ function paint(){                                          // big ✓ for the si
 let joinRendered=false;
 function renderJoinQR(){if(joinRendered)return;                         // the idle "add a device" QR -> the /app landing page
   if(typeof QRCode!=='undefined'){new QRCode($('qrjoinqr'),{text:location.origin+'/app/',width:200,height:200});joinRendered=true}}
-function showJoinQR(on){if(on)renderJoinQR();show('qrjoin',on)}
-function updateQrBtn(){show('qrjoinbtn',phase!=='run'&&phase!=='paused')}  // visible only when no game is running
+function showJoinQR(on){if(on)renderJoinQR();show('qrjoin',on);if(on)clk.running=false;else updateWait();}   // pause the game while the QR is up
+function updateQrBtn(){show('qrjoinbtn',true)}                          // available any time (gated by the board being visible), incl. during a game
 $('qrjoinbtn').onclick=()=>showJoinQR(true);
 $('qrjoin').onclick=()=>showJoinQR(false);
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
@@ -356,7 +356,7 @@ function updateWait(){                                  // the board overlay + s
     $('startov').classList.toggle('wait', ov!=='START');   // WAIT/PAUSE are muted; START is green
     $('startov').querySelector('span').textContent = ov;
   } else { show('startov',false); }
-  if(phase==='run') clk.running = !waiting && !needsResume && $('calib').classList.contains('hidden');   // pause while blocked, awaiting a manual resume, OR the Camera dialog is open
+  if(phase==='run') clk.running = !waiting && !needsResume && $('calib').classList.contains('hidden') && $('qrjoin').classList.contains('hidden');   // pause while blocked, awaiting a manual resume, or the Camera/QR overlay is open
   show('cambtn', camLinked);                                  // "Camera" rail button -> calibration dialog (only with a live camera)
   if(status!==null){ $('report').className='report'; $('report').textContent = status; }
   paint();
