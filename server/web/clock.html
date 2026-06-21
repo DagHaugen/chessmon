@@ -33,6 +33,7 @@
   .sq.l.bad{background:#f2a6a6} .sq.d.bad{background:#dd8585}     /* an illegal move's squares */
   .sq .pc{width:86%;height:86%;display:block;pointer-events:none}
   #game{display:flex;flex-direction:row;flex:1;min-height:0;gap:8px;position:relative}
+  #game.hidden{display:none}   /* the ID rule above out-specifies a bare .hidden — re-assert hiding */
   .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;gap:6px}   /* col 3 */
   .zone{flex:1;display:flex;flex-direction:column;min-height:0;gap:6px}
   .zone.black{transform:rotate(180deg)}
@@ -106,7 +107,9 @@
   .report{background:#11141a;border:1px solid var(--line);border-radius:11px;padding:10px;font-size:13px;
     text-align:center;color:var(--mut)} .report.over{color:var(--good);font-weight:600}
   .report.warn{color:var(--bad);border-color:var(--bad);font-weight:800;text-transform:uppercase}
-  .pair{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+  .pair{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 18px;text-align:center;align-self:center;width:100%;max-width:340px;margin:auto 0}
+  .pairicon{width:60px;height:60px;display:block;margin:0 auto 12px}
+  .pairlead{font-size:15px;color:var(--ink);line-height:1.5;margin:0 0 18px}
   .pair h2{font-size:13px;color:var(--mut);margin:0 0 10px;text-transform:uppercase;letter-spacing:.1em}
   #qr{display:flex;justify-content:center;margin:0 auto;width:160px;height:160px;background:#fff;
     border-radius:10px;padding:8px}
@@ -150,6 +153,8 @@
   <div class="rrail"><span class="report" id="report"></span></div>
 
   <div class="pair hidden" id="pair">
+    <img src="icon.svg" class="pairicon" alt="chessmon" width="60" height="60">
+    <p class="pairlead">This device is the <b>clock</b> for <b id="pairtable">this table</b>.<br>A camera must be paired before a game can start.</p>
     <h2>Add a camera</h2>
     <div id="qr"></div>
     <code id="paircode"></code>
@@ -412,6 +417,7 @@ function handle(m){
       updateWait();
       if(SHOW_PAIR_QR&&m.pairToken&&!started&&!m.calibrated&&!m.cameraLinked){  // on a table, no camera yet -> show ONLY the pairing QR
         show('game',false);show('pair',true);$('report').textContent='';
+        $('pairtable').textContent=$('tid').textContent;                       // "clock for <table>"
         $('paircode').textContent=m.pairToken;$('qr').innerHTML='';            // clear so reconnects don't stack QRs
         if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+m.pairToken,width:144,height:144});}
       else {show('pair',false);show('game',true);}
