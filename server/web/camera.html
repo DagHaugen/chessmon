@@ -128,15 +128,19 @@ let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
 function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
 setupBattery();
-let lastMovedSig=0,motionSettleT=null;                   // gyro -> nudge the console to refresh the calibration frame while the camera is being moved
+let lastMovedSig=0,motionSettleT=null,lastAcc=null;      // gyro + accelerometer -> nudge the console to refresh the calibration frame while the camera is being moved
 function sendMoved(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'camera.moved'}))}
 function onMotion(e){
-  const rr=e.rotationRate;if(!rr)return;
-  const mag=Math.abs(rr.alpha||0)+Math.abs(rr.beta||0)+Math.abs(rr.gamma||0);   // total rotation rate, deg/s
-  if(mag>20){const now=Date.now();if(now-lastMovedSig>300){lastMovedSig=now;sendMoved()}   // throttle while moving
+  let moving=false;
+  const rr=e.rotationRate;                                                       // gyroscope (deg/s) -- absent on phones without a gyro
+  if(rr&&Math.abs(rr.alpha||0)+Math.abs(rr.beta||0)+Math.abs(rr.gamma||0)>20)moving=true;
+  const ag=e.accelerationIncludingGravity;                                       // accelerometer (m/s²) -- on every device; catches slides + gyro-less phones
+  if(ag){if(lastAcc&&Math.abs(ag.x-lastAcc.x)+Math.abs(ag.y-lastAcc.y)+Math.abs(ag.z-lastAcc.z)>1.3)moving=true;
+    lastAcc={x:ag.x||0,y:ag.y||0,z:ag.z||0};}
+  if(moving){const now=Date.now();if(now-lastMovedSig>300){lastMovedSig=now;sendMoved()}   // throttle while moving
     clearTimeout(motionSettleT);motionSettleT=setTimeout(sendMoved,500);}                  // one more once it settles
 }
-function motionEnable(){window.addEventListener('devicemotion',onMotion);log('movement detection on')}
+function motionEnable(){lastAcc=null;window.addEventListener('devicemotion',onMotion);log('movement detection on')}
 function motionDisable(){window.removeEventListener('devicemotion',onMotion);clearTimeout(motionSettleT);log('movement detection off')}
 $('motionchk').onchange=()=>{                             // ticking the box is the user gesture iOS needs for the motion-permission prompt
   if(!$('motionchk').checked){motionDisable();return}
