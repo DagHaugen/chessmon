@@ -95,6 +95,7 @@
   .gstat{font-size:12px;font-weight:700;margin-left:6px}.gstat.pause{color:var(--accent)}.gstat.wait{color:var(--bad)}
   .grow .gsub{font-size:12px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
   .grow .gres{font-size:12px;font-weight:700;color:var(--cam)}
+  .gmatch{font-size:12.5px;color:var(--cam);font-weight:600;margin-top:3px}   /* assigned players · format · start */
 
   /* calibration modal (unchanged behaviour) */
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -194,7 +195,8 @@
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
-window.name='cm_console';   // claim this tab's name so other pages' nav (target=cm_console) reuses it   // Enter in any input -> drop focus / dismiss keyboard
+window.name='cm_console';   // claim this tab's name so other pages' nav (target=cm_console) reuses it
+function matchLine(m){const w=m.white?m.white.name:'?',b=m.black?m.black.name:'?',f=m.format?m.format.name:'—';return w+' – '+b+' · '+f+(m.start_mode?' · '+m.start_mode:'');}   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 const BIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 let ws, devs=[], tabs=[], calibTable=null, camState={};   // camState: console-intended flash/screen per table
@@ -309,7 +311,8 @@ function renderTables(){
     head.append(rm);
     const slots=document.createElement('div');slots.className='slots';
     slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
-    card.append(head,slots);L.appendChild(card);
+    if(t.match){const mm=document.createElement('div');mm.className='gmatch';mm.style.margin='0 0 10px';mm.textContent=matchLine(t.match);card.append(head,mm,slots);}else card.append(head,slots);
+    L.appendChild(card);
   });
 }
 
@@ -329,7 +332,7 @@ function renderRunning(){
     const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
-    left.append(nm,sub);
+    left.append(nm,sub);if(t.match){const mm=document.createElement('div');mm.className='gmatch';mm.textContent=matchLine(t.match);left.append(mm);}
     const acts=document.createElement('div');acts.className='gacts';
     if(camDev&&camDev.online){                                // live camera -> remote flash/screen controls (View screen moved to the camera slot)
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
