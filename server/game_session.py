@@ -47,6 +47,7 @@ class Session:
         self.white, self.black, self.variant = white, black, variant
         self.start_fen = start_fen        # custom start position (e.g. a chess960 layout from Basic Setup)
         self.needs_anchor = False         # board was programmatically reset -> re-baseline the detector at the next START
+        self._archived = False            # this finished game has been written to the games archive
         if start_fen:
             board = chess.Board(start_fen)
         else:
@@ -70,7 +71,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None), ("match", None), ("start_fen", None), ("needs_anchor", False)):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None), ("match", None), ("start_fen", None), ("needs_anchor", False), ("_archived", False)):
             if not hasattr(self, k):
                 setattr(self, k, v)
         if self.board_reader is not None and self.camera_dev and not self.calibrations:   # migrate a pre-existing single-camera calibration
@@ -299,6 +300,7 @@ class Session:
         self.started_at = None
         self.status = ""
         self._pending = None
+        self._archived = False
 
     def apply_match_position(self, start_fen, chess960):
         """Adopt a Basic Setup / Tournament start position (e.g. a chess960 layout). Only before a game starts."""
@@ -311,6 +313,7 @@ class Session:
         self.result = None
         self._pending = None
         self.needs_anchor = True              # detector must re-baseline to this start before the first move
+        self._archived = False
 
     def mark_started(self):
         """Clock pressed START -> the game counts as 'running' even before the first move lands."""

@@ -23,6 +23,8 @@ import asyncio
 import base64
 import json
 import os
+import time
+import uuid
 
 import chess
 import cv2
@@ -45,6 +47,8 @@ PLAYERS_FILE = os.environ.get("CHESSMON_PLAYERS",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "players.json"))
 TOURNAMENTS_FILE = os.environ.get("CHESSMON_TOURNAMENTS",
                                   os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tournaments.json"))
+GAMES_FILE = os.environ.get("CHESSMON_GAMES",
+                            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "games.json"))
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -55,6 +59,7 @@ admins: set = set()                # server-console websockets
 formats: dict = {}                 # format id -> {id, name, base_ms, increment_ms, inc_type, category, variant}
 players: dict = {}                 # player id -> {id, name}
 tournaments: dict = {}             # tournament id -> {id, name, format, players[], rounds[]}
+games: list = []                   # append-only archive of finished games (moves + pgn + metadata)
 
 
 def _quiet_conn_reset(loop, context):
@@ -87,6 +92,9 @@ async def broadcast_state(s):
         await send(ws, snap)
     await broadcast_tables()        # keep the console's Running-games list live (moves / result)
     mgr.save(SESSIONS_FILE)         # a move or calibration changed the session -> persist
+    if archive_if_finished(s):      # a finished game -> save it to the archive before any reuse clears the moves
+        for a in list(admins):
+            await send(a, {"type": "games_changed"})
     if flow_result_to_tournament(s):   # a finished tournament game -> write the result back onto its pairing
         await broadcast_admin()
 
@@ -124,6 +132,56 @@ def flow_result_to_tournament(s):
                     return True
                 return False
     return False
+
+
+def archive_if_finished(s):
+    """A just-finished game -> append it to the games archive once, before any reuse clears the moves."""
+    if not getattr(s, "result", None) or getattr(s, "_archived", False):
+        return False
+    s._archived = True
+    if not s.moves:                                   # a result with no moves -> nothing worth keeping
+        return False
+    m = getattr(s, "match", None) or {}
+    ref = m.get("ref") or {}
+    fmt = m.get("format") or {}
+    games.append({
+        "id": uuid.uuid4().hex[:12],
+        "table": s.table_token, "table_name": s.name,
+        "white": (m.get("white") or {}).get("name") or s.white,
+        "black": (m.get("black") or {}).get("name") or s.black,
+        "result": s.result,
+        "ply": len(s.moves),
+        "moves": [{"san": mv.get("san", ""), "fen": mv.get("fen", "")} for mv in s.moves],
+        "pgn": s.pgn(),
+        "format": fmt.get("name"),
+        "variant": getattr(s, "variant", "standard"),
+        "chess960": m.get("chess960"),
+        "start_fen": getattr(s, "start_fen", None),
+        "tournament": ref.get("tournament"),
+        "tournament_name": ref.get("name"),
+        "round": ref.get("round"),
+        "finished_at": time.time(),
+    })
+    save_games()
+    return True
+
+
+def game_pgn(g):
+    """Build a full PGN (with headers) from an archived game record."""
+    h = ['[Event "%s"]' % (g.get("tournament_name") or "chessmon game"), '[Site "chessmon"]']
+    if g.get("finished_at"):
+        h.append('[Date "%s"]' % time.strftime("%Y.%m.%d", time.localtime(g["finished_at"])))
+    if g.get("round") is not None:
+        h.append('[Round "%d"]' % (int(g["round"]) + 1))
+    h += ['[White "%s"]' % (g.get("white") or "White"),
+          '[Black "%s"]' % (g.get("black") or "Black"),
+          '[Result "%s"]' % (g.get("result") or "*")]
+    if g.get("variant") == "chess960":
+        h.append('[Variant "Chess960"]')
+        if g.get("start_fen"):
+            h += ['[FEN "%s"]' % g["start_fen"], '[SetUp "1"]']
+    body = (g.get("pgn", "") + " " + (g.get("result") or "*")).strip()
+    return "\n".join(h) + "\n\n" + body + "\n"
 
 
 def admin_state():
@@ -247,10 +305,27 @@ def save_tournaments():
         pass
 
 
+def load_games():
+    try:
+        with open(GAMES_FILE) as f:
+            games.clear(); games.extend(json.load(f))
+    except Exception:
+        pass
+
+
+def save_games():
+    try:
+        with open(GAMES_FILE, "w") as f:
+            json.dump(games, f, indent=1)
+    except Exception:
+        pass
+
+
 load_devices()
 load_formats()
 load_players()
 load_tournaments()
+load_games()
 for _s in mgr._by_table.values():          # rebuild the live device<->table link from persisted table configs
     for _role, _devid in (("clock", _s.clock_dev), ("camera", _s.camera_dev)):
         if _devid and _devid in devices:
@@ -609,13 +684,36 @@ async def ws_endpoint(ws: WebSocket):
                                           "format": tr.get("format"), "start_mode": "manual",
                                           "variant": "chess960" if ch960 else "standard",
                                           "chess960": n, "start_fen": start_fen,
-                                          "ref": {"tournament": tr["id"], "pairing": pg["id"], "name": tr.get("name", "")}}
+                                          "ref": {"tournament": tr["id"], "pairing": pg["id"], "name": tr.get("name", ""), "round": ri}}
                             sess.apply_match_position(start_fen, ch960)   # free or finished table -> reset to the start
                             await broadcast_state(sess)               # board + match -> clock; tables -> console/setup; persists
                             await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
                             started.append(sess.name or tok[:6])
                         await send(ws, {"type": "tournament.started", "round": ri,
                                         "started": started, "conflicts": conflicts})
+            elif t == "games.list":                               # the archive, metadata only (light)
+                await send(ws, {"type": "games", "games": [
+                    {k: g.get(k) for k in ("id", "white", "black", "result", "ply", "format",
+                                           "variant", "chess960", "table_name", "tournament",
+                                           "tournament_name", "round", "finished_at")}
+                    for g in games]})
+            elif t == "games.get":                                # one game in full (moves + start_fen) for replay
+                g = next((x for x in games if x.get("id") == data.get("id")), None)
+                await send(ws, {"type": "game", "game": g})
+            elif t == "games.pgn":                                # built PGN text for download: one game (id), one tournament, or all
+                gid, tid = data.get("id"), data.get("tournament")
+                if gid:
+                    sel = [g for g in games if g.get("id") == gid]
+                else:
+                    sel = [g for g in games if tid is None or g.get("tournament") == tid]
+                await send(ws, {"type": "games_pgn", "pgn": "\n\n".join(game_pgn(g) for g in sel),
+                                "count": len(sel), "id": gid, "tournament": tid})
+            elif t == "games.delete":
+                before = len(games)
+                games[:] = [g for g in games if g.get("id") != data.get("id")]
+                if len(games) != before:
+                    save_games()
+                    await send(ws, {"type": "games_changed"})
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
