@@ -52,7 +52,7 @@
   .cbtn.won,.cbtn.lost,.cbtn.draw{font-size:min(13vw,54px);font-weight:800;letter-spacing:.05em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
   .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; full height: names pin to top/bottom of screen, clocks+table held at board level by .cmid */
-    padding:2px 0}
+    padding:6px 0}                                                                                            /* small gap so the names don't touch the screen edges */
   .cstrip .ct{transform:rotate(-90deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
