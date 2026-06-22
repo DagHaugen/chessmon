@@ -38,6 +38,10 @@ DEVICES_FILE = os.environ.get("CHESSMON_DEVICES",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json"))
 SESSIONS_FILE = os.environ.get("CHESSMON_SESSIONS",
                                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sessions.pkl"))
+FORMATS_FILE = os.environ.get("CHESSMON_FORMATS",
+                              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "formats.json"))
+PLAYERS_FILE = os.environ.get("CHESSMON_PLAYERS",
+                              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "players.json"))
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -45,6 +49,8 @@ mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
+formats: dict = {}                 # format id -> {id, name, base_ms, increment_ms, inc_type, category, variant}
+players: dict = {}                 # player id -> {id, name}
 
 
 def _quiet_conn_reset(loop, context):
@@ -132,7 +138,64 @@ def load_devices():
         pass
 
 
+SEED_FORMATS = [   # common controls (from the time-controls reference); seeded on first run, then editable
+    {"id": "f_90_30", "name": "90+30",   "base_ms": 5400000, "increment_ms": 30000, "inc_type": "fischer", "category": "Classical", "variant": "standard"},
+    {"id": "f_15_10", "name": "15+10",   "base_ms":  900000, "increment_ms": 10000, "inc_type": "fischer", "category": "Rapid",     "variant": "standard"},
+    {"id": "f_25_10", "name": "25+10",   "base_ms": 1500000, "increment_ms": 10000, "inc_type": "fischer", "category": "Rapid",     "variant": "standard"},
+    {"id": "f_10_0",  "name": "10+0",    "base_ms":  600000, "increment_ms":     0, "inc_type": "none",    "category": "Rapid",     "variant": "standard"},
+    {"id": "f_30_0",  "name": "30+0",    "base_ms": 1800000, "increment_ms":     0, "inc_type": "none",    "category": "Rapid",     "variant": "standard"},
+    {"id": "f_3_2",   "name": "3+2",     "base_ms":  180000, "increment_ms":  2000, "inc_type": "fischer", "category": "Blitz",     "variant": "standard"},
+    {"id": "f_3_0",   "name": "3+0",     "base_ms":  180000, "increment_ms":     0, "inc_type": "none",    "category": "Blitz",     "variant": "standard"},
+    {"id": "f_5_0",   "name": "5+0",     "base_ms":  300000, "increment_ms":     0, "inc_type": "none",    "category": "Blitz",     "variant": "standard"},
+    {"id": "f_5_5",   "name": "5+5",     "base_ms":  300000, "increment_ms":  5000, "inc_type": "fischer", "category": "Blitz",     "variant": "standard"},
+    {"id": "f_1_0",   "name": "1+0",     "base_ms":   60000, "increment_ms":     0, "inc_type": "none",    "category": "Bullet",    "variant": "standard"},
+    {"id": "f_1_1",   "name": "1+1",     "base_ms":   60000, "increment_ms":  1000, "inc_type": "fischer", "category": "Bullet",    "variant": "standard"},
+    {"id": "f_2_1",   "name": "2+1",     "base_ms":  120000, "increment_ms":  1000, "inc_type": "fischer", "category": "Bullet",    "variant": "standard"},
+    {"id": "f_g60d5", "name": "G/60 d5", "base_ms": 3600000, "increment_ms":  5000, "inc_type": "delay",   "category": "Rapid",     "variant": "standard"},
+]
+
+
+def load_formats():
+    try:
+        with open(FORMATS_FILE) as f:
+            for r in json.load(f):
+                formats[r["id"]] = r
+    except Exception:
+        pass
+    if not formats:                       # first run -> seed the common time controls
+        for r in SEED_FORMATS:
+            formats[r["id"]] = dict(r)
+        save_formats()
+
+
+def save_formats():
+    try:
+        with open(FORMATS_FILE, "w") as f:
+            json.dump(list(formats.values()), f, indent=1)
+    except Exception:
+        pass
+
+
+def load_players():
+    try:
+        with open(PLAYERS_FILE) as f:
+            for r in json.load(f):
+                players[r["id"]] = r
+    except Exception:
+        pass
+
+
+def save_players():
+    try:
+        with open(PLAYERS_FILE, "w") as f:
+            json.dump(list(players.values()), f, indent=1)
+    except Exception:
+        pass
+
+
 load_devices()
+load_formats()
+load_players()
 for _s in mgr._by_table.values():          # rebuild the live device<->table link from persisted table configs
     for _role, _devid in (("clock", _s.clock_dev), ("camera", _s.camera_dev)):
         if _devid and _devid in devices:

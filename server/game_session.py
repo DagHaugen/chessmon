@@ -58,6 +58,7 @@ class Session:
         self._calib_step = None            # next binary frame is this calibration step
         self._calib_frame = None           # empty-board frame relayed to the clock for corner-tap
         self._last_frame = None            # most recent decoded camera frame (served to overlays via preview.req, no fresh grab)
+        self.match = None                  # {white, black, format{...}, start_mode} from Basic Setup / Tournament; drives clock names + time
 
     def __getstate__(self):                # persistence: drop the big transient frames
         d = self.__dict__.copy()
@@ -67,7 +68,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None)):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None), ("match", None)):
             if not hasattr(self, k):
                 setattr(self, k, v)
         if self.board_reader is not None and self.camera_dev and not self.calibrations:   # migrate a pre-existing single-camera calibration
