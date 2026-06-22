@@ -43,11 +43,11 @@
 <body>
 <div class="wrap">
   <nav class="nav">
-    <a href="admin.html">Console</a>
-    <a href="players.html">Players</a>
-    <a href="formats.html" class="here">Formats</a>
-    <a href="setup.html">Setup</a>
-    <a href="tournament.html">Tournament</a>
+    <a href="admin.html" target="cm_console">Console</a>
+    <a href="setup.html" target="cm_setup">Setup</a>
+    <a href="players.html" target="cm_players">Players</a>
+    <a href="formats.html" target="cm_formats" class="here">Formats</a>
+    <a href="tournament.html" target="cm_tournament">Tournament</a>
     <span class="dot" id="dot" title="server link"></span>
   </nav>
   <h1>Formats</h1>
@@ -69,6 +69,7 @@
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
+window.name='cm_formats';   // claim this tab's name so the nav's target= links reuse it
 let ws, formats=[], editId=null;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){

@@ -17,6 +17,8 @@
   .top h1{font-size:18px;margin:0;font-weight:700}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--good)}
   .sub{color:var(--mut);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .setuplink{margin-left:14px;color:var(--mut);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:9px;padding:6px 12px}
+  .setuplink:hover{background:var(--panel);color:var(--ink)}
 
   .section{margin-bottom:24px}
   .section h2{font-size:13px;color:var(--mut);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
@@ -137,6 +139,7 @@
 <body class="offline">
 <div class="wrap">
   <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
+    <a href="setup.html" target="cm_setup" class="setuplink">Setup ↗</a>
     <span class="sub" id="sub">connecting…</span></div>
 
   <div class="addbar">
@@ -190,7 +193,8 @@
 <script src="qrcode.min.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
+window.name='cm_console';   // claim this tab's name so other pages' nav (target=cm_console) reuses it   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 const BIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 let ws, devs=[], tabs=[], calibTable=null, camState={};   // camState: console-intended flash/screen per table
