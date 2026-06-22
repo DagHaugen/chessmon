@@ -98,7 +98,7 @@
   .gstat{font-size:12px;font-weight:700;margin-left:6px}.gstat.pause{color:var(--accent)}.gstat.wait{color:var(--bad)}
   .grow .gsub{font-size:12px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
   .grow .gres{font-size:12px;font-weight:700;color:var(--cam)}
-  .gmatch{font-size:12.5px;color:var(--cam);font-weight:600;margin-top:3px}   /* assigned players · format · start */
+  .ginline{color:var(--cam);font-weight:600;font-size:13px;margin-left:8px}   /* assigned match, inline after the running-game name */
 
   /* calibration modal (unchanged behaviour) */
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -336,7 +336,8 @@ function renderRunning(){
     const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
     sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
-    left.append(nm,sub);if(t.match){const mm=document.createElement('div');mm.className='gmatch';mm.textContent=matchLine(t.match);left.append(mm);}
+    if(t.match){const gi=document.createElement('span');gi.className='ginline';gi.textContent=matchLine(t.match);nm.append(gi);}
+    left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
     if(camDev&&camDev.online){                                // live camera -> remote flash/screen controls (View screen moved to the camera slot)
       const cs=camState[t.token]||(camState[t.token]={flash:false,screen:true});
