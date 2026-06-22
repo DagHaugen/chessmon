@@ -33,9 +33,7 @@
   .add{background:var(--accent);color:#0b1020;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer}
   .ghost{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:9px 14px;font-size:13px;cursor:pointer}
   .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;font-size:13px;line-height:1.5}
-  .varrow{display:flex;align-items:center;gap:10px;margin-top:12px}
-  .varlbl{font-size:11px;color:var(--mut)}
-  .radios{margin-left:auto;display:flex;gap:16px}
+  .radios{margin-left:auto;align-self:center;display:flex;gap:16px}
   .radios label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
   .frow960{display:flex;gap:14px;align-items:flex-start;margin-top:12px}
   .frow960.hidden{display:none}
@@ -112,14 +110,12 @@ function render(){
     const startEl=document.createElement('div');startEl.className='startlabel';startEl.textContent='Manual';
     grid.append(field('White',wsel),field('Black',bsel),field('Format',fsel),field('Start',startEl));
     const isF=!!(t.match&&t.match.variant==='chess960');                 // Standard vs Fischer Random (chess960)
-    const varRow=document.createElement('div');varRow.className='varrow';
-    const vl=document.createElement('span');vl.className='varlbl';vl.textContent='Variant';
     const radios=document.createElement('div');radios.className='radios';
     const stdR=document.createElement('input'),fisR=document.createElement('input');
     stdR.type=fisR.type='radio';stdR.name=fisR.name='var_'+t.token;stdR.checked=!isF;fisR.checked=isF;
     const stdL=document.createElement('label'),fisL=document.createElement('label');
     stdL.append(stdR,document.createTextNode(' Standard'));fisL.append(fisR,document.createTextNode(' Fischer'));
-    radios.append(stdL,fisL);varRow.append(vl,radios);
+    radios.append(stdL,fisL);head.append(radios);                        // radios live on the header line
     const fRow=document.createElement('div');fRow.className='frow960'+(isF?'':' hidden');
     const numIn=document.createElement('input');numIn.type='number';numIn.min=0;numIn.max=959;
     numIn.value=(t.match&&t.match.chess960!=null)?t.match.chess960:518;
@@ -141,7 +137,7 @@ function render(){
     if(t.match){const clrb=document.createElement('button');clrb.className='ghost';clrb.textContent='Clear';
       clrb.onclick=()=>{if(confirm('Clear the assignment on “'+(t.name||'this table')+'”?'))send({type:'match.set',table:t.token,match:null})};
       acts.append(clrb);}
-    card.append(head,grid,varRow,fRow,acts);L.appendChild(card);
+    card.append(head,grid,fRow,acts);L.appendChild(card);
   });
 }
 connect();
