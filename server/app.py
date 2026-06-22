@@ -42,6 +42,8 @@ FORMATS_FILE = os.environ.get("CHESSMON_FORMATS",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "formats.json"))
 PLAYERS_FILE = os.environ.get("CHESSMON_PLAYERS",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "players.json"))
+TOURNAMENTS_FILE = os.environ.get("CHESSMON_TOURNAMENTS",
+                                  os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tournaments.json"))
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
@@ -51,6 +53,7 @@ devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, 
 admins: set = set()                # server-console websockets
 formats: dict = {}                 # format id -> {id, name, base_ms, increment_ms, inc_type, category, variant}
 players: dict = {}                 # player id -> {id, name}
+tournaments: dict = {}             # tournament id -> {id, name, format, players[], rounds[]}
 
 
 def _quiet_conn_reset(loop, context):
@@ -100,7 +103,8 @@ def tables_public():
 
 def admin_state():
     return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public(),
-            "formats": list(formats.values()), "players": list(players.values())}
+            "formats": list(formats.values()), "players": list(players.values()),
+            "tournaments": list(tournaments.values())}
 
 
 async def broadcast_devices():
@@ -201,9 +205,27 @@ def save_players():
         pass
 
 
+def load_tournaments():
+    try:
+        with open(TOURNAMENTS_FILE) as f:
+            for r in json.load(f):
+                tournaments[r["id"]] = r
+    except Exception:
+        pass
+
+
+def save_tournaments():
+    try:
+        with open(TOURNAMENTS_FILE, "w") as f:
+            json.dump(list(tournaments.values()), f, indent=1)
+    except Exception:
+        pass
+
+
 load_devices()
 load_formats()
 load_players()
+load_tournaments()
 for _s in mgr._by_table.values():          # rebuild the live device<->table link from persisted table configs
     for _role, _devid in (("clock", _s.clock_dev), ("camera", _s.camera_dev)):
         if _devid and _devid in devices:
@@ -515,6 +537,16 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "players.delete":
                 if players.pop(data.get("id"), None) is not None:
                     save_players()
+                    await broadcast_admin()
+            elif t == "tournament.save":                          # management page created/edited a tournament
+                tr = data.get("tournament") or {}
+                if tr.get("id"):
+                    tournaments[tr["id"]] = tr
+                    save_tournaments()
+                    await broadcast_admin()
+            elif t == "tournament.delete":
+                if tournaments.pop(data.get("id"), None) is not None:
+                    save_tournaments()
                     await broadcast_admin()
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))

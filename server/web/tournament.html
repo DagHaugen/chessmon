@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#15171c">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>chessmon · tournament</title>
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
+    --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:22px}
+  .nav{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .nav a{color:var(--mut);text-decoration:none;font-size:13px;font-weight:600;padding:7px 12px;border-radius:9px;border:1px solid transparent}
+  .nav a:hover{background:var(--panel)}
+  .nav a.here{color:var(--ink);background:var(--panel);border-color:var(--line)}
+  .nav .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:auto}
+  .nav .dot.on{background:var(--good)}
+  h1{font-size:18px;margin:0 0 4px;font-weight:700}
+  .lead{color:var(--mut);font-size:13px;margin:0 0 16px}
+  .add{background:var(--accent);color:#0b1020;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer}
+  .mini{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+  .mini.bad{color:var(--bad)}
+  .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;font-size:13px}
+  .trow{display:flex;gap:12px;align-items:baseline;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:7px;cursor:pointer}
+  .trow.sel{border-color:var(--accent)}
+  .trow .tnm2{font-weight:700}
+  .trow .tmeta{margin-left:auto;font-size:12px;color:var(--mut)}
+  .detail{margin-top:20px}
+  .detail.hidden{display:none}
+  .dhead{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+  .tnm{flex:1;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:16px;font-weight:700;font-family:inherit}
+  .field{margin-bottom:8px;max-width:240px}
+  .field label{display:block;font-size:11px;color:var(--mut);margin-bottom:4px}
+  .field select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:14px;font-family:inherit}
+  h3{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin:20px 0 9px}
+  .pchecks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+  .pchecks label{display:flex;align-items:center;gap:7px;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+  .round{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px}
+  .rhead{display:flex;align-items:center;margin-bottom:9px;font-weight:700;font-size:14px}
+  .rhead button{margin-left:auto}
+  .pair{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .pair select{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:14px;font-family:inherit}
+  .pair select.res{flex:0 0 86px}
+  .pair .dash{color:var(--mut)}
+  .stbl{display:flex;flex-direction:column;gap:4px}
+  .strow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+  .strow .srank{color:var(--mut);width:18px;text-align:right}
+  .strow .snm{font-weight:600}
+  .strow .spts{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
+  .strow .sgms{color:var(--mut);font-size:12px;width:42px;text-align:right}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="admin.html" target="cm_console">Console</a>
+    <a href="setup.html" target="cm_setup">Setup</a>
+    <a href="players.html" target="cm_players">Players</a>
+    <a href="formats.html" target="cm_formats">Formats</a>
+    <a href="tournament.html" target="cm_tournament" class="here">Tournament</a>
+    <span class="dot" id="dot" title="server link"></span>
+  </nav>
+  <h1>Tournament</h1>
+  <p class="lead">Manual tracker: build the field, pair each round by hand, record results. Set the actual games up on the <b>Setup</b> page.</p>
+  <div id="tlist"></div>
+  <div class="detail hidden" id="detail"></div>
+</div>
+<script>
+function $(id){return document.getElementById(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
+window.name='cm_tournament';
+let ws, tours=[], players=[], formats=[], selId=null, renderPending=false;
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){
+    players=m.players||[];formats=m.formats||[];
+    const sel=selId&&tours.find(t=>t.id===selId);                    // keep the in-flight local copy of the open tournament
+    tours=(m.tournaments||[]).map(t=>sel&&t.id===selId?sel:t);
+    if(sel&&!tours.some(t=>t.id===selId))tours.push(sel);
+    maybeRender();
+  }};
+  ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function uid(){return crypto.randomUUID?crypto.randomUUID():('t_'+Math.random().toString(36).slice(2)+Date.now())}
+function pname(pid){const p=players.find(x=>x.id===pid);return p?(p.name||'?'):'?';}
+function curTour(){return tours.find(t=>t.id===selId);}
+function saveTour(tr){send({type:'tournament.save',tournament:tr});}
+function maybeRender(){
+  if(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('detail').contains(document.activeElement)){renderPending=true;return;}
+  renderPending=false;render();
+}
+function fmtPts(p){let s=(Math.round(p*2)/2).toString();if(s.endsWith('.5'))s=s.slice(0,-2)+'½';if(s==='0½')s='½';return s;}
+function field(label,el){const d=document.createElement('div');d.className='field';const l=document.createElement('label');l.textContent=label;d.append(l,el);return d;}
+function formatSelect(selId){const s=document.createElement('select');
+  s.innerHTML='<option value="">—</option>'+formats.slice().sort((a,b)=>(a.base_ms-b.base_ms)||(a.increment_ms-b.increment_ms))
+    .map(f=>'<option value="'+esc(f.id)+'"'+(f.id===selId?' selected':'')+'>'+esc(f.name||'')+(f.category?' · '+esc(f.category):'')+'</option>').join('');
+  return s;}
+function fieldPlayerSelect(tr,sel){const s=document.createElement('select');
+  s.innerHTML='<option value="">—</option>'+(tr.players||[]).map(pid=>({pid,name:pname(pid)})).sort((a,b)=>a.name.localeCompare(b.name))
+    .map(o=>'<option value="'+esc(o.pid)+'"'+(o.pid===sel?' selected':'')+'>'+esc(o.name)+'</option>').join('');
+  return s;}
+function render(){renderList();renderDetail();}
+function renderList(){
+  const L=$('tlist');L.innerHTML='';
+  const add=document.createElement('button');add.className='add';add.textContent='+ New tournament';
+  add.onclick=()=>{const tr={id:uid(),name:'',format:null,players:[],rounds:[]};tours.push(tr);selId=tr.id;saveTour(tr);render();};
+  L.append(add);
+  const box=document.createElement('div');box.style.marginTop='12px';
+  tours.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(t=>{
+    const row=document.createElement('div');row.className='trow'+(t.id===selId?' sel':'');
+    row.innerHTML='<span class="tnm2">'+esc(t.name||'(unnamed)')+'</span><span class="tmeta">'+(t.players||[]).length+' players · '+(t.rounds||[]).length+' rounds</span>';
+    row.onclick=()=>{selId=t.id;render();};
+    box.append(row);
+  });
+  L.append(box);
+}
+function renderRound(tr,rd,ri){
+  const box=document.createElement('div');box.className='round';
+  const rh=document.createElement('div');rh.className='rhead';
+  const lbl=document.createElement('span');lbl.textContent='Round '+(ri+1);
+  const delR=document.createElement('button');delR.className='mini bad';delR.textContent='✕';delR.title='Delete round';
+  delR.onclick=()=>{tr.rounds.splice(ri,1);saveTour(tr);};
+  rh.append(lbl,delR);box.append(rh);
+  (rd.pairings||[]).forEach((pg,pi)=>{
+    const row=document.createElement('div');row.className='pair';
+    const ws2=fieldPlayerSelect(tr,pg.w);ws2.onchange=()=>{pg.w=ws2.value||null;saveTour(tr);};
+    const bs=fieldPlayerSelect(tr,pg.b);bs.onchange=()=>{pg.b=bs.value||null;saveTour(tr);};
+    const rs=document.createElement('select');rs.className='res';
+    rs.innerHTML='<option value="">—</option><option value="1-0">1–0</option><option value="1/2-1/2">½–½</option><option value="0-1">0–1</option>';
+    rs.value=pg.r||'';rs.onchange=()=>{pg.r=rs.value||null;saveTour(tr);};
+    const rm=document.createElement('button');rm.className='mini bad';rm.textContent='✕';
+    rm.onclick=()=>{rd.pairings.splice(pi,1);saveTour(tr);};
+    const dash=document.createElement('span');dash.className='dash';dash.textContent='–';
+    row.append(ws2,dash,bs,rs,rm);box.append(row);
+  });
+  const addP=document.createElement('button');addP.className='mini';addP.textContent='+ Board';
+  addP.onclick=()=>{rd.pairings=rd.pairings||[];rd.pairings.push({w:null,b:null,r:null});saveTour(tr);};
+  box.append(addP);
+  return box;
+}
+function renderStandings(tr){
+  const wrap=document.createElement('div');
+  const h=document.createElement('h3');h.textContent='Standings';wrap.append(h);
+  if(!(tr.players||[]).length){const e=document.createElement('div');e.className='empty';e.textContent='Add players to the field above.';wrap.append(e);return wrap;}
+  const pts={},gms={};tr.players.forEach(pid=>{pts[pid]=0;gms[pid]=0;});
+  (tr.rounds||[]).forEach(rd=>(rd.pairings||[]).forEach(p=>{
+    if(!p.r||!p.w||!p.b)return;
+    gms[p.w]=(gms[p.w]||0)+1;gms[p.b]=(gms[p.b]||0)+1;
+    if(p.r==='1-0')pts[p.w]+=1;else if(p.r==='0-1')pts[p.b]+=1;else if(p.r==='1/2-1/2'){pts[p.w]+=0.5;pts[p.b]+=0.5;}
+  }));
+  const rows=tr.players.map(pid=>({pid,pts:pts[pid]||0,gms:gms[pid]||0})).sort((a,b)=>b.pts-a.pts||a.gms-b.gms);
+  const tbl=document.createElement('div');tbl.className='stbl';
+  rows.forEach((r,i)=>{const row=document.createElement('div');row.className='strow';
+    row.innerHTML='<span class="srank">'+(i+1)+'</span><span class="snm">'+esc(pname(r.pid))+'</span><span class="spts">'+fmtPts(r.pts)+'</span><span class="sgms">'+r.gms+' g</span>';
+    tbl.append(row);});
+  wrap.append(tbl);return wrap;
+}
+function renderDetail(){
+  const D=$('detail'),tr=curTour();
+  if(!tr){D.classList.add('hidden');D.innerHTML='';return;}
+  D.classList.remove('hidden');D.innerHTML='';
+  const hd=document.createElement('div');hd.className='dhead';
+  const nm=document.createElement('input');nm.className='tnm';nm.value=tr.name||'';nm.maxLength=40;nm.placeholder='Tournament name';
+  nm.onchange=()=>{tr.name=nm.value.trim();saveTour(tr);};
+  nm.onblur=()=>{if(renderPending)render();};
+  const del=document.createElement('button');del.className='mini bad';del.textContent='Delete';
+  del.onclick=()=>{if(confirm('Delete tournament “'+(tr.name||'')+'”?')){send({type:'tournament.delete',id:tr.id});selId=null;tours=tours.filter(x=>x.id!==tr.id);render();}};
+  hd.append(nm,del);D.append(hd);
+  const fsel=formatSelect(tr.format&&tr.format.id);fsel.onchange=()=>{tr.format=formats.find(f=>f.id===fsel.value)||null;saveTour(tr);};
+  D.append(field('Format',fsel));
+  const ph=document.createElement('h3');ph.textContent='Players';D.append(ph);
+  const pl=document.createElement('div');pl.className='pchecks';
+  if(!players.length){const e=document.createElement('div');e.className='empty';e.textContent='No players yet — add them on the Players page.';D.append(e);}
+  players.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(p=>{
+    const lab=document.createElement('label');const cb=document.createElement('input');cb.type='checkbox';cb.checked=(tr.players||[]).includes(p.id);
+    cb.onchange=()=>{tr.players=tr.players||[];if(cb.checked){if(!tr.players.includes(p.id))tr.players.push(p.id);}else tr.players=tr.players.filter(x=>x!==p.id);saveTour(tr);};
+    lab.append(cb,document.createTextNode(' '+(p.name||'')));pl.append(lab);
+  });
+  D.append(pl);
+  const rh=document.createElement('h3');rh.textContent='Rounds';D.append(rh);
+  (tr.rounds||[]).forEach((rd,ri)=>D.append(renderRound(tr,rd,ri)));
+  const addR=document.createElement('button');addR.className='add';addR.textContent='+ Add round';
+  addR.onclick=()=>{tr.rounds=tr.rounds||[];tr.rounds.push({pairings:[]});saveTour(tr);};
+  D.append(addR);
+  D.append(renderStandings(tr));
+}
+connect();
+</script>
+</body>
+</html>
