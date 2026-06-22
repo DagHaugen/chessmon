@@ -199,7 +199,7 @@
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
 window.name='cm_console';   // claim this tab's name so other pages' nav (target=cm_console) reuses it
-function matchLine(m){const w=m.white?m.white.name:'?',b=m.black?m.black.name:'?',f=m.format?m.format.name:'—';return w+' – '+b+' · '+f+(m.start_mode?' · '+m.start_mode:'');}   // Enter in any input -> drop focus / dismiss keyboard
+function matchLine(m){const w=m.white?m.white.name:'?',b=m.black?m.black.name:'?',f=m.format?m.format.name:'—';return w+' – '+b+' · '+f+(m.variant==='chess960'?' · Chess960 #'+(m.chess960!=null?m.chess960:'?'):'')+(m.start_mode?' · '+m.start_mode:'');}   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 const BIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 let ws, devs=[], tabs=[], calibTable=null, camState={};   // camState: console-intended flash/screen per table
