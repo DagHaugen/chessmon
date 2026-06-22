@@ -128,13 +128,18 @@ function render(){
     const liveSummary=()=>{const w=players.find(p=>p.id===wsel.value),b=players.find(p=>p.id===bsel.value),f=formats.find(x=>x.id===fsel.value);
       if(!w&&!b&&!f){msumEl.textContent='not set';msumEl.className='msum none';return;}
       msumEl.className='msum';msumEl.textContent=(w?w.name:'?')+' – '+(b?b.name:'?')+' · '+(f?f.name:'—')+(fisR.checked?' · Chess960 #'+num960():'')+' · manual';};
+    const dirty=()=>{const m=t.match,w=wsel.value||null,b=bsel.value||null,f=fsel.value||null,f960=fisR.checked,n=num960();
+      if(!m)return !!(w||b||f);
+      return w!==(m.white?m.white.id:null)||b!==(m.black?m.black.id:null)||f!==(m.format?m.format.id:null)||f960!==(m.variant==='chess960')||(f960&&n!==m.chess960);};
     refreshPrev();
-    wsel.onchange=bsel.onchange=fsel.onchange=liveSummary;
-    numIn.oninput=()=>{refreshPrev();liveSummary();};
     fRow.append(field('Position # (0–959)',numIn),prev);
-    stdR.onchange=fisR.onchange=()=>{const f=fisR.checked;fRow.classList.toggle('hidden',!f);if(f)refreshPrev();liveSummary();};
     const acts=document.createElement('div');acts.className='sacts';
     const setb=document.createElement('button');setb.className='add';setb.textContent=t.match?'Update':'Set';
+    const onEdit=()=>{liveSummary();setb.style.display=(t.match&&!dirty())?'none':'';};   // live summary + hide Set/Update when nothing changed
+    wsel.onchange=bsel.onchange=fsel.onchange=onEdit;
+    numIn.oninput=()=>{refreshPrev();onEdit();};
+    stdR.onchange=fisR.onchange=()=>{const f=fisR.checked;fRow.classList.toggle('hidden',!f);if(f)refreshPrev();onEdit();};
+    onEdit();
     setb.onclick=()=>{
       const w=players.find(p=>p.id===wsel.value),b=players.find(p=>p.id===bsel.value),f=formats.find(x=>x.id===fsel.value);
       const f960=fisR.checked,n=num960();
