@@ -415,7 +415,7 @@ function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
 function resetGame(){phase='ready';clk.white=clk.black=baseMs();clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
-  lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
+  lastMove=null;renderBoard((curMatch&&curMatch.start_fen)||'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start (chess960 if assigned)
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
   showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();updateWait()}
 function ph(txt){const d=document.createElement('div');d.className='ph';d.textContent=txt;return d}

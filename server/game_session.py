@@ -45,6 +45,7 @@ class Session:
         self.alignment_alert = False       # True while the camera looks moved since calibration (console flag)
         self._align_strikes = 0            # consecutive frames that looked moved (debounce before raising the alert)
         self.white, self.black, self.variant = white, black, variant
+        self.start_fen = start_fen        # custom start position (e.g. a chess960 layout from Basic Setup)
         if start_fen:
             board = chess.Board(start_fen)
         else:
@@ -68,7 +69,7 @@ class Session:
 
     def __setstate__(self, d):             # tolerate older pickles that predate newer fields
         self.__dict__.update(d)
-        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None), ("match", None)):
+        for k, v in (("clock_dev", None), ("camera_dev", None), ("started_at", None), ("name", ""), ("corners", None), ("status", ""), ("calibrations", {}), ("align_refs", {}), ("alignment_alert", False), ("_align_strikes", 0), ("_last_frame", None), ("match", None), ("start_fen", None)):
             if not hasattr(self, k):
                 setattr(self, k, v)
         if self.board_reader is not None and self.camera_dev and not self.calibrations:   # migrate a pre-existing single-camera calibration
@@ -288,11 +289,25 @@ class Session:
         """Operator moved all pieces back to the start position and confirmed RESET: rebuild the game
         from scratch. The detector re-anchors to the start position from the next camera frame, which
         the I/O layer requests as a 'refresh' (resnap against the now-start board)."""
-        self.game = CameraGame(chess.Board(chess960=(self.variant == "chess960")))
+        if self.start_fen:
+            self.game = CameraGame(chess.Board(self.start_fen, chess960=(self.variant == "chess960")))
+        else:
+            self.game = CameraGame(chess.Board(chess960=(self.variant == "chess960")))
         self.moves = []
         self.result = None
         self.started_at = None
         self.status = ""
+        self._pending = None
+
+    def apply_match_position(self, start_fen, chess960):
+        """Adopt a Basic Setup / Tournament start position (e.g. a chess960 layout). Only before a game starts."""
+        self.variant = "chess960" if chess960 else "standard"
+        self.start_fen = start_fen or None
+        board = (chess.Board(self.start_fen, chess960=chess960) if self.start_fen
+                 else chess.Board(chess960=chess960))
+        self.game = CameraGame(board)
+        self.moves = []
+        self.result = None
         self._pending = None
 
     def mark_started(self):

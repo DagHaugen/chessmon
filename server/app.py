@@ -520,8 +520,10 @@ async def ws_endpoint(ws: WebSocket):
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
                     sess.match = data.get("match")
-                    mgr.save(SESSIONS_FILE)
-                    await broadcast_tables()
+                    m = sess.match or {}
+                    if not sess.moves and not sess.result:        # no game in progress -> adopt the assigned start position
+                        sess.apply_match_position(m.get("start_fen"), m.get("variant") == "chess960")
+                    await broadcast_state(sess)                   # new board + match -> clock; tables -> console; persists
                     await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
             elif t == "admin.calib.lock":                         # console opened/closed its calibration modal -> block/unblock the clock's Calibrate
                 sess = mgr.by_table(data.get("table"))
