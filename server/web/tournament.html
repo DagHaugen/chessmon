@@ -47,6 +47,16 @@
   .pair .dash{color:var(--mut)}
   .pair select.asg{flex:0 0 auto;font-size:12px;color:var(--mut)}
   .pair .ontab{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--good);white-space:nowrap;padding:0 4px}
+  .pair .asghint{flex:0 0 auto;font-size:12px;color:var(--mut);font-style:italic}
+  .frow{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .vradios{display:flex;gap:14px;align-items:center;padding-bottom:9px}
+  .vradios label{display:flex;align-items:center;gap:5px;font-size:14px;color:var(--ink);cursor:pointer}
+  .c9row{display:flex;align-items:center;gap:10px;margin:2px 0 10px;flex-wrap:wrap}
+  .c9lab{font-size:12px;color:var(--mut)}
+  .c9num{width:84px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px;font-family:inherit}
+  .c9num:disabled{opacity:.4;cursor:not-allowed}
+  .c9prev{font-size:19px;letter-spacing:3px;color:var(--ink);line-height:1}
+  .c9hint{font-size:12px;color:var(--mut);font-style:italic}
   .stbl{display:flex;flex-direction:column;gap:4px}
   .strow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
   .strow .srank{color:var(--mut);width:18px;text-align:right}
@@ -99,6 +109,24 @@ function curTour(){return tours.find(t=>t.id===selId);}
 function saveTour(tr){lastEdit=performance.now();send({type:'tournament.save',tournament:tr});}
 function tableSig(ts){return (ts||[]).map(t=>t.token+':'+((t.match&&t.match.ref&&t.match.ref.pairing)||'')+':'+(t.result||'')).join('|');}
 function pairingTable(pid){return pid&&(tables||[]).find(t=>t.match&&t.match.ref&&t.match.ref.pairing===pid);}
+const KRN=['NNRKR','NRNKR','NRKNR','NRKRN','RNNKR','RNKNR','RNKRN','RKNNR','RKNRN','RKRNN'];
+function backrank960(n){n=((n%960)+960)%960;const b='........'.split('');
+  b[[1,3,5,7][n%4]]='B';n=Math.floor(n/4);b[[0,2,4,6][n%4]]='B';n=Math.floor(n/4);
+  let e=[];for(let i=0;i<8;i++)if(b[i]==='.')e.push(i);b[e[n%6]]='Q';n=Math.floor(n/6);
+  e=[];for(let i=0;i<8;i++)if(b[i]==='.')e.push(i);const k=KRN[n];for(let i=0;i<5;i++)b[e[i]]=k[i];return b.join('');}
+const GLY={R:'♜',N:'♞',B:'♝',Q:'♛',K:'♚'};
+function backrankGlyphs(n){return backrank960(n).split('').map(c=>GLY[c]||c).join('');}
+function roundDone(rd){const ps=(rd&&rd.pairings)||[];return ps.length>0&&ps.every(p=>p.r);}
+function variant960(tr){return (tr.variant||'standard')==='chess960';}
+function variantRadios(tr){
+  const wrap=document.createElement('div');wrap.className='vradios';
+  [['standard','Standard'],['chess960','Fischer']].forEach(pair=>{
+    const l=document.createElement('label');const r=document.createElement('input');r.type='radio';r.name='tvariant';r.checked=((tr.variant||'standard')===pair[0]);
+    r.onchange=()=>{if(r.checked){tr.variant=pair[0];saveTour(tr);render();}};
+    l.append(r,document.createTextNode(' '+pair[1]));wrap.append(l);
+  });
+  return wrap;
+}
 function maybeRender(){
   if(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('detail').contains(document.activeElement)){renderPending=true;return;}
   renderPending=false;render();
@@ -128,11 +156,12 @@ function renderList(){
   });
   L.append(box);
 }
-function assignCtl(tr,pg){
+function assignCtl(tr,rd,pg){
   const onTab=pairingTable(pg.id);
   if(onTab){const tag=document.createElement('span');tag.className='ontab';tag.textContent='▸ '+(onTab.name||'table')+(onTab.result?' ✓':'');
     tag.title='Assigned to '+(onTab.name||'table')+(onTab.result?' · finished':'');return tag;}
   if(!pg.w||!pg.b||!(tables||[]).length)return document.createElement('span');   // need both players and a table before it can be assigned
+  if(variant960(tr)&&rd.chess960==null){const h=document.createElement('span');h.className='asghint';h.textContent='set position #';return h;}   // chess960: this round needs its position before it can start
   const s=document.createElement('select');s.className='asg';
   s.innerHTML='<option value="">→ table…</option>'+tables.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
     .map(t=>{const live=t.moves&&!t.result;                                       // a game actually in progress -> held; finished/fresh tables are reusable (assigning resets them)
@@ -149,6 +178,21 @@ function renderRound(tr,rd,ri){
   const delR=document.createElement('button');delR.className='mini bad';delR.textContent='✕';delR.title='Delete round';
   delR.onclick=()=>{tr.rounds.splice(ri,1);saveTour(tr);};
   rh.append(lbl,delR);box.append(rh);
+  if(variant960(tr)){                                              // chess960: each round gets its own position, set only after the previous round is finished
+    const prevDone=ri===0||roundDone(tr.rounds[ri-1]);
+    const prow=document.createElement('div');prow.className='c9row';
+    const lab=document.createElement('span');lab.className='c9lab';lab.textContent='Position #';
+    const inp=document.createElement('input');inp.className='c9num';inp.type='number';inp.min=0;inp.max=959;inp.placeholder='0–959';
+    inp.value=(rd.chess960!=null?rd.chess960:'');inp.disabled=!prevDone;
+    const prev=document.createElement('span');prev.className='c9prev';
+    const val=()=>inp.value===''?null:Math.max(0,Math.min(959,parseInt(inp.value,10)||0));
+    const upd=()=>{const v=val();prev.textContent=(v!=null?backrankGlyphs(v):'');};upd();
+    inp.oninput=upd;
+    inp.onchange=()=>{rd.chess960=val();upd();saveTour(tr);};
+    prow.append(lab,inp,prev);
+    if(!prevDone){const h=document.createElement('span');h.className='c9hint';h.textContent='finish round '+ri+' first';prow.append(h);}
+    box.append(prow);
+  }
   (rd.pairings||[]).forEach((pg,pi)=>{
     const row=document.createElement('div');row.className='pair';
     const ws2=fieldPlayerSelect(tr,pg.w);ws2.onchange=()=>{pg.w=ws2.value||null;saveTour(tr);};
@@ -159,7 +203,7 @@ function renderRound(tr,rd,ri){
     const rm=document.createElement('button');rm.className='mini bad';rm.textContent='✕';
     rm.onclick=()=>{rd.pairings.splice(pi,1);saveTour(tr);};
     const dash=document.createElement('span');dash.className='dash';dash.textContent='–';
-    row.append(ws2,dash,bs,rs,rm,assignCtl(tr,pg));box.append(row);
+    row.append(ws2,dash,bs,rs,rm,assignCtl(tr,rd,pg));box.append(row);
   });
   const addP=document.createElement('button');addP.className='mini';addP.textContent='+ Board';
   addP.onclick=()=>{rd.pairings=rd.pairings||[];rd.pairings.push({id:uid(),w:null,b:null,r:null});saveTour(tr);};
@@ -195,7 +239,8 @@ function renderDetail(){
   del.onclick=()=>{if(confirm('Delete tournament “'+(tr.name||'')+'”?')){send({type:'tournament.delete',id:tr.id});selId=null;tours=tours.filter(x=>x.id!==tr.id);render();}};
   hd.append(nm,del);D.append(hd);
   const fsel=formatSelect(tr.format&&tr.format.id);fsel.onchange=()=>{tr.format=formats.find(f=>f.id===fsel.value)||null;saveTour(tr);};
-  D.append(field('Format',fsel));
+  const frow=document.createElement('div');frow.className='frow';frow.append(field('Format',fsel),variantRadios(tr));
+  D.append(frow);
   const ph=document.createElement('h3');ph.textContent='Players';D.append(ph);
   const pl=document.createElement('div');pl.className='pchecks';
   if(!players.length){const e=document.createElement('div');e.className='empty';e.textContent='No players yet — add them on the Players page.';D.append(e);}

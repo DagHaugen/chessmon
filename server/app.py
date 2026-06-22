@@ -24,6 +24,7 @@ import base64
 import json
 import os
 
+import chess
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket
@@ -576,25 +577,35 @@ async def ws_endpoint(ws: WebSocket):
                 tr = tournaments.get(data.get("tournament"))
                 sess = mgr.by_table(data.get("table"))
                 pid = data.get("pairing")
-                if tr is None or sess is None or not pid:
+                rd = pg = None
+                if tr is not None and pid:
+                    for r in tr.get("rounds", []):
+                        for p in r.get("pairings", []):
+                            if p.get("id") == pid:
+                                rd, pg = r, p
+                                break
+                        if pg is not None:
+                            break
+                ch960 = tr is not None and tr.get("variant") == "chess960"
+                if tr is None or sess is None or pg is None:
                     await send(ws, {"type": "error", "reason": "unknown table or pairing"})
+                elif ch960 and rd.get("chess960") is None:
+                    await send(ws, {"type": "error", "reason": "set this round's Chess960 number first"})
                 else:
-                    pg = next((p for rd in tr.get("rounds", []) for p in rd.get("pairings", [])
-                               if p.get("id") == pid), None)
-                    if pg is None:
-                        await send(ws, {"type": "error", "reason": "unknown pairing"})
-                    else:
-                        def _pl(x):
-                            r = players.get(x) or {}
-                            return {"id": x, "name": r.get("name", "")} if x else None
-                        sess.match = {"white": _pl(pg.get("w")), "black": _pl(pg.get("b")),
-                                      "format": tr.get("format"), "start_mode": "manual",
-                                      "variant": "standard", "chess960": None, "start_fen": None,
-                                      "ref": {"tournament": tr["id"], "pairing": pid, "name": tr.get("name", "")}}
-                        if sess.result or not sess.moves:         # fresh or finished table -> (re)set the board to the standard start; never disturb a game in progress
-                            sess.apply_match_position(None, False)
-                        await broadcast_state(sess)               # board + match -> clock; tables -> console/setup; persists
-                        await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
+                    def _pl(x):
+                        r = players.get(x) or {}
+                        return {"id": x, "name": r.get("name", "")} if x else None
+                    n = int(rd["chess960"]) if ch960 else None
+                    start_fen = chess.Board.from_chess960_pos(n).fen() if ch960 else None
+                    sess.match = {"white": _pl(pg.get("w")), "black": _pl(pg.get("b")),
+                                  "format": tr.get("format"), "start_mode": "manual",
+                                  "variant": "chess960" if ch960 else "standard",
+                                  "chess960": n, "start_fen": start_fen,
+                                  "ref": {"tournament": tr["id"], "pairing": pid, "name": tr.get("name", "")}}
+                    if sess.result or not sess.moves:             # fresh or finished table -> (re)set the board; never disturb a game in progress
+                        sess.apply_match_position(start_fen, ch960)
+                    await broadcast_state(sess)                   # board + match -> clock; tables -> console/setup; persists
+                    await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
@@ -677,6 +688,11 @@ async def ws_endpoint(ws: WebSocket):
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
             elif t == "game.start":                               # clock pressed START -> mark the game running
                 s.mark_started()
+                cam = hub(s.table_token)["camera"]
+                if getattr(s, "needs_anchor", False) and cam is not None and s.board_reader is not None:
+                    s.needs_anchor = False                        # board was (re)assigned -> re-anchor the detector to the start before the first move
+                    s.set_calib_step("refresh")
+                    await send(cam, {"type": "capture.req"})
                 await broadcast_state(s)
             elif t == "game.status":                              # clock reports running / paused / waiting
                 s.status = data.get("status", "")
