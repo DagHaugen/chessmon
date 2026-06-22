@@ -319,7 +319,7 @@ function renderRunning(){
     const row=document.createElement('div');row.className='grow';
     const open=expanded.has(t.token);
     const left=document.createElement('div');left.style.cursor='pointer';left.title='Show / hide the live board';
-    left.onclick=()=>{if(open)expanded.delete(t.token);else{expanded.add(t.token);reqCam(t.token);}renderRunning();};
+    left.onclick=()=>{if(open)expanded.delete(t.token);else expanded.add(t.token);renderRunning();};
     const nm=document.createElement('div');nm.className='gnm';
     nm.innerHTML='<span class="gcar">'+(open?'▾':'▸')+'</span>'+(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''))+(t.moved?' <span class="gstat wait" title="Camera/board shifted since calibration — re-calibrate.">⚠ CAMERA MOVED</span>':'');
     const camDev=devById(t.camera);
@@ -349,7 +349,8 @@ function renderRunning(){
       const img=document.createElement('img');img.alt='';img.draggable=false;img.setAttribute('data-t',t.token);
       const ph=document.createElement('div');ph.className='ph';ph.textContent=(camDev&&camDev.online)?'loading camera…':'camera offline';cam.append(img,ph);
       gv.append(bd,mv,cam);row.append(gv);
-      if(camFrames[t.token]){ph.remove();img.onload=()=>warpCam(img,camFrames[t.token].corners);img.src=camFrames[t.token].image;}}
+      if(camFrames[t.token]){ph.remove();img.onload=()=>warpCam(img,camFrames[t.token].corners);img.src=camFrames[t.token].image;}
+      if(camMoves[t.token]!==t.moves){camMoves[t.token]=t.moves;reqCam(t.token);}}   // auto-refresh the camera board when a move lands (or on first open)
     L.appendChild(row);
   });
 }
@@ -374,6 +375,7 @@ function renderGMoves(el,san,result){let h='';
   el.innerHTML=h||'<div class="mvempty">no moves yet</div>';el.scrollTop=el.scrollHeight;}
 /* ---- inline camera board: perspective-warp the last real-board frame into a square ---- */
 const camFrames={};                                        // table token -> {image, corners} from the last grabbed frame
+const camMoves={};                                         // table token -> move count when we last pulled a frame (auto-refresh on a new move)
 function hgAdj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
 function hgMul(a,b){const c=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=a[3*i+k]*b[3*k+j];c[3*i+j]=s;}return c;}
 function hgVec(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
