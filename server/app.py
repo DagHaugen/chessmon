@@ -573,39 +573,49 @@ async def ws_endpoint(ws: WebSocket):
                 if tournaments.pop(data.get("id"), None) is not None:
                     save_tournaments()
                     await broadcast_admin()
-            elif t == "tournament.assign":                        # push a tournament pairing onto a table as a Match
+            elif t == "tournament.start_round":                   # activate a planned round: push its matches to the planned tables, skipping any busy with another game
                 tr = tournaments.get(data.get("tournament"))
-                sess = mgr.by_table(data.get("table"))
-                pid = data.get("pairing")
-                rd = pg = None
-                if tr is not None and pid:
-                    for r in tr.get("rounds", []):
-                        for p in r.get("pairings", []):
-                            if p.get("id") == pid:
-                                rd, pg = r, p
-                                break
-                        if pg is not None:
-                            break
-                ch960 = tr is not None and tr.get("variant") == "chess960"
-                if tr is None or sess is None or pg is None:
-                    await send(ws, {"type": "error", "reason": "unknown table or pairing"})
-                elif ch960 and rd.get("chess960") is None:
-                    await send(ws, {"type": "error", "reason": "set this round's Chess960 number first"})
+                ri = data.get("round")
+                rounds = (tr or {}).get("rounds", [])
+                if tr is None or not isinstance(ri, int) or ri < 0 or ri >= len(rounds):
+                    await send(ws, {"type": "error", "reason": "unknown tournament or round"})
                 else:
-                    def _pl(x):
-                        r = players.get(x) or {}
-                        return {"id": x, "name": r.get("name", "")} if x else None
-                    n = int(rd["chess960"]) if ch960 else None
-                    start_fen = chess.Board.from_chess960_pos(n).fen() if ch960 else None
-                    sess.match = {"white": _pl(pg.get("w")), "black": _pl(pg.get("b")),
-                                  "format": tr.get("format"), "start_mode": "manual",
-                                  "variant": "chess960" if ch960 else "standard",
-                                  "chess960": n, "start_fen": start_fen,
-                                  "ref": {"tournament": tr["id"], "pairing": pid, "name": tr.get("name", "")}}
-                    if sess.result or not sess.moves:             # fresh or finished table -> (re)set the board; never disturb a game in progress
-                        sess.apply_match_position(start_fen, ch960)
-                    await broadcast_state(sess)                   # board + match -> clock; tables -> console/setup; persists
-                    await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
+                    rd = rounds[ri]
+                    ch960 = tr.get("variant") == "chess960"
+                    if ch960 and rd.get("chess960") is None:
+                        await send(ws, {"type": "error", "reason": "set this round's Chess960 number first"})
+                    else:
+                        def _pl(x):
+                            r = players.get(x) or {}
+                            return {"id": x, "name": r.get("name", "")} if x else None
+                        n = int(rd["chess960"]) if ch960 else None
+                        start_fen = chess.Board.from_chess960_pos(n).fen() if ch960 else None
+                        started, conflicts = [], []
+                        for pg in rd.get("pairings", []):
+                            tok = pg.get("table")
+                            if pg.get("r") or not tok or not pg.get("w") or not pg.get("b"):
+                                continue                          # finished / unplanned / incomplete -> skip
+                            sess = mgr.by_table(tok)
+                            if sess is None:
+                                continue
+                            in_prog = bool(sess.moves) and not sess.result
+                            ref_pid = (sess.match or {}).get("ref", {}).get("pairing") if sess.match else None
+                            if in_prog and ref_pid == pg["id"]:
+                                continue                          # this very pairing is already running here
+                            if in_prog:
+                                conflicts.append(sess.name or tok[:6])   # a different game is live on this table
+                                continue
+                            sess.match = {"white": _pl(pg.get("w")), "black": _pl(pg.get("b")),
+                                          "format": tr.get("format"), "start_mode": "manual",
+                                          "variant": "chess960" if ch960 else "standard",
+                                          "chess960": n, "start_fen": start_fen,
+                                          "ref": {"tournament": tr["id"], "pairing": pg["id"], "name": tr.get("name", "")}}
+                            sess.apply_match_position(start_fen, ch960)   # free or finished table -> reset to the start
+                            await broadcast_state(sess)               # board + match -> clock; tables -> console/setup; persists
+                            await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
+                            started.append(sess.name or tok[:6])
+                        await send(ws, {"type": "tournament.started", "round": ri,
+                                        "started": started, "conflicts": conflicts})
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:

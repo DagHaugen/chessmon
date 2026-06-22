@@ -47,7 +47,13 @@
   .pair .dash{color:var(--mut)}
   .pair select.asg{flex:0 0 auto;font-size:12px;color:var(--mut)}
   .pair .ontab{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--good);white-space:nowrap;padding:0 4px}
+  .pair .ontab.run{color:var(--cam)}
   .pair .asghint{flex:0 0 auto;font-size:12px;color:var(--mut);font-style:italic}
+  .rfoot{display:flex;align-items:center;gap:10px;margin-top:9px}
+  .startbtn{background:var(--good);color:#06140d;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
+  .startbtn:disabled{opacity:1;cursor:not-allowed;background:var(--panel);color:var(--mut);border:1px solid var(--line)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 17px;font-size:13px;color:var(--ink);box-shadow:0 8px 28px rgba(0,0,0,.45);opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center;white-space:pre-line;z-index:50}
+  .toast.show{opacity:1}
   .frow{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
   .vradios{display:flex;gap:14px;align-items:center;padding-bottom:9px}
   .vradios label{display:flex;align-items:center;gap:5px;font-size:14px;color:var(--ink);cursor:pointer}
@@ -79,11 +85,12 @@
   <div id="tlist"></div>
   <div class="detail hidden" id="detail"></div>
 </div>
+<div id="toast" class="toast"></div>
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
 window.name='cm_tournament';
-let ws, tours=[], players=[], formats=[], tables=[], selId=null, renderPending=false, tablesSig='', lastEdit=0;
+let ws, tours=[], players=[], formats=[], tables=[], selId=null, renderPending=false, tablesSig='', lastEdit=0, toastT=0;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
@@ -98,10 +105,15 @@ function connect(){
     }else if(m.type==='tables'){                                       // live tables: re-render only when the assignment/result picture changes (not every move)
       tables=m.tables||[];const sig=tableSig(tables);
       if(sig!==tablesSig){tablesSig=sig;maybeRender();}
+    }else if(m.type==='tournament.started'){                           // result of a Start round
+      let msg='Round '+((m.round|0)+1)+': '+((m.started&&m.started.length)?('started on '+m.started.join(', ')):'nothing to start');
+      if(m.conflicts&&m.conflicts.length)msg+='\nbusy, skipped: '+m.conflicts.join(', ');
+      showToast(msg);
     }};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function showToast(msg){const e=$('toast');if(!e)return;e.textContent=msg;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),4500);}
 function uid(){return crypto.randomUUID?crypto.randomUUID():('t_'+Math.random().toString(36).slice(2)+Date.now())}
 function pname(pid){const p=players.find(x=>x.id===pid);return p?(p.name||'?'):'?';}
 function curTour(){return tours.find(t=>t.id===selId);}
@@ -155,19 +167,18 @@ function renderList(){
   });
   L.append(box);
 }
-function assignCtl(tr,rd,pg){
-  const onTab=pairingTable(pg.id);
-  if(onTab){const tag=document.createElement('span');tag.className='ontab';tag.textContent='▸ '+(onTab.name||'table')+(onTab.result?' ✓':'');
-    tag.title='Assigned to '+(onTab.name||'table')+(onTab.result?' · finished':'');return tag;}
-  if(!pg.w||!pg.b||!(tables||[]).length)return document.createElement('span');   // need both players and a table before it can be assigned
-  if(variant960(tr)&&rd.chess960==null){const h=document.createElement('span');h.className='asghint';h.textContent='set position #';return h;}   // chess960: this round needs its position before it can start
-  const s=document.createElement('select');s.className='asg';
-  s.innerHTML='<option value="">→ table…</option>'+tables.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
-    .map(t=>{const live=t.moves&&!t.result;                                       // a game actually in progress -> held; finished/fresh tables are reusable (assigning resets them)
-      return '<option value="'+esc(t.token)+'"'+(live?' disabled':'')+'>'+esc(t.name||t.token.slice(0,6))+(live?' · in play':(t.result?' · done':''))+'</option>';}).join('');
-  s.onchange=()=>{const tok=s.value;if(!tok)return;
-    if(!pg.id){pg.id=uid();saveTour(tr);}                                          // ensure a stable id the result can flow back to
-    send({type:'tournament.assign',tournament:tr.id,pairing:pg.id,table:tok});s.value='';};
+function tname(tok){const t=(tables||[]).find(x=>x.token===tok);return t?(t.name||tok.slice(0,6)):(tok||'').slice(0,6);}
+function planCtl(tr,rd,pg){
+  const live=pairingTable(pg.id);                                                 // is this pairing actually live on a table right now?
+  if(live){const tag=document.createElement('span');tag.className='ontab'+(live.result?'':' run');
+    tag.textContent=(live.result?'✓ ':'● ')+(live.name||'table');
+    tag.title=(live.result?'Finished on ':'Running on ')+(live.name||'table');return tag;}
+  if(pg.r){const t=document.createElement('span');t.className='ontab';t.textContent='✓ '+(pg.table?tname(pg.table):'done');t.title='Finished';return t;}   // result in, table since reused
+  if(!(tables||[]).length)return document.createElement('span');
+  const s=document.createElement('select');s.className='asg';                      // a PLAN only -- does not touch the live table until Start round
+  s.innerHTML='<option value="">— table —</option>'+tables.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(t=>'<option value="'+esc(t.token)+'"'+(t.token===pg.table?' selected':'')+'>'+esc(t.name||t.token.slice(0,6))+'</option>').join('');
+  s.onchange=()=>{if(!pg.id)pg.id=uid();pg.table=s.value||null;saveTour(tr);};
   return s;
 }
 function renderRound(tr,rd,ri){
@@ -201,12 +212,28 @@ function renderRound(tr,rd,ri){
     const rm=document.createElement('button');rm.className='mini bad';rm.textContent='✕';
     rm.onclick=()=>{rd.pairings.splice(pi,1);saveTour(tr);};
     const dash=document.createElement('span');dash.className='dash';dash.textContent='–';
-    row.append(ws2,dash,bs,rs,rm,assignCtl(tr,rd,pg));box.append(row);
+    row.append(ws2,dash,bs,rs,rm,planCtl(tr,rd,pg));box.append(row);
   });
+  const foot=document.createElement('div');foot.className='rfoot';
   const addP=document.createElement('button');addP.className='mini';addP.textContent='+ Board';
   addP.onclick=()=>{rd.pairings=rd.pairings||[];rd.pairings.push({id:uid(),w:null,b:null,r:null});saveTour(tr);};
-  box.append(addP);
+  const plans=(rd.pairings||[]).filter(p=>!p.r&&p.table&&p.w&&p.b);
+  const need960=variant960(tr)&&rd.chess960==null;
+  const startB=document.createElement('button');startB.className='startbtn';startB.textContent='▶ Start round';
+  startB.disabled=!(plans.length&&!need960);
+  startB.title=need960?'Set the Chess960 number first':(plans.length?'Send these matches to their tables (busy tables are skipped)':'Plan a table for at least one board first');
+  startB.onclick=()=>startRound(tr,rd,ri);
+  foot.append(addP,startB);box.append(foot);
   return box;
+}
+function startRound(tr,rd,ri){
+  const plans=(rd.pairings||[]).filter(p=>!p.r&&p.table&&p.w&&p.b);
+  if(!plans.length)return;
+  const busy=plans.filter(p=>{const t=(tables||[]).find(x=>x.token===p.table);return t&&t.moves&&!t.result&&!(t.match&&t.match.ref&&t.match.ref.pairing===p.id);});
+  let msg='Start round '+(ri+1)+' — send '+plans.length+' match'+(plans.length>1?'es':'')+' to their tables?';
+  if(busy.length)msg+='\n\nBusy, will be skipped: '+busy.map(p=>tname(p.table)).join(', ');
+  if(!confirm(msg))return;
+  send({type:'tournament.start_round',tournament:tr.id,round:ri});
 }
 function renderStandings(tr){
   const wrap=document.createElement('div');
