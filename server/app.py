@@ -93,13 +93,14 @@ def tables_public():
     """The configured tables (each persists its unit assignments + name + calibration)."""
     return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
              "calibrated": s.board_reader is not None, "moved": getattr(s, "alignment_alert", False), "moves": len(s.moves),
-             "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(),   # live board for the console's inline game view
+             "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(), "match": getattr(s, "match", None),   # live board + match for the console
              "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
 
 
 def admin_state():
-    return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public()}
+    return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public(),
+            "formats": list(formats.values()), "players": list(players.values())}
 
 
 async def broadcast_devices():
@@ -112,6 +113,13 @@ async def broadcast_devices():
 async def broadcast_tables():
     """Just the table list (live moves / started / result) -> the console, without re-saving devices."""
     msg = {"type": "tables", "tables": tables_public()}
+    for ws in list(admins):
+        await send(ws, msg)
+
+
+async def broadcast_admin():
+    """Full admin state (devices + tables + formats + players) -> every console / management page."""
+    msg = admin_state()
     for ws in list(admins):
         await send(ws, msg)
 
@@ -488,6 +496,33 @@ async def ws_endpoint(ws: WebSocket):
                     _ok, buf = cv2.imencode(".jpg", f, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                     durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
                     await send(ws, {"type": "preview.image", "table": sess.table_token, "image": durl, "corners": sess.corners})
+            elif t == "formats.save":                             # management page added/edited a time control
+                fmt = data.get("format") or {}
+                if fmt.get("id"):
+                    formats[fmt["id"]] = fmt
+                    save_formats()
+                    await broadcast_admin()
+            elif t == "formats.delete":
+                if formats.pop(data.get("id"), None) is not None:
+                    save_formats()
+                    await broadcast_admin()
+            elif t == "players.save":                             # management page added/edited a player
+                p = data.get("player") or {}
+                if p.get("id"):
+                    players[p["id"]] = p
+                    save_players()
+                    await broadcast_admin()
+            elif t == "players.delete":
+                if players.pop(data.get("id"), None) is not None:
+                    save_players()
+                    await broadcast_admin()
+            elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
+                sess = mgr.by_table(data.get("table"))
+                if sess is not None:
+                    sess.match = data.get("match")
+                    mgr.save(SESSIONS_FILE)
+                    await broadcast_tables()
+                    await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
             elif t == "admin.calib.lock":                         # console opened/closed its calibration modal -> block/unblock the clock's Calibrate
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
