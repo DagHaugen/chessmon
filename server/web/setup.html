@@ -67,7 +67,9 @@ function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){tables=m.tables||[];players=m.players||[];formats=m.formats||[];maybeRender();}};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='devices'){tables=m.tables||[];players=m.players||[];formats=m.formats||[];maybeRender();}
+    else if(m.type==='tables'){tables=m.tables||[];maybeRender();}};   // match.set broadcasts 'tables' -> refresh the summary (sig guard ignores move-only changes)
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
