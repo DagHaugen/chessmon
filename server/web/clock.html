@@ -51,15 +51,15 @@
   .cbtn.draw{background:var(--panel);border-color:var(--accent);color:var(--accent)}
   .cbtn.won,.cbtn.lost,.cbtn.draw{font-size:min(13vw,54px);font-weight:800;letter-spacing:.05em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
-  .cstrip{flex:0 0 46px;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; height synced to the board (JS) */
+  .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; full height: names pin to top/bottom of screen, clocks+table held at board level by .cmid */
     padding:2px 0}
   .cstrip .ct{transform:rotate(-90deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
-  .cstrip .cend{display:flex;flex-direction:column;align-items:center;gap:9px}                 /* a player's name + clock, pinned to one end of the rail */
-  .cstrip .ctnm{transform:rotate(-90deg);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-height:40dvh}
+  .cstrip .cmid{display:flex;flex-direction:column;align-items:center;justify-content:space-between;flex:0 0 auto}   /* clock/table/clock, height pinned to the board (JS) */
+  .cstrip .ctnm{transform:rotate(-90deg);font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em;       /* player name -- same face as the rail clocks */
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-height:22dvh}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:auto;cursor:pointer;opacity:1}   /* warped real-board photo; tap to refresh */
   .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
@@ -211,10 +211,14 @@
   </div>
 
   <div id="game" class="hidden">
-    <div class="cstrip">                                <!-- col 2: name+clock at each end, table centred; sized to the board height -->
-      <div class="cend"><span class="ctnm" id="ctnm-black">Black</span><span class="ct" id="st-black">5:00</span></div>
-      <span class="ctname" id="tid"></span>
-      <div class="cend"><span class="ct" id="st-white">5:00</span><span class="ctnm" id="ctnm-white">White</span></div>
+    <div class="cstrip">                                <!-- col 2: names at screen ends (left of the move buttons); clocks+table at board level -->
+      <span class="ctnm" id="ctnm-black">Black</span>
+      <div class="cmid" id="cmid">
+        <span class="ct" id="st-black">5:00</span>
+        <span class="ctname" id="tid"></span>
+        <span class="ct" id="st-white">5:00</span>
+      </div>
+      <span class="ctnm" id="ctnm-white">White</span>
     </div>
     <div class="main">                                  <!-- col 3: zones (clocks + buttons) + board -->
       <div class="zone black" id="z-black">
@@ -654,10 +658,10 @@ if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ
 else{show('setup',true);$('tid').textContent='no table';}
 connect();                                             // always connect so the server console sees the device
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-function layoutBoard(){const bw=document.querySelector('.boardwrap'),cs=document.querySelector('.cstrip');
+function layoutBoard(){const bw=document.querySelector('.boardwrap'),cm=document.querySelector('.cmid');
   if(!bw||!bw.offsetWidth)return;                                                                  // hidden / not laid out yet
   if(!(window.CSS&&CSS.supports&&CSS.supports('aspect-ratio','1')))bw.style.height=bw.offsetWidth+'px';  // old browsers: no aspect-ratio -> force the board square
-  if(cs)cs.style.height=Math.round(bw.getBoundingClientRect().height)+'px';                         // col 2 (side clocks) spans exactly the board height
+  if(cm)cm.style.height=Math.round(bw.getBoundingClientRect().height)+'px';                         // clock/table middle spans the board; names pin to the screen ends
   if(camOn())warpBoardCam();}                                                                       // re-warp the overlay to the new board size
 window.addEventListener('resize',layoutBoard);
 (function(){const bw=document.querySelector('.boardwrap');
