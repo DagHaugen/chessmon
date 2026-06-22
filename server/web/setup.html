@@ -105,6 +105,7 @@ function render(){
     const head=document.createElement('div');head.className='thead';
     head.innerHTML='<span class="tname">'+esc(t.name||'unnamed table')+'</span>'+
       (t.match?'<span class="msum">'+esc(matchSummary(t.match))+'</span>':'<span class="msum none">not set</span>');
+    const msumEl=head.querySelector('.msum');
     const grid=document.createElement('div');grid.className='sgrid';
     const wsel=playerSelect(t.match&&t.match.white&&t.match.white.id);
     const bsel=playerSelect(t.match&&t.match.black&&t.match.black.id);
@@ -124,9 +125,14 @@ function render(){
     const prev=document.createElement('div');prev.className='mini';
     const num960=()=>((+numIn.value||0)%960+960)%960;
     const refreshPrev=()=>renderMini(prev,chess960Fen(num960()));
-    refreshPrev();numIn.oninput=refreshPrev;
+    const liveSummary=()=>{const w=players.find(p=>p.id===wsel.value),b=players.find(p=>p.id===bsel.value),f=formats.find(x=>x.id===fsel.value);
+      if(!w&&!b&&!f){msumEl.textContent='not set';msumEl.className='msum none';return;}
+      msumEl.className='msum';msumEl.textContent=(w?w.name:'?')+' – '+(b?b.name:'?')+' · '+(f?f.name:'—')+(fisR.checked?' · Chess960 #'+num960():'')+' · manual';};
+    refreshPrev();
+    wsel.onchange=bsel.onchange=fsel.onchange=liveSummary;
+    numIn.oninput=()=>{refreshPrev();liveSummary();};
     fRow.append(field('Position # (0–959)',numIn),prev);
-    stdR.onchange=fisR.onchange=()=>{const f=fisR.checked;fRow.classList.toggle('hidden',!f);if(f)refreshPrev();};
+    stdR.onchange=fisR.onchange=()=>{const f=fisR.checked;fRow.classList.toggle('hidden',!f);if(f)refreshPrev();liveSummary();};
     const acts=document.createElement('div');acts.className='sacts';
     const setb=document.createElement('button');setb.className='add';setb.textContent=t.match?'Update':'Set';
     setb.onclick=()=>{
