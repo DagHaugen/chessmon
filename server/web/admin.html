@@ -65,9 +65,12 @@
   /* configured tables */
   .tcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:10px}
   .thead{display:flex;align-items:center;gap:9px;margin-bottom:11px}
-  .thead input{flex:1;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
+  .thead input{flex:none;width:150px;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
     border-radius:9px;padding:8px 11px;font-size:15px;font-weight:600}
   .thead input:focus{outline:none;border-color:var(--accent)}
+  .ginfo{flex:1;min-width:0;color:var(--cam);text-decoration:none;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .ginfo:hover{text-decoration:underline}
+  .ginfo.none{color:var(--mut);font-weight:500}
   .pill{font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap}   /* plain grey status text, not a button */
   .pill.ok{color:var(--ink)}
   .cal{background:transparent;border:1px solid var(--good);color:var(--good);border-radius:8px;
@@ -302,7 +305,9 @@ function renderTables(){
     rm.onclick=()=>{                                          // an empty table just goes; one with units asks first
       if((!t.clock&&!t.camera)||confirm('Remove table “'+(t.name||'unnamed')+'”? Its units go back to Unused.'))
         send({type:'table.remove',table:t.token})};
-    head.append(nm);
+    const gi=document.createElement('a');gi.className='ginfo'+(t.match?'':' none');gi.href='setup.html';gi.target='cm_setup';
+    gi.textContent=t.match?matchLine(t.match):'Setup ↗';gi.title=t.match?'Edit this game in Setup':'Assign players + format in Setup';
+    head.append(nm,gi);
     if(t.camera){                                            // calibration only applies once a camera is assigned to the table
       head.append(pill);
       if(t.moved){const mv=document.createElement('span');mv.className='gstat wait';mv.textContent='⚠ moved';mv.title='The camera or board looks like it shifted since calibration — re-calibrate.';head.append(mv);}
@@ -311,8 +316,7 @@ function renderTables(){
     head.append(rm);
     const slots=document.createElement('div');slots.className='slots';
     slots.append(slotEl(t,'clock'),slotEl(t,'camera'));
-    if(t.match){const mm=document.createElement('div');mm.className='gmatch';mm.style.margin='0 0 10px';mm.textContent=matchLine(t.match);card.append(head,mm,slots);}else card.append(head,slots);
-    L.appendChild(card);
+    card.append(head,slots);L.appendChild(card);
   });
 }
 
