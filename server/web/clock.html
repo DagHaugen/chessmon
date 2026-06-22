@@ -57,6 +57,9 @@
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
   .cstrip .ctname{transform:rotate(-90deg);font-size:14px;color:var(--ink);font-weight:600;letter-spacing:.04em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:0}
+  .cstrip .cend{display:flex;flex-direction:column;align-items:center;gap:9px}                 /* a player's name + clock, pinned to one end of the rail */
+  .cstrip .ctnm{transform:rotate(-90deg);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-height:40dvh}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:auto;cursor:pointer;opacity:1}   /* warped real-board photo; tap to refresh */
   .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
@@ -158,7 +161,7 @@
   .setup{margin:auto;text-align:center}
   .setup .btn{background:var(--accent);color:#fff;max-width:240px}
   @supports (writing-mode:vertical-rl){   /* where it works, use real vertical text; old browsers keep the rotate(-90deg) base */
-    .cstrip .ct,.cstrip .ctname,.rail button .lbl,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
+    .cstrip .ct,.cstrip .ctname,.cstrip .ctnm,.rail button .lbl,.rrail .report{-webkit-text-orientation:sideways;text-orientation:sideways;writing-mode:vertical-rl;transform:rotate(180deg)}}
 </style>
 </head>
 <body>
@@ -208,10 +211,10 @@
   </div>
 
   <div id="game" class="hidden">
-    <div class="cstrip">                                <!-- col 2: clocks + table, sized to the board height -->
-      <span class="ct" id="st-black">5:00</span>
+    <div class="cstrip">                                <!-- col 2: name+clock at each end, table centred; sized to the board height -->
+      <div class="cend"><span class="ctnm" id="ctnm-black">Black</span><span class="ct" id="st-black">5:00</span></div>
       <span class="ctname" id="tid"></span>
-      <span class="ct" id="st-white">5:00</span>
+      <div class="cend"><span class="ct" id="st-white">5:00</span><span class="ctnm" id="ctnm-white">White</span></div>
     </div>
     <div class="main">                                  <!-- col 3: zones (clocks + buttons) + board -->
       <div class="zone black" id="z-black">
@@ -478,7 +481,9 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
 let consoleCalibrating=false,camFlashOn=false,curCorners=null,lastFrame=null,curMatch=null;   // curCorners: calibration (drives overlay warp); lastFrame: real-board photo; curMatch: assigned players + format
 function baseMs(){return (curMatch&&curMatch.format&&curMatch.format.base_ms)||300000;}
 function turnName(t){t=(''+t).toLowerCase();if(curMatch){if(t==='white'&&curMatch.white)return curMatch.white.name;if(t==='black'&&curMatch.black)return curMatch.black.name;}return t?t.charAt(0).toUpperCase()+t.slice(1):'';}
-function applyNames(){const w=$('s-white').querySelector('.nm'),b=$('s-black').querySelector('.nm');if(w)w.textContent=(curMatch&&curMatch.white&&curMatch.white.name)||'White';if(b)b.textContent=(curMatch&&curMatch.black&&curMatch.black.name)||'Black';}
+function applyNames(){const wn=(curMatch&&curMatch.white&&curMatch.white.name)||'White',bn=(curMatch&&curMatch.black&&curMatch.black.name)||'Black';
+  const w=$('s-white').querySelector('.nm'),b=$('s-black').querySelector('.nm');if(w)w.textContent=wn;if(b)b.textContent=bn;
+  const cw=$('ctnm-white'),cb=$('ctnm-black');if(cw)cw.textContent=wn;if(cb)cb.textContent=bn;}
 function onMatch(){applyNames();if(phase!=='run'&&phase!=='paused'&&phase!=='over'){clk.white=clk.black=baseMs();renderClocks();}}
 function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
 function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
