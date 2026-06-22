@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#15171c">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>chessmon · players</title>
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
+    --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:640px;margin:0 auto;padding:22px}
+  .nav{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .nav a{color:var(--mut);text-decoration:none;font-size:13px;font-weight:600;padding:7px 12px;border-radius:9px;border:1px solid transparent}
+  .nav a:hover{background:var(--panel)}
+  .nav a.here{color:var(--ink);background:var(--panel);border-color:var(--line)}
+  .nav .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:auto}
+  .nav .dot.on{background:var(--good)}
+  h1{font-size:18px;margin:0 0 4px;font-weight:700}
+  .lead{color:var(--mut);font-size:13px;margin:0 0 16px}
+  .addrow{display:flex;gap:8px;margin-bottom:16px}
+  .addrow input{flex:1;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:15px;font-family:inherit}
+  .add{background:var(--accent);color:#0b1020;border:none;border-radius:9px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .plist{display:flex;flex-direction:column;gap:8px}
+  .prow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  .pname{width:100%;background:var(--bg);color:var(--ink);border:1px solid transparent;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;font-family:inherit}
+  .pname:focus{border-color:var(--line);outline:none}
+  .mini{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
+  .mini.bad{color:var(--bad)}
+  .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="admin.html" target="cm_console">Console</a>
+    <a href="setup.html" target="cm_setup">Setup</a>
+    <a href="players.html" target="cm_players" class="here">Players</a>
+    <a href="formats.html" target="cm_formats">Formats</a>
+    <a href="tournament.html" target="cm_tournament">Tournament</a>
+    <span class="dot" id="dot" title="server link"></span>
+  </nav>
+  <h1>Players</h1>
+  <p class="lead">The roster. Names show on the clock and in the console.</p>
+  <div class="addrow"><input id="newname" maxlength="40" placeholder="New player name"><button class="add" id="addbtn">+ Add</button></div>
+  <div class="plist" id="list"></div>
+</div>
+<script>
+function $(id){return document.getElementById(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
+window.name='cm_players';   // claim this tab's name so the nav's target= links reuse it
+let ws, players=[], renderPending=false;
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){players=m.players||[];render();}};
+  ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function uid(){return crypto.randomUUID?crypto.randomUUID():('p_'+Math.random().toString(36).slice(2)+Date.now())}
+function render(){
+  if(document.activeElement&&document.activeElement.classList&&document.activeElement.classList.contains('pname')){renderPending=true;return}
+  renderPending=false;
+  const L=$('list');L.innerHTML='';
+  if(!players.length){L.innerHTML='<div class="empty">No players yet — add some above.</div>';return}
+  players.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(p=>{
+    const row=document.createElement('div');row.className='prow';
+    const inp=document.createElement('input');inp.className='pname';inp.value=p.name||'';inp.maxLength=40;
+    inp.onchange=()=>{const v=inp.value.trim();if(v)send({type:'players.save',player:{id:p.id,name:v}});else inp.value=p.name||'';};
+    inp.onblur=()=>{if(renderPending)render()};
+    const del=document.createElement('button');del.className='mini bad';del.textContent='Delete';
+    del.onclick=()=>{if(confirm('Remove “'+(p.name||'')+'”?'))send({type:'players.delete',id:p.id})};
+    row.append(inp,del);L.appendChild(row);
+  });
+}
+function addPlayer(){const v=$('newname').value.trim();if(!v)return;send({type:'players.save',player:{id:uid(),name:v}});$('newname').value='';$('newname').focus();}
+$('addbtn').onclick=addPlayer;
+$('newname').onkeydown=e=>{if(e.key==='Enter'){e.stopPropagation();addPlayer();}};   // Enter adds + keeps focus (bypass the global blur)
+connect();
+</script>
+</body>
+</html>
