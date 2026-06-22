@@ -389,7 +389,7 @@ function updateWait(){                                  // the board overlay + s
   else if(waiting){ ov='WAIT'; status=reason; }
   else if(phase==='run' && needsResume){ ov='START'; status='Camera ready — press START to resume'; }   // back mid-game
   else if(phase==='ready'){ ov='START'; status='Ready — press START'; }
-  else if(phase==='run'){ status=(clk.active==='white'?'White':'Black')+' to move'; }
+  else if(phase==='run'){ status=turnName(clk.active)+' to move'; }
   if(ov!==null){
     show('startov',true);
     $('startov').classList.toggle('wait', ov!=='START');   // WAIT/PAUSE are muted; START is green
@@ -414,7 +414,7 @@ function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen|
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
-function resetGame(){phase='ready';clk.white=clk.black=300000;clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
+function resetGame(){phase='ready';clk.white=clk.black=baseMs();clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
   lastMove=null;renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
   showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();updateWait()}
@@ -422,6 +422,7 @@ function ph(txt){const d=document.createElement('div');d.className='ph';d.textCo
 ['white','black'].forEach(side=>$('cb-'+side).onclick=()=>{   // confirm, or retry after a warning
   if(clk.active!==side||phase!=='run')return;
   warnMsg=null;reading=true;clk.running=false;clearCands();
+  if(curMatch&&curMatch.format&&curMatch.format.inc_type==='fischer'&&curMatch.format.increment_ms)clk[side]+=curMatch.format.increment_ms;   // Fischer: +inc when you complete your move (folded into the reported time)
   send({type:'move.confirm',side,clockWhite:Math.round(clk.white),clockBlack:Math.round(clk.black)});paint()});
 
 let selMark=null;
@@ -474,7 +475,11 @@ function sendCorners(){const r=$('cimg').getBoundingClientRect();
     return [(b.left+b.width/2-r.left)/r.width,(b.top+b.height/2-r.top)/r.height]});  // fractions 0..1
   send({type:'calib.corners',corners});$('report').textContent='registering…';}   // dialog stays open until the verdict
 
-let consoleCalibrating=false,camFlashOn=false,curCorners=null,lastFrame=null;   // curCorners: the table's current calibration (also drives the overlay warp); lastFrame: last real-board photo
+let consoleCalibrating=false,camFlashOn=false,curCorners=null,lastFrame=null,curMatch=null;   // curCorners: calibration (drives overlay warp); lastFrame: real-board photo; curMatch: assigned players + format
+function baseMs(){return (curMatch&&curMatch.format&&curMatch.format.base_ms)||300000;}
+function turnName(t){t=(''+t).toLowerCase();if(curMatch){if(t==='white'&&curMatch.white)return curMatch.white.name;if(t==='black'&&curMatch.black)return curMatch.black.name;}return t?t.charAt(0).toUpperCase()+t.slice(1):'';}
+function applyNames(){const w=$('s-white').querySelector('.nm'),b=$('s-black').querySelector('.nm');if(w)w.textContent=(curMatch&&curMatch.white&&curMatch.white.name)||'White';if(b)b.textContent=(curMatch&&curMatch.black&&curMatch.black.name)||'Black';}
+function onMatch(){applyNames();if(phase!=='run'&&phase!=='paused'&&phase!=='over'){clk.white=clk.black=baseMs();renderClocks();}}
 function camFlashLabel(){$('cflash').textContent='Flash: '+(camFlashOn?'on':'off');$('cflash').classList.toggle('on',camFlashOn)}
 function openCamDialog(){                                     // "Camera" rail button -> preview the camera, then Calibrate
   show('game',false);clk.running=false;$('calib').classList.remove('orienting');$('calib').classList.add('preview');   // pause the game while calibrating
@@ -531,7 +536,9 @@ function handle(m){
       break;
     case 'unassigned':                                          // console pulled this unit off its table -> back to the landing
       localStorage.removeItem('cm_table');location.href='index.html';break;
+    case 'match': curMatch=m.match; onMatch(); break;           // Basic Setup / Tournament assigned this table -> names + start time
     case 'state':                                               // refresh/reconnect -> restore the view
+      if('match' in m){curMatch=m.match;applyNames();}
       {const lm=(m.moves||[]).slice(-1)[0];lastMove=lm&&lm.uci?{from:lm.uci.slice(0,2),to:lm.uci.slice(2,4)}:null;}
       renderBoard(m.fen);
       showUndo(!!(m.moves&&m.moves.length));   // resume: clear illegal flag; undo if any moves
@@ -546,9 +553,9 @@ function handle(m){
         clk.active=m.turn.toLowerCase();
         if(m.moves&&m.moves.length){phase='run';needsResume=false;clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
           show('rotbtn',false);showCtrls(true);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();updateWait();}   // updateWait -> WAIT if the camera's down, else "X to move"
-        else if(phase==='run'){$('report').className='report';$('report').textContent=m.turn+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
-        else{enterReady();}}                                 // enterReady -> updateWait sets Ready / Camera not ready
-      else{$('report').textContent=m.turn+' to move';}
+        else if(phase==='run'){$('report').className='report';$('report').textContent=turnName(m.turn)+' to move';}   // already started -> ignore a redundant ready (e.g. the reset re-baseline broadcast)
+        else{clk.white=clk.black=baseMs();enterReady();}}    // base time from the format; enterReady -> updateWait sets Ready / Camera not ready
+      else{$('report').textContent=turnName(m.turn)+' to move';}
       break;
     case 'session.baselined':
       started=true;calibrated=true;show('pair',false);show('calib',false);$('calib').classList.remove('preview','orienting');show('game',true);   // calibration done -> close the Camera dialog
@@ -569,13 +576,13 @@ function handle(m){
     case 'calib.ok': $('report').textContent='board registered — capturing the start position…'; break;
     case 'calib.failed': $('report').textContent='calibration: '+m.reason;
       if(!$('calib').classList.contains('hidden'))$('chint').textContent='Failed — '+m.reason+'. Adjust the corners and try again.'; break;
-    case 'refreshed': $('report').textContent='board refreshed ✓ · '+(clk.active==='white'?'White':'Black')+' to move'; break;
+    case 'refreshed': $('report').textContent='board refreshed ✓ · '+turnName(clk.active)+' to move'; break;
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
       if(m.fen)renderBoard(m.fen);
       showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
-      $('report').className='report';$('report').textContent=m.san+'  ·  '+m.turn+' to move';
+      $('report').className='report';$('report').textContent=m.san+'  ·  '+turnName(m.turn)+' to move';
       reading=false;warnMsg=null;gameResult=null;clearCands();paint();hideCam();break;   // a move landed -> drop the real-board overlay
     case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
     case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;

@@ -479,7 +479,7 @@ class Session:
 
     def snapshot(self):
         return {"table": self.table_token, "variant": self.variant, "name": self.name,
-                "white": self.white, "black": self.black,
+                "white": self.white, "black": self.black, "match": getattr(self, "match", None),
                 "fen": self.game.board.fen(),
                 "turn": "White" if self.game.board.turn else "Black",
                 "calibrated": self.board_reader is not None,
