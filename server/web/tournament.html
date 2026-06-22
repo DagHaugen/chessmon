@@ -130,12 +130,13 @@ function renderList(){
 }
 function assignCtl(tr,pg){
   const onTab=pairingTable(pg.id);
-  if(onTab){const tag=document.createElement('span');tag.className='ontab';tag.textContent='▸ '+(onTab.name||'table');
+  if(onTab){const tag=document.createElement('span');tag.className='ontab';tag.textContent='▸ '+(onTab.name||'table')+(onTab.result?' ✓':'');
     tag.title='Assigned to '+(onTab.name||'table')+(onTab.result?' · finished':'');return tag;}
   if(!pg.w||!pg.b||!(tables||[]).length)return document.createElement('span');   // need both players and a table before it can be assigned
   const s=document.createElement('select');s.className='asg';
   s.innerHTML='<option value="">→ table…</option>'+tables.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
-    .map(t=>'<option value="'+esc(t.token)+'">'+esc(t.name||t.token.slice(0,6))+(t.moves?' (busy)':'')+'</option>').join('');
+    .map(t=>{const live=t.moves&&!t.result;                                       // a game actually in progress -> held; finished/fresh tables are reusable (assigning resets them)
+      return '<option value="'+esc(t.token)+'"'+(live?' disabled':'')+'>'+esc(t.name||t.token.slice(0,6))+(live?' · in play':(t.result?' · done':''))+'</option>';}).join('');
   s.onchange=()=>{const tok=s.value;if(!tok)return;
     if(!pg.id){pg.id=uid();saveTour(tr);}                                          // ensure a stable id the result can flow back to
     send({type:'tournament.assign',tournament:tr.id,pairing:pg.id,table:tok});s.value='';};
