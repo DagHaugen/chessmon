@@ -39,7 +39,7 @@
   .pchecks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
   .pchecks label{display:flex;align-items:center;gap:7px;font-size:14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
   .round{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px}
-  .rhead{display:flex;align-items:center;margin-bottom:9px;font-weight:700;font-size:14px}
+  .rhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:9px;font-weight:700;font-size:14px}
   .rhead button{margin-left:auto}
   .pair{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
   .pair select{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:14px;font-family:inherit}
@@ -51,11 +51,10 @@
   .frow{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
   .vradios{display:flex;gap:14px;align-items:center;padding-bottom:9px}
   .vradios label{display:flex;align-items:center;gap:5px;font-size:14px;color:var(--ink);cursor:pointer}
-  .c9row{display:flex;align-items:center;gap:10px;margin:2px 0 10px;flex-wrap:wrap}
-  .c9lab{font-size:12px;color:var(--mut)}
-  .c9num{width:84px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:14px;font-family:inherit}
+  .c9lab{font-size:13px;color:var(--mut);font-weight:600}
+  .c9num{width:72px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 7px;font-size:13px;font-family:inherit}
   .c9num:disabled{opacity:.4;cursor:not-allowed}
-  .c9prev{font-size:19px;letter-spacing:3px;color:var(--ink);line-height:1}
+  .c9prev{font-size:16px;letter-spacing:2px;color:var(--ink);line-height:1}
   .c9hint{font-size:12px;color:var(--mut);font-style:italic}
   .stbl{display:flex;flex-direction:column;gap:4px}
   .strow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
@@ -175,13 +174,10 @@ function renderRound(tr,rd,ri){
   const box=document.createElement('div');box.className='round';
   const rh=document.createElement('div');rh.className='rhead';
   const lbl=document.createElement('span');lbl.textContent='Round '+(ri+1);
-  const delR=document.createElement('button');delR.className='mini bad';delR.textContent='✕';delR.title='Delete round';
-  delR.onclick=()=>{tr.rounds.splice(ri,1);saveTour(tr);};
-  rh.append(lbl,delR);box.append(rh);
-  if(variant960(tr)){                                              // chess960: each round gets its own position, set only after the previous round is finished
+  rh.append(lbl);
+  if(variant960(tr)){                                              // chess960: each round's position lives on the header line after "Round N", set only once the previous round is finished
     const prevDone=ri===0||roundDone(tr.rounds[ri-1]);
-    const prow=document.createElement('div');prow.className='c9row';
-    const lab=document.createElement('span');lab.className='c9lab';lab.textContent='Position #';
+    const lab=document.createElement('span');lab.className='c9lab';lab.textContent='· Chess960';
     const inp=document.createElement('input');inp.className='c9num';inp.type='number';inp.min=0;inp.max=959;inp.placeholder='0–959';
     inp.value=(rd.chess960!=null?rd.chess960:'');inp.disabled=!prevDone;
     const prev=document.createElement('span');prev.className='c9prev';
@@ -189,10 +185,12 @@ function renderRound(tr,rd,ri){
     const upd=()=>{const v=val();prev.textContent=(v!=null?backrankGlyphs(v):'');};upd();
     inp.oninput=upd;
     inp.onchange=()=>{rd.chess960=val();upd();saveTour(tr);};
-    prow.append(lab,inp,prev);
-    if(!prevDone){const h=document.createElement('span');h.className='c9hint';h.textContent='finish round '+ri+' first';prow.append(h);}
-    box.append(prow);
+    rh.append(lab,inp,prev);
+    if(!prevDone){const h=document.createElement('span');h.className='c9hint';h.textContent='finish round '+ri+' first';rh.append(h);}
   }
+  const delR=document.createElement('button');delR.className='mini bad';delR.textContent='✕';delR.title='Delete round';
+  delR.onclick=()=>{tr.rounds.splice(ri,1);saveTour(tr);};
+  rh.append(delR);box.append(rh);
   (rd.pairings||[]).forEach((pg,pi)=>{
     const row=document.createElement('div');row.className='pair';
     const ws2=fieldPlayerSelect(tr,pg.w);ws2.onchange=()=>{pg.w=ws2.value||null;saveTour(tr);};
