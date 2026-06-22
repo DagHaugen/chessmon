@@ -41,10 +41,12 @@
   .round{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px}
   .rhead{display:flex;align-items:center;margin-bottom:9px;font-weight:700;font-size:14px}
   .rhead button{margin-left:auto}
-  .pair{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .pair{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
   .pair select{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:14px;font-family:inherit}
   .pair select.res{flex:0 0 86px}
   .pair .dash{color:var(--mut)}
+  .pair select.asg{flex:0 0 auto;font-size:12px;color:var(--mut)}
+  .pair .ontab{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--good);white-space:nowrap;padding:0 4px}
   .stbl{display:flex;flex-direction:column;gap:4px}
   .strow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
   .strow .srank{color:var(--mut);width:18px;text-align:right}
@@ -72,25 +74,31 @@
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
 window.name='cm_tournament';
-let ws, tours=[], players=[], formats=[], selId=null, renderPending=false;
+let ws, tours=[], players=[], formats=[], tables=[], selId=null, renderPending=false, tablesSig='', lastEdit=0;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){
-    players=m.players||[];formats=m.formats||[];
-    const sel=selId&&tours.find(t=>t.id===selId);                    // keep the in-flight local copy of the open tournament
-    tours=(m.tournaments||[]).map(t=>sel&&t.id===selId?sel:t);
-    if(sel&&!tours.some(t=>t.id===selId))tours.push(sel);
-    maybeRender();
-  }};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='devices'){
+      players=m.players||[];formats=m.formats||[];tables=m.tables||[];tablesSig=tableSig(tables);
+      const sel=(performance.now()-lastEdit<700)&&selId&&tours.find(t=>t.id===selId);   // shield the open tournament only just after a local edit, so result-back still lands
+      tours=(m.tournaments||[]).map(t=>sel&&t.id===selId?sel:t);
+      if(sel&&!tours.some(t=>t.id===selId))tours.push(sel);
+      maybeRender();
+    }else if(m.type==='tables'){                                       // live tables: re-render only when the assignment/result picture changes (not every move)
+      tables=m.tables||[];const sig=tableSig(tables);
+      if(sig!==tablesSig){tablesSig=sig;maybeRender();}
+    }};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function uid(){return crypto.randomUUID?crypto.randomUUID():('t_'+Math.random().toString(36).slice(2)+Date.now())}
 function pname(pid){const p=players.find(x=>x.id===pid);return p?(p.name||'?'):'?';}
 function curTour(){return tours.find(t=>t.id===selId);}
-function saveTour(tr){send({type:'tournament.save',tournament:tr});}
+function saveTour(tr){lastEdit=performance.now();send({type:'tournament.save',tournament:tr});}
+function tableSig(ts){return (ts||[]).map(t=>t.token+':'+((t.match&&t.match.ref&&t.match.ref.pairing)||'')+':'+(t.result||'')).join('|');}
+function pairingTable(pid){return pid&&(tables||[]).find(t=>t.match&&t.match.ref&&t.match.ref.pairing===pid);}
 function maybeRender(){
   if(document.activeElement&&document.activeElement.tagName==='INPUT'&&$('detail').contains(document.activeElement)){renderPending=true;return;}
   renderPending=false;render();
@@ -120,6 +128,19 @@ function renderList(){
   });
   L.append(box);
 }
+function assignCtl(tr,pg){
+  const onTab=pairingTable(pg.id);
+  if(onTab){const tag=document.createElement('span');tag.className='ontab';tag.textContent='▸ '+(onTab.name||'table');
+    tag.title='Assigned to '+(onTab.name||'table')+(onTab.result?' · finished':'');return tag;}
+  if(!pg.w||!pg.b||!(tables||[]).length)return document.createElement('span');   // need both players and a table before it can be assigned
+  const s=document.createElement('select');s.className='asg';
+  s.innerHTML='<option value="">→ table…</option>'+tables.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''))
+    .map(t=>'<option value="'+esc(t.token)+'">'+esc(t.name||t.token.slice(0,6))+(t.moves?' (busy)':'')+'</option>').join('');
+  s.onchange=()=>{const tok=s.value;if(!tok)return;
+    if(!pg.id){pg.id=uid();saveTour(tr);}                                          // ensure a stable id the result can flow back to
+    send({type:'tournament.assign',tournament:tr.id,pairing:pg.id,table:tok});s.value='';};
+  return s;
+}
 function renderRound(tr,rd,ri){
   const box=document.createElement('div');box.className='round';
   const rh=document.createElement('div');rh.className='rhead';
@@ -137,10 +158,10 @@ function renderRound(tr,rd,ri){
     const rm=document.createElement('button');rm.className='mini bad';rm.textContent='✕';
     rm.onclick=()=>{rd.pairings.splice(pi,1);saveTour(tr);};
     const dash=document.createElement('span');dash.className='dash';dash.textContent='–';
-    row.append(ws2,dash,bs,rs,rm);box.append(row);
+    row.append(ws2,dash,bs,rs,rm,assignCtl(tr,pg));box.append(row);
   });
   const addP=document.createElement('button');addP.className='mini';addP.textContent='+ Board';
-  addP.onclick=()=>{rd.pairings=rd.pairings||[];rd.pairings.push({w:null,b:null,r:null});saveTour(tr);};
+  addP.onclick=()=>{rd.pairings=rd.pairings||[];rd.pairings.push({id:uid(),w:null,b:null,r:null});saveTour(tr);};
   box.append(addP);
   return box;
 }

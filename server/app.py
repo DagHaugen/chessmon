@@ -86,6 +86,8 @@ async def broadcast_state(s):
         await send(ws, snap)
     await broadcast_tables()        # keep the console's Running-games list live (moves / result)
     mgr.save(SESSIONS_FILE)         # a move or calibration changed the session -> persist
+    if flow_result_to_tournament(s):   # a finished tournament game -> write the result back onto its pairing
+        await broadcast_admin()
 
 
 def dev_public(d):
@@ -99,6 +101,28 @@ def tables_public():
              "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(), "match": getattr(s, "match", None),   # live board + match for the console
              "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
+
+
+def flow_result_to_tournament(s):
+    """A finished game whose Match came from a tournament pairing -> record the result on that pairing.
+    Idempotent: returns True only on the transition (when the pairing's result actually changes)."""
+    res = getattr(s, "result", None)
+    if res not in ("1-0", "0-1", "1/2-1/2"):
+        return False
+    ref = (getattr(s, "match", None) or {}).get("ref") or {}
+    tr = tournaments.get(ref.get("tournament"))
+    pid = ref.get("pairing")
+    if not tr or not pid:
+        return False
+    for rd in tr.get("rounds", []):
+        for pg in rd.get("pairings", []):
+            if pg.get("id") == pid:
+                if pg.get("r") != res:
+                    pg["r"] = res
+                    save_tournaments()
+                    return True
+                return False
+    return False
 
 
 def admin_state():
@@ -548,6 +572,29 @@ async def ws_endpoint(ws: WebSocket):
                 if tournaments.pop(data.get("id"), None) is not None:
                     save_tournaments()
                     await broadcast_admin()
+            elif t == "tournament.assign":                        # push a tournament pairing onto a table as a Match
+                tr = tournaments.get(data.get("tournament"))
+                sess = mgr.by_table(data.get("table"))
+                pid = data.get("pairing")
+                if tr is None or sess is None or not pid:
+                    await send(ws, {"type": "error", "reason": "unknown table or pairing"})
+                else:
+                    pg = next((p for rd in tr.get("rounds", []) for p in rd.get("pairings", [])
+                               if p.get("id") == pid), None)
+                    if pg is None:
+                        await send(ws, {"type": "error", "reason": "unknown pairing"})
+                    else:
+                        def _pl(x):
+                            r = players.get(x) or {}
+                            return {"id": x, "name": r.get("name", "")} if x else None
+                        sess.match = {"white": _pl(pg.get("w")), "black": _pl(pg.get("b")),
+                                      "format": tr.get("format"), "start_mode": "manual",
+                                      "variant": "standard", "chess960": None, "start_fen": None,
+                                      "ref": {"tournament": tr["id"], "pairing": pid, "name": tr.get("name", "")}}
+                        if sess.result or not sess.moves:         # fresh or finished table -> (re)set the board to the standard start; never disturb a game in progress
+                            sess.apply_match_position(None, False)
+                        await broadcast_state(sess)               # board + match -> clock; tables -> console/setup; persists
+                        await send(hub(sess.table_token)["clock"], {"type": "match", "match": sess.match})
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
