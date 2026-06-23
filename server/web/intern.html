@@ -65,6 +65,7 @@
     <div class="grp">
       <label>Table (players · rules)</label>
       <select id="tableSel"><option value="">— none (White / Black, 5:00) —</option></select>
+      <input id="tableName" value="Table 1" placeholder="Table name" style="margin-top:8px;width:100%">
     </div>
     <div class="grp">
       <label>Board from PGN</label>
@@ -155,7 +156,7 @@ function pushClock(){
   let lastMove=null;
   if(plies&&plyIdx>0&&plies[plyIdx].uci){const u=plies[plyIdx].uci;lastMove={from:u.slice(0,2),to:u.slice(2,4)};}
   fr.contentWindow.postMessage({__cm:{type:'preview',match:curMatch()||null,fen,
-    white_ms:parseTime($('wtime').value,baseMs()),black_ms:parseTime($('btime').value,baseMs()),active,lastMove,rot:+$('rotSel').value}},'*');
+    white_ms:parseTime($('wtime').value,baseMs()),black_ms:parseTime($('btime').value,baseMs()),active,lastMove,rot:+$('rotSel').value,table_name:$('tableName').value}},'*');
 }
 
 function setDevice(d){
@@ -180,8 +181,8 @@ $('preset').onchange=()=>{const i=$('preset').value;if(i===''){return;}const p=P
 $('rw').oninput=$('rh').oninput=()=>{$('preset').value='';applyRes();};
 $('swap').onclick=()=>{const w=$('rw').value;$('rw').value=$('rh').value;$('rh').value=w;applyRes();};
 document.querySelectorAll('.devbtn').forEach(b=>b.onclick=()=>setDevice(b.dataset.dev));
-$('tableSel').onchange=()=>{const b=baseMs();$('wtime').value=fmtTime(b);$('btime').value=fmtTime(b);pushClock();};
-$('activeSel').onchange=$('rotSel').onchange=$('wtime').oninput=$('btime').oninput=pushClock;
+$('tableSel').onchange=()=>{const t=tables.find(x=>x.token===$('tableSel').value);if(t&&t.name)$('tableName').value=t.name;const b=baseMs();$('wtime').value=fmtTime(b);$('btime').value=fmtTime(b);pushClock();};
+$('activeSel').onchange=$('rotSel').onchange=$('tableName').oninput=$('wtime').oninput=$('btime').oninput=pushClock;
 $('pgnApply').onclick=()=>{const p=$('pgn').value.trim();if(!p)return;
   if(!ws||ws.readyState!==1){$('pgnErr').textContent='⚠ not connected — is the server running?';return;}
   $('pgnErr').textContent='parsing…';clearTimeout(pgnTimer);

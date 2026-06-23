@@ -51,7 +51,7 @@
   .cbtn.draw{background:var(--panel);border-color:var(--accent);color:var(--accent)}
   .cbtn.won,.cbtn.lost,.cbtn.draw{font-size:min(13vw,54px);font-weight:800;letter-spacing:.05em}
   .cbtn:not(:disabled):active{transform:translateY(1px)}
-  .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;   /* col 2; full height: names pin to top/bottom of screen, clocks+table held at board level by .cmid */
+  .cstrip{flex:0 0 46px;display:flex;flex-direction:column;align-items:center;justify-content:center;   /* col 2; full height: .cmid stays board-centred via equal flex:1 ends, so name length never shifts the clocks */
     padding:6px 0}                                                                                            /* small gap so the names don't touch the screen edges */
   .cstrip .ct{transform:rotate(-90deg);font-variant-numeric:tabular-nums;font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em}
   .cstrip .ct.low{color:var(--warn)} .cstrip .ct.flag{color:var(--bad)}        /* all three read from the right side */
@@ -60,6 +60,8 @@
   .cstrip .cmid{display:flex;flex-direction:column;align-items:center;justify-content:space-between;flex:0 0 auto}   /* clock/table/clock, height pinned to the board (JS) */
   .cstrip .ctnm{transform:rotate(-90deg);font-weight:700;font-size:23px;color:var(--ink);letter-spacing:.02em;       /* player name -- same face as the rail clocks */
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-height:22dvh}
+  .cstrip .cend{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center}                       /* equal top/bottom regions -> .cmid stays board-centred regardless of name lengths */
+  .cstrip .cend.top{justify-content:flex-start} .cstrip .cend.bot{justify-content:flex-end}
   .boardwrap{position:relative;flex:0 1 auto;width:54vh;max-width:100%;width:min(54dvh,100%);aspect-ratio:1;margin:0 auto}
   .camoverlay{position:absolute;inset:0;overflow:hidden;border-radius:6px;pointer-events:auto;cursor:pointer;opacity:1}   /* warped real-board photo; tap to refresh */
   .camoverlay img{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;-webkit-user-drag:none}
@@ -212,13 +214,13 @@
 
   <div id="game" class="hidden">
     <div class="cstrip">                                <!-- col 2: names at screen ends (left of the move buttons); clocks+table at board level -->
-      <span class="ctnm" id="ctnm-black">Black</span>
+      <div class="cend top"><span class="ctnm" id="ctnm-black">Black</span></div>
       <div class="cmid" id="cmid">
         <span class="ct" id="st-black">5:00</span>
         <span class="ctname" id="tid"></span>
         <span class="ct" id="st-white">5:00</span>
       </div>
-      <span class="ctnm" id="ctnm-white">White</span>
+      <div class="cend bot"><span class="ctnm" id="ctnm-white">White</span></div>
     </div>
     <div class="main">                                  <!-- col 3: zones (clocks + buttons) + board -->
       <div class="zone black" id="z-black">
@@ -673,6 +675,7 @@ function initPreview(){                                 // postMessage-driven mo
     const m=e.data&&e.data.__cm;if(!m)return;
     if(m.type==='preview'){
       if('match' in m){curMatch=m.match;applyNames();}
+      if(m.table_name!=null)$('tid').textContent=m.table_name;
       if(m.fen){lastMove=m.lastMove||null;renderBoard(m.fen);}
       if(m.white_ms!=null)clk.white=m.white_ms;
       if(m.black_ms!=null)clk.black=m.black_ms;
