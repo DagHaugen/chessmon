@@ -16,6 +16,12 @@ live.json
 # Server-console device registry (persisted names) — runtime state
 devices.json
 
+# Registries + game archive (runtime data; formats reseed from code, the rest are user-created)
+formats.json
+players.json
+tournaments.json
+games.json
+
 # Persisted live sessions (calibrated boards + games) — survives a server restart
 sessions.pkl
 
