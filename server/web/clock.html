@@ -665,6 +665,9 @@ else{
 function initPreview(){                                 // postMessage-driven mockup for intern.html (resolution previews + PNG)
   document.body.classList.add('preview');
   show('setup',false);show('pair',false);show('calib',false);show('game',true);phase='run';
+  rotMode=1;applyRot();                                // default orientation: board rotated -90°
+  $('dot').classList.add('on');camLinked=true;camAssigned=true;calibrated=true;started=true;   // pretend we're fully online: server + camera linked, game running
+  showCtrls(true);showUndo(true);show('refreshbtn',true);show('cambtn',true);   // the full in-game rail on the left
   renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
   window.addEventListener('message',e=>{
     const m=e.data&&e.data.__cm;if(!m)return;
@@ -674,6 +677,7 @@ function initPreview(){                                 // postMessage-driven mo
       if(m.white_ms!=null)clk.white=m.white_ms;
       if(m.black_ms!=null)clk.black=m.black_ms;
       if(m.active)clk.active=m.active;
+      if(m.rot!=null){rotMode=((m.rot%3)+3)%3;applyRot();}
       clk.running=true;                                // keep the active-side highlight; the tick loop won't decrement under PREVIEW
       renderClocks();paint();
     }else handle(m);
