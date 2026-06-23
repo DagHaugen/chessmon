@@ -274,6 +274,7 @@ function deviceName(){const u=navigator.userAgent;
 const devName=deviceName();
 const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the camera-pairing QR (scan to pair, or pair from the console). Set false to hide.
 let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,calibrated=false,camAssigned=false,needsResume=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+const PREVIEW=/[?&]preview\b/.test(location.search);       // /app/clock.html?preview=1 -> driven by intern.html via postMessage; no WS, no SW, clocks don't tick
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
 
@@ -311,7 +312,7 @@ function renderClocks(){
   $('s-black').classList.toggle('active',clk.active==='black'&&clk.running);
 }
 setInterval(()=>{const now=Date.now();
-  if(clk.running){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
+  if(clk.running&&!PREVIEW){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
   clk.last=now;renderClocks()},100);
 function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');gameResult=winner==='white'?'1-0':'0-1';$('report').className='report over';
@@ -654,10 +655,31 @@ $('resetbtn').onclick=()=>showDialog('Reset the game?\nMove all the pieces back 
 $('rotbtn').onclick=()=>{rotMode=(rotMode+1)%3;localStorage.setItem('cm_rot',rotMode);applyRot()};   // cycle 0->1->2
 applyRot();
 
-if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');}
-else{show('setup',true);$('tid').textContent='no table';}
-connect();                                             // always connect so the server console sees the device
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(PREVIEW){initPreview();}
+else{
+  if(table){show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');}
+  else{show('setup',true);$('tid').textContent='no table';}
+  connect();                                           // always connect so the server console sees the device
+  if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+function initPreview(){                                 // postMessage-driven mockup for intern.html (resolution previews + PNG)
+  document.body.classList.add('preview');
+  show('setup',false);show('pair',false);show('calib',false);show('game',true);phase='run';
+  renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+  window.addEventListener('message',e=>{
+    const m=e.data&&e.data.__cm;if(!m)return;
+    if(m.type==='preview'){
+      if('match' in m){curMatch=m.match;applyNames();}
+      if(m.fen){lastMove=m.lastMove||null;renderBoard(m.fen);}
+      if(m.white_ms!=null)clk.white=m.white_ms;
+      if(m.black_ms!=null)clk.black=m.black_ms;
+      if(m.active)clk.active=m.active;
+      clk.running=true;                                // keep the active-side highlight; the tick loop won't decrement under PREVIEW
+      renderClocks();paint();
+    }else handle(m);
+  });
+  try{if(window.parent&&window.parent!==window)window.parent.postMessage({__cmready:1},'*');}catch(_){}
+}
 function layoutBoard(){const bw=document.querySelector('.boardwrap'),cm=document.querySelector('.cmid');
   if(!bw||!bw.offsetWidth)return;                                                                  // hidden / not laid out yet
   if(!(window.CSS&&CSS.supports&&CSS.supports('aspect-ratio','1')))bw.style.height=bw.offsetWidth+'px';  // old browsers: no aspect-ratio -> force the board square

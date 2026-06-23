@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import os
 import time
 import uuid
 
 import chess
+import chess.pgn
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket
@@ -714,6 +716,28 @@ async def ws_endpoint(ws: WebSocket):
                 if len(games) != before:
                     save_games()
                     await send(ws, {"type": "games_changed"})
+            elif t == "preview.pgn":                              # intern.html: parse a pasted PGN -> positions for the clock preview
+                try:
+                    game = chess.pgn.read_game(io.StringIO(data.get("pgn", "") or ""))
+                except Exception:
+                    game = None
+                if game is None:
+                    await send(ws, {"type": "preview_pgn", "ok": False, "error": "couldn't read a game from that PGN"})
+                else:
+                    board = game.board()
+                    plies = [{"san": "start", "fen": board.fen()}]
+                    try:
+                        for mv in game.mainline_moves():
+                            san = board.san(mv)
+                            uci = mv.uci()
+                            board.push(mv)
+                            plies.append({"san": san, "uci": uci, "fen": board.fen()})
+                    except Exception:
+                        pass
+                    h = game.headers
+                    await send(ws, {"type": "preview_pgn", "ok": True,
+                                    "white": h.get("White", ""), "black": h.get("Black", ""),
+                                    "result": h.get("Result", "*"), "fen": board.fen(), "plies": plies})
             elif t == "match.set":                                # Basic Setup / Tournament assigned players + format to a table
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:

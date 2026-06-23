@@ -32,6 +32,8 @@
     white-space:pre-wrap;background:#11141a;border:1px solid var(--line);border-radius:10px;padding:8px}
   .screenoff{position:fixed;inset:0;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center;color:#1b1b1b;font-size:13px}
   .screenoff.hidden{display:none}                     /* .hidden is defined earlier, so its display:none loses by source order -> force it here */
+  body.preview #v{display:none}                        /* preview mockup: no live feed -> show a board-ish placeholder */
+  body.preview .vwrap{background:repeating-conic-gradient(#363b45 0 25%,#2a2e36 0 50%) 0 0/38px 38px}
 </style>
 </head>
 <body>
@@ -68,6 +70,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.t
 function status(t,cls){const s=$('status');s.textContent=t;s.className='status'+(cls?' '+cls:'')}
 function log(t){const l=$('log');l.textContent=(new Date().toLocaleTimeString()+'  '+t+'\n')+l.textContent}
 
+const PREVIEW=/[?&]preview\b/.test(location.search);   // /app/camera.html?preview=1 -> resolution mockup for intern.html; no camera, no WS
 async function startCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     status('this browser blocks the camera here — open the page over HTTPS',  'err');return}
@@ -178,8 +181,11 @@ function connect(){
   };
 }
 
-startCam();connect();                                  // always: register the device + show the preview
-if(!pair)status('camera ready — pair from the server console, or scan a QR');
+if(PREVIEW){document.body.classList.add('preview');status('camera preview');}
+else{
+  startCam();connect();                                // always: register the device + show the preview
+  if(!pair)status('camera ready — pair from the server console, or scan a QR');
+}
 </script>
 </body>
 </html>

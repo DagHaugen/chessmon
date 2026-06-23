@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chessmon · device preview (internal)</title>
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;--accent:#4f8cff;--good:#3ecf8e}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:flex;background:var(--bg);color:var(--ink);overflow:hidden;
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .side{width:320px;flex:0 0 auto;background:var(--panel);border-right:1px solid var(--line);padding:16px;overflow:auto}
+  .side h1{font-size:15px;margin:0 0 2px} .side .sub{color:var(--mut);font-size:12px;margin:0 0 16px}
+  .grp{margin-bottom:16px} .grp>label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:6px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input,textarea,button{font-family:inherit}
+  select,input{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px}
+  input.wh{width:64px;text-align:center} input.tm{width:64px;text-align:center}
+  textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;height:96px;resize:vertical}
+  button{background:rgba(255,255,255,.06);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--mut)} button.on{background:var(--accent);border-color:var(--accent);color:#07142e;font-weight:600}
+  button.prim{background:var(--accent);border-color:var(--accent);color:#07142e;font-weight:700;width:100%}
+  button.prim:disabled{opacity:.5;cursor:default}
+  .seg{display:flex;gap:6px} .seg button{flex:1}
+  .hidden{display:none}
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:20px;position:relative}
+  .framewrap{box-shadow:0 10px 40px rgba(0,0,0,.5);border-radius:8px;overflow:hidden;background:#000}
+  iframe{border:0;display:block;transform-origin:top left}
+  .reslab{position:absolute;top:12px;left:50%;transform:translateX(-50%);color:var(--mut);font-size:12px;
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 12px;font-variant-numeric:tabular-nums}
+  .dot{width:8px;height:8px;border-radius:50%;background:#ff6b6b;display:inline-block;margin-left:6px;vertical-align:middle}
+  .dot.on{background:var(--good)}
+  .hint{color:var(--mut);font-size:11px;margin-top:6px;line-height:1.5}
+  .ply{font-variant-numeric:tabular-nums;font-size:12px;color:var(--mut);min-width:70px}
+</style>
+</head>
+<body>
+<div class="side">
+  <h1>Device preview<span class="dot" id="dot" title="server link"></span></h1>
+  <p class="sub">Internal tool — not linked anywhere.</p>
+
+  <div class="grp">
+    <label>Device</label>
+    <div class="seg">
+      <button class="devbtn on" data-dev="clock">Clock</button>
+      <button class="devbtn" data-dev="camera">Camera</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label>Resolution</label>
+    <select id="preset"></select>
+    <div class="row" style="margin-top:8px">
+      <input class="wh" id="rw" type="number" min="200" max="3000"> ×
+      <input class="wh" id="rh" type="number" min="200" max="3000">
+      <button id="swap" title="Rotate">⇄</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label style="text-transform:none;letter-spacing:0;margin:0;color:var(--mut);font-size:12px">PNG scale</label>
+      <select id="pngScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option></select>
+    </div>
+  </div>
+
+  <div id="clockCtl">
+    <div class="grp">
+      <label>Table (players · rules)</label>
+      <select id="tableSel"><option value="">— none (White / Black, 5:00) —</option></select>
+    </div>
+    <div class="grp">
+      <label>Board from PGN</label>
+      <textarea id="pgn" placeholder="Paste a PGN here…&#10;1. e4 e5 2. Nf3 Nc6 ..."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="pgnApply">Apply</button><button id="pgnClear">Clear</button>
+        <span class="ply" id="pgnErr"></span>
+      </div>
+      <div class="row hidden" id="plyRow" style="margin-top:8px">
+        <input type="range" id="plySlider" min="0" max="0" value="0" style="flex:1">
+        <span class="ply" id="plyLabel"></span>
+      </div>
+    </div>
+    <div class="grp">
+      <label>Clocks</label>
+      <div class="row">
+        White <input class="tm" id="wtime" value="5:00">
+        Black <input class="tm" id="btime" value="5:00">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label style="text-transform:none;letter-spacing:0;margin:0;color:var(--mut);font-size:12px">To move</label>
+        <select id="activeSel"><option value="auto">Auto (from position)</option><option value="white">White</option><option value="black">Black</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="grp">
+    <button class="prim" id="savePng">Save PNG</button>
+    <div class="hint" id="pngHint"></div>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="reslab" id="resLab">—</div>
+  <div class="framewrap" id="framewrap"><iframe id="frame" title="device preview"></iframe></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const START='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const PRESETS=[['iPhone SE',375,667],['iPhone 14',390,844],['iPhone 15 Pro Max',430,932],['Pixel 7',412,915],
+  ['Galaxy (old)',360,740],['Small Android',320,640],['iPad mini',768,1024],['iPad Pro 11"',834,1194],['iPad Pro 12.9"',1024,1366]];
+let ws, tables=[], device='clock', plies=null, plyIdx=0, frameReady=false, curW=390, curH=844;
+
+function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='devices'){tables=m.tables||[];fillTables();}
+    else if(m.type==='preview_pgn'){
+      if(m.ok){plies=m.plies||[];plyIdx=plies.length-1;$('pgnErr').textContent='';showPly();pushClock();}
+      else{plies=null;showPly();$('pgnErr').textContent=m.error||'bad PGN';}
+    }};
+  ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
+}
+window.addEventListener('message',e=>{if(e.data&&e.data.__cmready){frameReady=true;pushClock();}});
+
+function fillTables(){
+  const sel=$('tableSel'),prev=sel.value;
+  const withMatch=tables.filter(t=>t.match&&(t.match.white||t.match.black));
+  sel.innerHTML='<option value="">— none (White / Black, 5:00) —</option>'+withMatch.map(t=>{
+    const m=t.match,nm=((m.white&&m.white.name)||'White')+' – '+((m.black&&m.black.name)||'Black');
+    const f=m.format&&m.format.name?' · '+m.format.name:'';
+    return '<option value="'+esc(t.token)+'">'+esc(t.name||t.token.slice(0,6))+': '+esc(nm)+esc(f)+'</option>';}).join('');
+  sel.value=prev;
+}
+function curMatch(){const t=tables.find(x=>x.token===$('tableSel').value);return t?t.match:null;}
+function baseMs(){const m=curMatch();return (m&&m.format&&m.format.base_ms)||300000;}
+function parseTime(s,def){s=(s||'').trim();if(!s)return def;const m=s.match(/^(\d+):(\d{1,2})$/);if(m)return(+m[1]*60+ +m[2])*1000;const n=parseInt(s,10);return isNaN(n)?def:n*60000;}
+function fmtTime(ms){ms=Math.max(0,ms|0);const t=Math.round(ms/1000);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');}
+function plyLabel(){if(!plies||!plies.length)return'';if(plyIdx===0)return'start';const no=Math.ceil(plyIdx/2);return no+(plyIdx%2?'.':'…')+' '+plies[plyIdx].san;}
+function showPly(){const row=$('plyRow');if(!plies||!plies.length){row.classList.add('hidden');return;}row.classList.remove('hidden');
+  const sl=$('plySlider');sl.max=plies.length-1;sl.value=plyIdx;$('plyLabel').textContent=plyLabel();}
+
+function pushClock(){
+  if(device!=='clock'||!frameReady)return;
+  const fr=$('frame');if(!fr.contentWindow)return;
+  const fen=plies&&plies.length?plies[plyIdx].fen:START;
+  const turn=fen.split(' ')[1]==='b'?'black':'white';
+  const av=$('activeSel').value,active=av==='auto'?turn:av;
+  let lastMove=null;
+  if(plies&&plyIdx>0&&plies[plyIdx].uci){const u=plies[plyIdx].uci;lastMove={from:u.slice(0,2),to:u.slice(2,4)};}
+  fr.contentWindow.postMessage({__cm:{type:'preview',match:curMatch()||null,fen,
+    white_ms:parseTime($('wtime').value,baseMs()),black_ms:parseTime($('btime').value,baseMs()),active,lastMove}},'*');
+}
+
+function setDevice(d){
+  device=d;frameReady=false;
+  document.querySelectorAll('.devbtn').forEach(b=>b.classList.toggle('on',b.dataset.dev===d));
+  $('clockCtl').classList.toggle('hidden',d!=='clock');
+  $('frame').src=(d==='clock'?'clock.html':'camera.html')+'?preview=1';   // clock re-pushes on __cmready
+}
+function setFrameSize(w,h){
+  curW=w;curH=h;
+  const stage=$('stage'),aw=stage.clientWidth-40,ah=stage.clientHeight-40;
+  const s=Math.min(1,aw/w,ah/h),fr=$('frame'),wrap=$('framewrap');
+  fr.style.width=w+'px';fr.style.height=h+'px';fr.style.transform='scale('+s+')';
+  wrap.style.width=Math.round(w*s)+'px';wrap.style.height=Math.round(h*s)+'px';
+  $('resLab').textContent=w+' × '+h+(s<1?'   ·   '+Math.round(s*100)+'%':'');
+}
+function applyRes(){setFrameSize(Math.max(200,+$('rw').value||390),Math.max(200,+$('rh').value||844));}
+
+$('preset').innerHTML='<option value="">Custom</option>'+PRESETS.map((p,i)=>'<option value="'+i+'">'+esc(p[0])+'  ('+p[1]+'×'+p[2]+')</option>').join('');
+$('preset').value='1';$('rw').value=PRESETS[1][1];$('rh').value=PRESETS[1][2];
+$('preset').onchange=()=>{const i=$('preset').value;if(i===''){return;}const p=PRESETS[+i];$('rw').value=p[1];$('rh').value=p[2];applyRes();};
+$('rw').oninput=$('rh').oninput=()=>{$('preset').value='';applyRes();};
+$('swap').onclick=()=>{const w=$('rw').value;$('rw').value=$('rh').value;$('rh').value=w;applyRes();};
+document.querySelectorAll('.devbtn').forEach(b=>b.onclick=()=>setDevice(b.dataset.dev));
+$('tableSel').onchange=()=>{const b=baseMs();$('wtime').value=fmtTime(b);$('btime').value=fmtTime(b);pushClock();};
+$('activeSel').onchange=$('wtime').oninput=$('btime').oninput=pushClock;
+$('pgnApply').onclick=()=>{const p=$('pgn').value.trim();if(p)send({type:'preview.pgn',pgn:p});};
+$('pgnClear').onclick=()=>{$('pgn').value='';plies=null;plyIdx=0;$('pgnErr').textContent='';showPly();pushClock();};
+$('plySlider').oninput=()=>{plyIdx=+$('plySlider').value;$('plyLabel').textContent=plyLabel();pushClock();};
+
+$('savePng').onclick=async()=>{
+  const fr=$('frame'),doc=fr.contentDocument;
+  if(!doc||!doc.body){$('pngHint').textContent='Frame not ready yet.';return;}
+  if(typeof html2canvas==='undefined'){$('pngHint').textContent='html2canvas not loaded (needs internet).';return;}
+  const btn=$('savePng');btn.disabled=true;btn.textContent='Rendering…';$('pngHint').textContent='';
+  try{
+    const canvas=await html2canvas(doc.body,{width:curW,height:curH,scale:+$('pngScale').value||2,backgroundColor:'#15171c',useCORS:true,logging:false});
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=device+'-'+curW+'x'+curH+'.png';
+    document.body.append(a);a.click();a.remove();
+  }catch(err){$('pngHint').textContent='PNG failed: '+err.message;}
+  btn.disabled=false;btn.textContent='Save PNG';
+};
+
+window.addEventListener('resize',()=>setFrameSize(curW,curH));
+setDevice('clock');
+applyRes();
+setTimeout(applyRes,60);   // after layout settles
+connect();
+</script>
+</body>
+</html>
