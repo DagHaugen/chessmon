@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#15171c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<title>chessmon clock</title>
+<!--
+  Standalone chess clock — self-contained, zero dependencies. No server, no camera, no board.
+  Runs anywhere static (chessmon's /app, comlos.com, even opened from disk). The empty middle
+  shows a chessmon promo. Fischer increment; tap your own (green) side to pass the turn.
+-->
+<style>
+  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
+    --accent:#4f8cff;--good:#3ecf8e;--warn:#ffb454;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transparent;
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  .screen{min-height:100vh;min-height:100dvh}
+  .hidden{display:none!important}
+
+  /* ---- setup ---- */
+  #setup{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;width:100%;max-width:380px}
+  .brand{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .brand .logo{font-size:22px}
+  .sub{color:var(--mut);font-size:13px;margin:4px 0 16px}
+  .names{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .names input{flex:1;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:11px 12px;font-size:16px;text-align:center}
+  .names input:focus{outline:none;border-color:var(--accent)}
+  .names .vs{color:var(--mut);font-size:13px}
+  .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+  .presets{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+  .presets button{background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:9px;
+    padding:8px 11px;font-size:14px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
+  .presets button.sel{border-color:var(--accent);color:var(--accent);background:#172033}
+  .custom{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:14px;margin-bottom:18px}
+  .custom input{width:66px;background:#11141a;border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:9px;font-size:16px;text-align:center}
+  .custom input:focus{outline:none;border-color:var(--accent)}
+  .btn{appearance:none;border:none;border-radius:13px;font-size:18px;font-weight:800;padding:15px;width:100%;
+    cursor:pointer;color:#08110a;background:var(--good)}
+  .btn:active{transform:translateY(1px)}
+  .setfoot{color:var(--mut);font-size:13px}
+  .setfoot a{color:var(--accent);text-decoration:none;font-weight:600}
+
+  /* ---- game ---- */
+  #game{display:flex;flex-direction:column;gap:8px;padding:8px}
+  .zone{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    appearance:none;border:2px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);
+    cursor:pointer;font-family:inherit;width:100%;padding:10px;transition:background .12s,border-color .12s}
+  .zone.black{transform:rotate(180deg)}                 /* faces the player across the table */
+  .zone.go{background:var(--good);border-color:var(--good);color:#08110a}    /* your move — tap to pass */
+  .zone.off{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
+  .zone.win{background:var(--good);border-color:var(--good);color:#08110a}
+  .zone.lose{background:var(--panel);border-color:var(--line);color:var(--mut)}
+  .znm{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85;
+    max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ztm{font-variant-numeric:tabular-nums;font-weight:800;font-size:min(20vw,116px);line-height:1}
+  .ztm.low{color:var(--warn)} .zone.go .ztm.low{color:#6a4400}
+  .ztm.flag{color:var(--bad)} .zone.go .ztm.flag{color:#5c0d0d}
+  .zhint{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;min-height:14px;opacity:.8}
+
+  .mid{flex:0 0 auto;height:184px;display:flex;align-items:center;justify-content:flex-start;gap:16px}
+  .ctrls{display:flex;gap:8px;height:158px}
+  .mbtn{width:42px;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;
+    background:#11141a;border:1px solid var(--line);color:var(--ink);border-radius:12px;
+    cursor:pointer;transition:background .12s,border-color .12s}
+  .mbtn .blbl{display:inline-block;transform:rotate(-90deg);white-space:nowrap;font-size:13px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.08em}     /* own class (not .lbl) so the setup label colour doesn't bleed in */
+  .mbtn:active{transform:translateY(1px)}
+  .mbtn:disabled{opacity:.4;cursor:default}
+  .pausebtn{width:74px}                                            /* the primary control -- much bigger */
+  .pausebtn .blbl{font-size:16px;font-weight:800}
+  .pausebtn.paused{background:var(--good);border-color:var(--good);color:#08110a}   /* green while paused; the label inherits this dark colour */
+  .promo{width:64px;height:158px;display:flex;align-items:center;justify-content:center;margin-left:auto;text-decoration:none}
+  .promo-in{display:flex;align-items:center;gap:11px;transform:rotate(-90deg);white-space:nowrap}  /* same -90deg as the buttons */
+  .promo-ic{width:44px;height:44px;flex:0 0 auto;opacity:.95}
+  .promo-tx{color:var(--mut);font-size:13px;line-height:1.35}
+  .promo-tx b{color:var(--ink);font-weight:800;font-size:15px}
+  .promo-tx .more{color:var(--accent);font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="setup" class="screen">
+  <div class="card">
+    <div class="brand"><span class="logo">&#9823;</span> chessmon clock</div>
+    <div class="sub">A free chess clock. No app, no account, no internet needed.</div>
+    <div class="names">
+      <input id="wn" maxlength="22" placeholder="White" autocomplete="off">
+      <span class="vs">vs</span>
+      <input id="bn" maxlength="22" placeholder="Black" autocomplete="off">
+    </div>
+    <div class="lbl">Time control</div>
+    <div id="presets" class="presets"></div>
+    <div class="custom">
+      <input id="mins" type="number" min="0" max="180" value="5" inputmode="numeric"> min
+      <span>+</span>
+      <input id="incs" type="number" min="0" max="60" value="0" inputmode="numeric"> sec
+    </div>
+    <button id="start" class="btn">Start clock</button>
+  </div>
+  <div class="setfoot">Want the board too? <a href="https://comlos.com/chessmon" target="_blank" rel="noopener">See chessmon &rarr;</a></div>
+</div>
+
+<div id="game" class="screen hidden">
+  <button class="zone black off" id="zb">
+    <span class="znm" id="nmb">Black</span>
+    <span class="ztm" id="tmb">5:00</span>
+    <span class="zhint" id="hb"></span>
+  </button>
+  <div class="mid">
+    <div class="ctrls">
+      <button id="pause" class="mbtn pausebtn"><span class="blbl" id="pauselbl">Pause</span></button>
+      <button id="reset" class="mbtn"><span class="blbl">Reset</span></button>
+      <button id="newg" class="mbtn"><span class="blbl">New</span></button>
+    </div>
+    <a class="promo" href="https://comlos.com/chessmon" target="_blank" rel="noopener">
+      <span class="promo-in">
+        <img class="promo-ic" src="icon.svg" width="44" height="44" alt="">
+        <span class="promo-tx"><b>chessmon</b><br>add the board <span class="more">&rarr;</span></span>
+      </span>
+    </a>
+  </div>
+  <button class="zone white off" id="zw">
+    <span class="znm" id="nmw">White</span>
+    <span class="ztm" id="tmw">5:00</span>
+    <span class="zhint" id="hw"></span>
+  </button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const other=s=>s==='white'?'black':'white';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let baseMs=300000, incMs=0, wname='White', bname='Black';
+let clk={white:300000,black:300000,active:'white',running:false,last:0};
+let phase='setup', winner=null, over=null;
+
+const PRESETS=[['1+0',1,0],['3+0',3,0],['3+2',3,2],['5+0',5,0],['5+3',5,3],
+               ['10+0',10,0],['10+5',10,5],['15+10',15,10],['30+0',30,0]];
+function buildPresets(){
+  $('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
+  $('presets').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const p=PRESETS[+b.dataset.i]; $('mins').value=p[1]; $('incs').value=p[2]; markPreset();
+  });
+}
+function markPreset(){
+  const m=+$('mins').value, s=+$('incs').value;
+  $('presets').querySelectorAll('button').forEach(b=>{const p=PRESETS[+b.dataset.i];
+    b.classList.toggle('sel', p[1]===m && p[2]===s);});
+}
+function fmt(ms){ms=Math.max(0,ms);
+  if(ms<20000) return (ms/1000).toFixed(1);                         // tenths under 20s
+  const t=Math.round(ms/1000); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');}
+
+function startGame(){
+  wname=($('wn').value.trim())||'White'; bname=($('bn').value.trim())||'Black';
+  let m=clamp(+$('mins').value||0,0,180), s=clamp(+$('incs').value||0,0,60);
+  if(!m && !s) m=5;                                                 // 0+0 is no game — default to 5+0
+  baseMs=m*60000; incMs=s*1000;
+  $('nmw').textContent=wname; $('nmb').textContent=bname;
+  clk={white:baseMs, black:baseMs, active:'white', running:true, last:Date.now()};
+  phase='run'; winner=null; over=null;
+  $('setup').classList.add('hidden'); $('game').classList.remove('hidden');
+  render();
+}
+function press(side){                                               // tap your own side to pass the turn
+  if(phase!=='run' || !clk.running || clk.active!==side) return;
+  const now=Date.now(); clk[side]-=(now-clk.last);
+  if(clk[side]<=0){clk[side]=0; flag(side); return;}
+  clk[side]+=incMs;                                                 // Fischer: bank increment on completing the move
+  clk.active=other(side); clk.last=now; render();
+}
+function flag(side){clk[side]=0; clk.running=false; phase='over'; winner=other(side); over='flag'; render();}
+function togglePause(){
+  if(phase!=='run') return;
+  const now=Date.now();
+  if(clk.running){clk[clk.active]-=(now-clk.last); if(clk[clk.active]<0)clk[clk.active]=0; clk.running=false;}
+  else {clk.running=true; clk.last=now;}
+  render();
+}
+function resetGame(){
+  clk={white:baseMs, black:baseMs, active:'white', running:true, last:Date.now()};
+  phase='run'; winner=null; over=null; render();
+}
+function newGame(){phase='setup'; $('game').classList.add('hidden'); $('setup').classList.remove('hidden'); markPreset();}
+
+function paint(side){
+  const z=side==='white'?$('zw'):$('zb');
+  const tm=side==='white'?$('tmw'):$('tmb');
+  const h=side==='white'?$('hw'):$('hb');
+  tm.textContent=fmt(clk[side]);
+  tm.className='ztm'+(clk[side]<=0?' flag':(clk[side]<30000 && clk[side]>0?' low':''));
+  let cls='zone '+side, hint='';
+  if(phase==='over'){
+    if(side===winner){cls+=' win'; hint='wins';}
+    else {cls+=' lose'; hint=(over==='flag')?'lost on time':'';}
+  } else {
+    cls += (clk.active===side && clk.running)?' go':' off';   // paused -> both sides dark; the green Resume button shows the pause
+  }
+  z.className=cls; h.textContent=hint;
+}
+function render(){paint('white'); paint('black');
+  const paused=(phase==='run' && !clk.running);
+  $('pause').disabled=(phase!=='run');
+  $('pause').classList.toggle('paused', paused);
+  $('pauselbl').textContent=paused?'Resume':'Pause';}
+
+setInterval(()=>{
+  if(phase==='run' && clk.running){
+    const now=Date.now(); clk[clk.active]-=(now-clk.last); clk.last=now;
+    if(clk[clk.active]<=0){clk[clk.active]=0; flag(clk.active);}
+  }
+  if(phase==='run') render();
+},100);
+
+$('zw').onclick=()=>press('white');
+$('zb').onclick=()=>press('black');
+$('start').onclick=startGame;
+$('pause').onclick=togglePause;
+$('reset').onclick=resetGame;
+$('newg').onclick=newGame;
+$('mins').oninput=markPreset; $('incs').oninput=markPreset;
+buildPresets(); markPreset();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});   // installable, offline-capable PWA
+</script>
+</body>
+</html>

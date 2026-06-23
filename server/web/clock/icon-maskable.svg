@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#15171c"/>
+  <g transform="translate(5,5) scale(0.9)">
+    <rect x="22" y="22" width="55" height="55" fill="#e0bd8b"/>
+    <rect x="22" y="22" width="11" height="11" fill="#8a5a36"/><rect x="44" y="22" width="11" height="11" fill="#8a5a36"/><rect x="66" y="22" width="11" height="11" fill="#8a5a36"/>
+    <rect x="33" y="33" width="11" height="11" fill="#8a5a36"/><rect x="55" y="33" width="11" height="11" fill="#8a5a36"/>
+    <rect x="22" y="44" width="11" height="11" fill="#8a5a36"/><rect x="44" y="44" width="11" height="11" fill="#8a5a36"/><rect x="66" y="44" width="11" height="11" fill="#8a5a36"/>
+    <rect x="33" y="55" width="11" height="11" fill="#8a5a36"/><rect x="55" y="55" width="11" height="11" fill="#8a5a36"/>
+    <rect x="22" y="66" width="11" height="11" fill="#8a5a36"/><rect x="44" y="66" width="11" height="11" fill="#8a5a36"/><rect x="66" y="66" width="11" height="11" fill="#8a5a36"/>
+    <path d="M36 37 L42 37 L45 32 Q46 31 47 31 L53 31 Q54 31 55 32 L58 37 L64 37 Q70 37 70 43 L70 57 Q70 63 64 63 L36 63 Q30 63 30 57 L30 43 Q30 37 36 37 Z" fill="#3ecf8e" stroke="#0c6e30" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="50" cy="50" r="9" fill="none" stroke="#0c6e30" stroke-width="2.3"/>
+    <circle cx="50" cy="50" r="4.6" fill="none" stroke="#0c6e30" stroke-width="1.3"/>
+    <rect x="60" y="40" width="6" height="6" rx="1.5" fill="none" stroke="#0c6e30" stroke-width="2"/>
+  </g>
+</svg>
