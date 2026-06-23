@@ -83,8 +83,13 @@ def hub(token):
 
 
 async def send(ws, obj):
-    if ws is not None:
-        await ws.send_text(json.dumps(obj))
+    if ws is None:
+        return
+    data = json.dumps(obj)                 # serialize first so a real encoding bug still surfaces
+    try:
+        await ws.send_text(data)
+    except Exception:
+        pass                               # client went away mid-broadcast (1001/1006); its disconnect handler drops it from the lists
 
 
 async def broadcast_state(s):
