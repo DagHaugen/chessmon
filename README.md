@@ -171,3 +171,15 @@ and the kings-to-centre gesture + its safety against false triggers).
 
 Python 3.x, `numpy`, `python-chess`, `opencv-python` (see `requirements.txt`;
 a `.venv` is already set up in this folder).
+
+## License
+
+chessmon is free software under the **GNU Affero General Public License v3.0** (AGPL‑3.0) — see
+[`LICENSE`](LICENSE). You may run, study, modify and share it; if you offer a modified version as a
+network service, AGPL requires that you also publish your changes.
+
+Copyright © 2026 BONDATA AS.
+
+The self‑hosted app is, and stays, free: it runs entirely on your own network — no account, nothing
+leaves the LAN. The optional **chessmon cloud** broadcast service (live online spectators) is a separate,
+hosted offering; using it is opt‑in and involves an account.
