@@ -30,7 +30,7 @@
   #setup{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;width:100%;max-width:380px}
   .brand{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
-  .brand .logo{font-size:22px}
+  .brand .logo{width:24px;height:24px;flex:0 0 auto}   /* inline SVG pawn -> white via currentColor (Unicode chess glyphs render black on iOS) */
   .sub{color:var(--mut);font-size:13px;margin:4px 0 16px}
   .names{display:flex;align-items:center;gap:10px;margin-bottom:16px}
   .names input{flex:1;min-width:0;background:#11141a;border:1px solid var(--line);color:var(--ink);
@@ -51,6 +51,10 @@
   .btn:active{transform:translateY(1px)}
   .setfoot{color:var(--mut);font-size:13px}
   .setfoot a{color:var(--accent);text-decoration:none;font-weight:600}
+  .ver{color:var(--mut);opacity:.55;font-size:11px;margin-top:10px;letter-spacing:.05em}
+  .ioshint{display:none;color:var(--mut);font-size:12px;line-height:1.4;margin-top:12px;max-width:300px;
+    background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px}
+  .ioshint.on{display:block} .ioshint b{color:var(--ink);font-weight:700}
 
   /* ---- game ---- */
   #game{display:flex;flex-direction:column;gap:8px;padding:8px}
@@ -81,7 +85,7 @@
   .pausebtn{width:74px}                                            /* the primary control -- much bigger */
   .pausebtn .blbl{font-size:16px;font-weight:800}
   .pausebtn.paused{background:var(--good);border-color:var(--good);color:#08110a}   /* green while paused; the label inherits this dark colour */
-  .promo{width:64px;height:158px;display:flex;align-items:center;justify-content:center;margin-left:auto;text-decoration:none}
+  .promo{width:64px;height:158px;display:flex;align-items:center;justify-content:center;margin-left:auto;text-decoration:none;overflow:hidden}
   .promo-in{display:flex;align-items:center;gap:11px;transform:rotate(-90deg);white-space:nowrap}  /* same -90deg as the buttons */
   .promo-ic{width:44px;height:44px;flex:0 0 auto;opacity:.95}
   .promo-tx{color:var(--mut);font-size:13px;line-height:1.35}
@@ -93,7 +97,7 @@
 
 <div id="setup" class="screen">
   <div class="card">
-    <div class="brand"><span class="logo">&#9823;</span> chessmon clock</div>
+    <div class="brand"><svg class="logo" viewBox="0 0 45 45" aria-hidden="true"><path fill="currentColor" d="M 22.5,9 C 20.29,9 18.5,10.79 18.5,13 C 18.5,13.89 18.79,14.71 19.28,15.38 C 17.33,16.5 16,18.59 16,21 C 16,23.03 16.94,24.84 18.41,26.03 C 15.41,27.09 11,31.58 11,39.5 L 34,39.5 C 34,31.58 29.59,27.09 26.59,26.03 C 28.06,24.84 29,23.03 29,21 C 29,18.59 27.67,16.5 25.72,15.38 C 26.21,14.71 26.5,13.89 26.5,13 C 26.5,10.79 24.71,9 22.5,9 z"/></svg> chessmon clock</div>
     <div class="sub">A free chess clock. No app, no account, no internet needed.</div>
     <div class="names">
       <input id="wn" maxlength="22" placeholder="White" autocomplete="off">
@@ -110,6 +114,8 @@
     <button id="start" class="btn">Start clock</button>
   </div>
   <div class="setfoot">Want the board too? <a href="https://comlos.com/chessmon" target="_blank" rel="noopener">See chessmon &rarr;</a></div>
+  <div class="ioshint" id="ioshint">Tip: <b>Add to Home Screen</b> (Share menu) for fullscreen.</div>
+  <div class="ver" id="ver"></div>
 </div>
 
 <div id="game" class="screen hidden">
@@ -140,6 +146,7 @@
 
 <script>
 const $=id=>document.getElementById(id);
+const VERSION='1.01';                              // bump on each change -> shown on the setup screen to confirm you're on the latest
 const other=s=>s==='white'?'black':'white';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 let baseMs=300000, incMs=0, wname='White', bname='Black';
@@ -163,7 +170,10 @@ function fmt(ms){ms=Math.max(0,ms);
   if(ms<20000) return (ms/1000).toFixed(1);                         // tenths under 20s
   const t=Math.round(ms/1000); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');}
 
+function saveSetup(){try{localStorage.setItem('cmclock',JSON.stringify({wn:$('wn').value,bn:$('bn').value,mins:$('mins').value,incs:$('incs').value}));}catch(e){}}
+function loadSetup(){try{const s=JSON.parse(localStorage.getItem('cmclock')||'{}');for(const k of ['wn','bn','mins','incs'])if(s[k]!=null)$(k).value=s[k];}catch(e){}}
 function startGame(){
+  saveSetup();                                                     // remember names + time control for next time
   wname=($('wn').value.trim())||'White'; bname=($('bn').value.trim())||'Black';
   let m=clamp(+$('mins').value||0,0,180), s=clamp(+$('incs').value||0,0,60);
   if(!m && !s) m=5;                                                 // 0+0 is no game — default to 5+0
@@ -172,7 +182,16 @@ function startGame(){
   clk={white:baseMs, black:baseMs, active:'white', running:true, last:Date.now()};
   phase='run'; winner=null; over=null;
   $('setup').classList.add('hidden'); $('game').classList.remove('hidden');
-  render();
+  render(); goFullscreen();
+}
+function goFullscreen(){                            // Start is a user gesture, so fullscreen is allowed (no-op on iPhone Safari -- there, "Install as an app" gives the same)
+  const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(req){try{ req.call(el); }catch(e){}}
+}
+function maybeIosHint(){                            // iPhone Safari has no element fullscreen -> nudge to install (standalone IS fullscreen). iPad/desktop/Android don't need it.
+  const isIphone=/iPhone|iPod/.test(navigator.userAgent);
+  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches;
+  if(isIphone && !standalone) $('ioshint').classList.add('on');
 }
 function press(side){                                               // tap your own side to pass the turn
   if(phase!=='run' || !clk.running || clk.active!==side) return;
@@ -231,7 +250,7 @@ $('pause').onclick=togglePause;
 $('reset').onclick=resetGame;
 $('newg').onclick=newGame;
 $('mins').oninput=markPreset; $('incs').oninput=markPreset;
-buildPresets(); markPreset();
+buildPresets(); loadSetup(); markPreset(); $('ver').textContent='v'+VERSION; maybeIosHint();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});   // installable, offline-capable PWA
 </script>
 </body>
