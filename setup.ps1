@@ -120,6 +120,7 @@ if (-not $NoCloud) {
           "set CLUB_NAME=$club",
           "set RELAY_URL=$url",
           'set CHESSMON_WS=wss://127.0.0.1:8000/ws',
+          ('set STOCKFISH_PATH=' + (Join-Path $Server 'engines\stockfish.exe')),
           $line,
           'pause'
         ) -join "`r`n" | Set-Content (Join-Path $Root 'broadcast.bat') -Encoding ASCII
