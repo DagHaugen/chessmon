@@ -83,6 +83,14 @@ def make_cert(ips):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "gencert":   # make/refresh the cert and exit (used by setup.ps1) — no server
+        try:
+            make_cert(lan_ips())
+        except ImportError:
+            print("need the cryptography package:  .venv\\Scripts\\pip install cryptography")
+            return 1
+        print(f"generated self-signed cert for: localhost, 127.0.0.1, {', '.join(lan_ips())}")
+        return 0
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     force = len(sys.argv) > 2 and sys.argv[2] == "new"
     ips = lan_ips()

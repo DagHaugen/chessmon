@@ -24,6 +24,9 @@ import base64
 import io
 import json
 import os
+import platform
+import socket
+import subprocess
 import time
 import uuid
 
@@ -62,6 +65,52 @@ formats: dict = {}                 # format id -> {id, name, base_ms, increment_
 players: dict = {}                 # player id -> {id, name}
 tournaments: dict = {}             # tournament id -> {id, name, format, players[], rounds[]}
 games: list = []                   # append-only archive of finished games (moves + pgn + metadata)
+network: dict = {"dhcp": None, "ip": None, "mac": None, "host": "", "adapters": []}   # how this host holds its LAN IP -> console "DHCP" chip
+
+
+def detect_network():
+    """Best-effort: does this host hold its LAN IP by dynamic DHCP (can change) or pinned (static/reserved)?
+    Windows picks the *physical*, Up, gateway-bearing NIC and reads DHCP from the address origin — so a VPN /
+    Hyper-V / WSL adapter is skipped by adapter type (not by IP range, which is unreliable: VPNs use 10.x and
+    172.x alike). Other OSes return dhcp=None so the console just hides the chip."""
+    info = {"dhcp": None, "ip": None, "mac": None, "host": socket.gethostname(), "adapters": []}
+    if platform.system() == "Windows":
+        try:
+            # one record per physical, connected NIC: its IPv4, whether that address is DHCP, MAC, and its default route
+            ps = ("Get-NetAdapter -Physical | ? { $_.Status -eq 'Up' } | % { $i=$_.ifIndex; "
+                  "$ip = Get-NetIPAddress -InterfaceIndex $i -AddressFamily IPv4 -EA SilentlyContinue | "
+                  "? { $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1; "
+                  "$gw = Get-NetRoute -InterfaceIndex $i -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | Select-Object -First 1; "
+                  "if ($ip) { [pscustomobject]@{ IP=$ip.IPAddress; DHCP=($ip.PrefixOrigin -eq 'Dhcp'); "
+                  "MAC=$_.MacAddress; HasGW=[bool]$gw; Metric=$(if($gw){$gw.RouteMetric}else{9999}) } } } | ConvertTo-Json -Compress")
+            out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                                 capture_output=True, text=True, timeout=8).stdout
+            data = json.loads(out or "[]")
+            if isinstance(data, dict):
+                data = [data]
+            elif not isinstance(data, list):
+                data = []
+            cands = [ad for ad in data if ad.get("IP")]
+            # every physical NIC, so the console can match the exact address it was opened on (like the QR does)
+            info["adapters"] = [{"ip": ad["IP"], "mac": ((ad.get("MAC") or "").replace("-", ":")) or None,
+                                 "dhcp": bool(ad.get("DHCP"))} for ad in cands]
+            if cands:
+                # the OS's own pick: a default-gateway NIC first, then the lowest route metric (the active link)
+                cands.sort(key=lambda ad: (0 if ad.get("HasGW") else 1,
+                                           ad["Metric"] if ad.get("Metric") is not None else 9999))
+                ad = cands[0]
+                info["ip"] = ad["IP"]
+                info["dhcp"] = bool(ad.get("DHCP"))
+                info["mac"] = ((ad.get("MAC") or "").replace("-", ":")) or None
+        except Exception:
+            pass
+    if not info["ip"]:                                        # non-Windows / probe failed -> default-route IP (may be a VPN)
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80)); info["ip"] = s.getsockname()[0]; s.close()
+        except Exception:
+            pass
+    return info
 
 
 def _quiet_conn_reset(loop, context):
@@ -75,7 +124,18 @@ def _quiet_conn_reset(loop, context):
 
 @app.on_event("startup")
 async def _install_loop_handler():
-    asyncio.get_running_loop().set_exception_handler(_quiet_conn_reset)
+    loop = asyncio.get_running_loop()
+    loop.set_exception_handler(_quiet_conn_reset)
+
+    async def _net_loop():                  # probe DHCP/IP off the event loop, then refresh so a lease change shows within a minute
+        global network
+        while True:
+            try:
+                network = await loop.run_in_executor(None, detect_network)
+            except Exception:
+                pass
+            await asyncio.sleep(60)
+    asyncio.create_task(_net_loop())
 
 
 def hub(token):
@@ -194,7 +254,7 @@ def game_pgn(g):
 def admin_state():
     return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public(),
             "formats": list(formats.values()), "players": list(players.values()),
-            "tournaments": list(tournaments.values())}
+            "tournaments": list(tournaments.values()), "network": network}
 
 
 async def broadcast_devices():
