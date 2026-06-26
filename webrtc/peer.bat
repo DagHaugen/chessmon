@@ -4,6 +4,7 @@ REM club PC. Keep your chessmon server running too (serve_https.py 8000, or uvic
 cd /d "%~dp0.."
 set RTC_BROKER=https://comlos.com/relay/signal.php
 set RTC_ROOM=club1
-set RTC_TARGET=wss://localhost:8000/ws
+REM ws:// for a plain-HTTP server (uvicorn server.app:app); wss:// for serve_https.py.
+set RTC_TARGET=ws://localhost:8000/ws
 echo Bridging room "%RTC_ROOM%"  to  %RTC_TARGET%
 .venv\Scripts\python webrtc\rtc_peer.py
