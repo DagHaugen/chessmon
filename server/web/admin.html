@@ -161,6 +161,7 @@
     <div class="addtxt">
       <div class="addhd">Add a device</div>
       <p>Scan with a phone or tablet, then bookmark the page.<br>It shows up under Unused, ready to drop into a table.</p>
+      <label style="display:block;font-size:11.5px;opacity:.75;margin:7px 0 3px">room <input id="rtcroom" maxlength="32" autocomplete="off" style="width:108px;background:#11141a;border:1px solid #2c313b;color:#e8eaed;border-radius:6px;padding:3px 7px;font-size:12.5px;margin-left:4px"></label>
       <code id="addurl"></code>
     </div>
     <div class="offmsg">Server offline</div>
@@ -566,8 +567,18 @@ function connect(){
   ws.onclose=()=>{clearTimeout(guard);$('dot').classList.remove('on');setLive(false);setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
-(function(){const url=location.origin+'/app/';$('addurl').textContent=url;   // static QR -> the device landing page
-  if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:url,width:118,height:118});})();
+(function(){                                                  // "Add a device" QR -> the device PWA on comlos.com (WebRTC)
+  const BASE='https://comlos.com/relay/app/';                // edit if your relay lives elsewhere
+  const ri=$('rtcroom'); ri.value=localStorage.getItem('cm_rtc_room')||'club1';   // MUST match rtc_peer.py's RTC_ROOM (peer.bat)
+  function paint(){
+    const room=(ri.value||'club1').trim();
+    const url=BASE+'?rtc=1&room='+encodeURIComponent(room);
+    $('addurl').textContent=url; $('qr').innerHTML='';
+    if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:url,width:118,height:118});
+  }
+  ri.oninput=()=>{localStorage.setItem('cm_rtc_room',ri.value.trim());paint();};
+  paint();
+})();
 connect();                                                 // no initial render -> no flash of "0 tables / 0 devices" before data
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!ws||ws.readyState>1))connect()});  // tab back in front + socket dead -> reconnect now, don't wait for a throttled timer
 setInterval(()=>send({type:'ping'}),20000);
