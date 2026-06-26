@@ -21,7 +21,7 @@
       this._signal = opts.signal || 'signal.php';
       this._room = opts.room || 'demo';
       this._session = Math.random().toString(36).slice(2);
-      this._poll = opts.pollMs || 500;
+      this._poll = opts.pollMs || 250;
       this._tries = opts.tries || 60;
       this._pc = null; this._dc = null;
       this._connect();
@@ -59,7 +59,7 @@
       return new Promise((res) => {
         const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); res(); } };
         pc.addEventListener('icegatheringstatechange', done);
-        setTimeout(res, 2500);                       // host candidates are usually ready well before this
+        setTimeout(res, 1200);                       // host candidates are usually ready well before this
       });
     }
     _closed() { if (this.readyState !== 3) { this.readyState = 3; this.onclose && this.onclose({ type: 'close' }); } }

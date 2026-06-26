@@ -7,5 +7,7 @@ set RTC_BROKER=https://comlos.com/relay/signal.php
 set RTC_ROOM=club1
 REM ws:// for a plain-HTTP server (uvicorn server.app:app); wss:// for serve_https.py.
 set RTC_TARGET=ws://localhost:8000/ws
+REM drop ICE candidates on these IP prefixes (e.g. a VPN the phone can't reach) -> much faster connects:
+set RTC_EXCLUDE=172.27
 echo Bridging room "%RTC_ROOM%"  to  %RTC_TARGET%
 .venv\Scripts\python webrtc\rtc_peer.py

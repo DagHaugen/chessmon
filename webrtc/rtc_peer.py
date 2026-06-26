@@ -23,6 +23,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 BROKER = os.environ.get("RTC_BROKER", "https://comlos.com/relay/signal.php")
 ROOM = os.environ.get("RTC_ROOM", "demo")
 TARGET = os.environ.get("RTC_TARGET", "")          # if set, bridge each channel to this WS (the chessmon server)
+EXCLUDE = [p.strip() for p in os.environ.get("RTC_EXCLUDE", "").split(",") if p.strip()]  # drop ICE candidates on these IPs (e.g. a VPN) -> faster connects
 pcs = set()
 
 
@@ -95,8 +96,11 @@ async def answer(session, sdp, loop):
 
     await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type="offer"))
     await pc.setLocalDescription(await pc.createAnswer())
-    payload = json.dumps({"room": ROOM, "session": session, "kind": "answer",
-                          "sdp": pc.localDescription.sdp}).encode()
+    ans = pc.localDescription.sdp
+    if EXCLUDE:                                       # strip candidates on excluded IPs (a VPN) so the device doesn't wait on dead paths
+        ans = "\r\n".join(l for l in ans.splitlines()
+                          if not (l.startswith("a=candidate:") and any(b in l for b in EXCLUDE))) + "\r\n"
+    payload = json.dumps({"room": ROOM, "session": session, "kind": "answer", "sdp": ans}).encode()
 
     def _post():
         req = urllib.request.Request(BROKER, data=payload, headers={"Content-Type": "application/json"})
@@ -121,7 +125,7 @@ async def main():
                     print("answer error", off.get("session"), ":", e)
         except Exception as e:
             print("poll error:", e)
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
 
 
 if __name__ == "__main__":
