@@ -4,9 +4,12 @@ Run this on the club PC; it only needs OUTBOUND access to comlos.com (no inbound
 
     set RTC_BROKER=https://comlos.com/relay/signal.php
     set RTC_ROOM=<your club/room code>
+    set RTC_TARGET=ws://localhost:8000/ws        # phase 2: bridge each channel to the local chessmon server
     chessmon-webrtc\\.venv\\Scripts\\python webrtc\\rtc_peer.py
 
-Phase 1b still just echoes over the channel; phase 2 routes the messages into the real chessmon handlers.
+With RTC_TARGET set, every data channel is bridged to a fresh WebSocket on the chessmon server, so the
+device speaks the normal chessmon protocol (hello / table.join / capture.req / move.result ...) over
+WebRTC and the server's handlers are untouched. Without it, the peer just echoes (phase 1b).
 """
 import asyncio
 import json
@@ -17,7 +20,49 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 
 BROKER = os.environ.get("RTC_BROKER", "https://comlos.com/relay/signal.php")
 ROOM = os.environ.get("RTC_ROOM", "demo")
+TARGET = os.environ.get("RTC_TARGET", "")          # if set, bridge each channel to this WS (the chessmon server)
 pcs = set()
+
+
+def _bridge(channel):
+    """Pipe a device's data channel <-> a fresh WebSocket to the chessmon server. Early channel messages
+    are buffered until the WS is up; text and binary (camera frames) both pass through unchanged."""
+    import websockets
+    state = {"ws": None}
+    buf = []
+
+    @channel.on("message")
+    def _to_ws(msg):
+        if state["ws"] is not None:
+            asyncio.ensure_future(state["ws"].send(msg))
+        else:
+            buf.append(msg)
+
+    @channel.on("close")
+    def _closed():
+        if state["ws"] is not None:
+            asyncio.ensure_future(state["ws"].close())
+
+    async def _run():
+        try:
+            ws = await websockets.connect(TARGET, max_size=None)
+        except Exception as e:
+            print("bridge: can't reach", TARGET, ":", e)
+            channel.close()
+            return
+        state["ws"] = ws
+        for m in buf:                              # flush anything the device sent before the WS was up
+            asyncio.ensure_future(ws.send(m))
+        buf.clear()
+        try:
+            async for m in ws:                     # server -> device
+                channel.send(m)
+        except Exception:
+            pass
+        finally:
+            await ws.close()
+
+    asyncio.ensure_future(_run())
 
 
 async def answer(session, sdp, loop):
@@ -33,9 +78,12 @@ async def answer(session, sdp, loop):
 
     @pc.on("datachannel")
     def _dc(channel):
-        @channel.on("message")
-        def _msg(message):
-            channel.send("echo: " + (message if isinstance(message, str) else message.decode("utf-8", "replace")))
+        if TARGET:
+            _bridge(channel)                       # phase 2: relay to the chessmon server
+        else:
+            @channel.on("message")                 # phase 1b: echo
+            def _msg(message):
+                channel.send("echo: " + (message if isinstance(message, str) else message.decode("utf-8", "replace")))
 
     await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type="offer"))
     await pc.setLocalDescription(await pc.createAnswer())
@@ -47,12 +95,12 @@ async def answer(session, sdp, loop):
         urllib.request.urlopen(req, timeout=10).read()
 
     await loop.run_in_executor(None, _post)
-    print("answered", session)
+    print("answered", session, "(bridge)" if TARGET else "(echo)")
 
 
 async def main():
     loop = asyncio.get_event_loop()
-    print("chessmon peer polling", BROKER, "for offers in room", ROOM)
+    print("chessmon peer polling", BROKER, "room", ROOM, "| target:", TARGET or "echo")
     while True:
         try:
             def _get():

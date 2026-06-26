@@ -96,7 +96,8 @@ async def poller():
 
 @app.on_event("startup")
 async def _startup():
-    asyncio.create_task(poller())
+    if not os.environ.get("RTC_NO_PEER"):       # RTC_NO_PEER=1 -> broker only (for testing a standalone peer/bridge)
+        asyncio.create_task(poller())
 
 
 if __name__ == "__main__":
