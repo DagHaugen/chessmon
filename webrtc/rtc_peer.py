@@ -32,8 +32,30 @@ async def _add_remote_skip_mdns(self, cand):
     return await _orig_add_remote(self, cand)
 _aii.Connection.add_remote_candidate = _add_remote_skip_mdns
 
+def _load_or_create_room():
+    """The club's signaling room. RTC_ROOM env wins (manual override); else share rtc_room.txt at the repo
+    root with the chessmon server (the server writes it on startup; if the bridge runs first it creates the
+    same file). A globally-unique, stable room per club — so two clubs never collide on comlos.com signaling
+    (a shared room would let one club's device answer into the other club's server)."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rtc_room.txt")
+    try:
+        with open(path) as f:
+            r = f.read().strip()
+        if r:
+            return r
+    except OSError:
+        pass
+    r = "cm-" + os.urandom(6).hex()
+    try:
+        with open(path, "w") as f:
+            f.write(r)
+    except OSError:
+        pass
+    return r
+
+
 BROKER = os.environ.get("RTC_BROKER", "https://comlos.com/relay/signal.php")
-ROOM = os.environ.get("RTC_ROOM", "demo")
+ROOM = (os.environ.get("RTC_ROOM") or "").strip() or _load_or_create_room()
 TARGET = os.environ.get("RTC_TARGET", "")          # if set, bridge each channel to this WS (the chessmon server)
 EXCLUDE = [p.strip() for p in os.environ.get("RTC_EXCLUDE", "").split(",") if p.strip()]  # optional manual override of IP prefixes to drop
 

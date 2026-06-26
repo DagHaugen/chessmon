@@ -19,11 +19,6 @@
   .sub{color:var(--mut);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums}
   .setuplink{margin-left:14px;color:var(--mut);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:9px;padding:6px 12px}
   .setuplink:hover{background:var(--panel);color:var(--ink)}
-  .netchip{margin-left:4px;border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--mut);white-space:nowrap;font-family:inherit}
-  .netchip.ok{color:var(--good);border-color:var(--good)}
-  .netchip.warn{color:var(--cam);border-color:var(--cam)}
-  .netchip:hover{filter:brightness(1.18)}
-  body.offline .netchip{display:none}
   .modal code{color:var(--accent);font-size:12px;word-break:break-all}
   .modal ul{font-size:13px;color:var(--mut);line-height:1.6;margin:6px 0;padding-left:20px;text-align:left}
   .modal .netmut{font-size:12px;color:var(--mut);margin-top:8px}
@@ -151,7 +146,6 @@
 <body class="offline">
 <div class="wrap">
   <div class="top"><span class="dot" id="dot"></span><h1>chessmon · console</h1>
-    <button class="netchip hidden" id="netchip" title="How this PC gets its network address"></button>
     <a href="setup.html" target="cm_setup" class="setuplink">Setup ↗</a>
     <a href="games.html" target="cm_games" class="setuplink">Games ↗</a>
     <span class="sub" id="sub">connecting…</span></div>
@@ -161,7 +155,7 @@
     <div class="addtxt">
       <div class="addhd">Add a device</div>
       <p>Scan with a phone or tablet, then bookmark the page.<br>It shows up under Unused, ready to drop into a table.</p>
-      <label style="display:block;font-size:11.5px;opacity:.75;margin:7px 0 3px">room <input id="rtcroom" maxlength="32" autocomplete="off" style="width:108px;background:#11141a;border:1px solid #2c313b;color:#e8eaed;border-radius:6px;padding:3px 7px;font-size:12.5px;margin-left:4px"></label>
+      <div style="font-size:11.5px;opacity:.6;margin:7px 0 2px">room <code id="rtcroomval" style="opacity:.85">…</code></div>
       <code id="addurl"></code>
     </div>
     <div class="offmsg">Server offline</div>
@@ -203,12 +197,6 @@
     <p id="snaphint">Asking the camera for a frame…</p>
     <div class="ccwrap"><img id="snapimg" alt="camera snapshot"><svg class="snapgrid hidden" id="snapgrid" viewBox="0 0 1 1" preserveAspectRatio="none"></svg></div>
     <div class="crow"><button class="sec hidden" id="snapgridbtn">Hide grid</button><button class="sec" id="snapclose">Close</button></div>
-  </div></div>
-
-  <div class="modal hidden" id="netmodal"><div class="card" style="text-align:left">
-    <h2 id="nettitle">Network</h2>
-    <div id="netbody"></div>
-    <div class="crow"><button class="sec hidden" id="netreserved">I’ve reserved this IP ✓</button><button id="netclose">Close</button></div>
   </div></div>
 </div>
 <script src="qrcode.min.js"></script>
@@ -444,7 +432,7 @@ $('snapgridbtn').onclick=()=>{const hid=$('snapgrid').classList.toggle('hidden')
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
   setLive(true);                                            // any message means the server is alive -> leave the offline state
-  if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];if(m.network)net=m.network;render();renderNetChip();}
+  if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];if(m.rtc_room){rtcRoom=m.rtc_room;paintAddQR();}render();}
   else if(m.type==='tables'){tabs=m.tables||[];render();}      // live moves/result without a full devices push
   else if(m.type==='camera.controlled'){const cs=camState[m.table];if(cs){   // ack from the camera
     if(m.what==='flash'){cs.flash=m.ok?m.on:false;cs.flashNote=m.ok?'':(m.reason||'unavailable');}
@@ -462,49 +450,7 @@ function handle(m){
   else if(m.type==='snap.image'){if(m.table===snapTable){$('snapimg').src=m.image;$('snaphint').textContent='Latest frame — Close when done.';drawCalibGrid(m.corners)}}
 }
 
-/* ---- network chip: is this PC's LAN IP dynamic (DHCP, can change) or pinned? ---- */
-let net=null;
-function nesc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function ipIsReal(h){return /^\d{1,3}(\.\d{1,3}){3}$/.test(h)&&h!=='127.0.0.1';}
-function netPick(){                         // the adapter THIS console is actually reached on (same source as the QR), else the server's primary pick
-  if(!net)return null;
-  if(ipIsReal(location.hostname)){
-    const hit=(net.adapters||[]).find(a=>a.ip===location.hostname);
-    return hit||{ip:location.hostname,mac:net.mac,dhcp:net.dhcp};
-  }
-  return {ip:net.ip,mac:net.mac,dhcp:net.dhcp};   // opened on localhost -> the server's detected LAN adapter
-}
-function ipReserved(ip){return !!(ip&&localStorage.getItem('cm_ip_reserved')===ip);}
-function renderNetChip(){
-  const c=$('netchip'),p=netPick();
-  if(!p||p.dhcp===null||p.dhcp===undefined){c.classList.add('hidden');return;}
-  c.classList.remove('hidden');
-  if(!p.dhcp){c.className='netchip ok';c.textContent='IP fixed ✓';}
-  else if(ipReserved(p.ip)){c.className='netchip ok';c.textContent='IP reserved ✓';}
-  else{c.className='netchip warn';c.textContent='⚠ DHCP';}
-}
-function openNet(){
-  const p=netPick(); if(!p)return;
-  const ip=nesc(p.ip||'this machine'),mac=nesc(p.mac||'(unknown)');
-  let h;
-  if(!p.dhcp){
-    h='<p>This PC has a <b>fixed (static) IP</b> — <code>'+ip+'</code> — so the links your phones and tablets bookmarked keep working across reboots. Nothing to do here. ✓</p>';
-    show('netreserved',false);$('nettitle').textContent='Network — IP is fixed';
-  }else{
-    const r=ipReserved(p.ip);
-    h='<p>This PC gets its address from the router by <b>DHCP</b>, so <code>'+ip+'</code> <b>can change</b> — and when it does, every device’s bookmarked link breaks.</p>'
-     +'<p><b>To pin it</b> (either one is enough):</p>'
-     +'<ul><li>In your router, add a <b>DHCP reservation</b> for this PC so it always gets the same address.<br>Its network‑card address (MAC): <code>'+mac+'</code></li>'
-     +'<li>or set a <b>static IP</b> on this PC.</li></ul>'
-     +'<p class="netmut">Once it’s pinned the address is permanent — no DNS or <code>.local</code> setup needed. '
-     +(r?'You’ve marked this IP as reserved, so the chip stays green.':'Already reserved it in your router? Mark it below and the chip turns green.')+'</p>';
-    show('netreserved',!r);$('nettitle').textContent='⚠ Your IP can change';
-  }
-  $('netbody').innerHTML=h;show('netmodal',true);
-}
-$('netchip').onclick=openNet;
-$('netclose').onclick=()=>show('netmodal',false);
-$('netreserved').onclick=()=>{const p=netPick();if(p&&p.ip)localStorage.setItem('cm_ip_reserved',p.ip);renderNetChip();show('netmodal',false);};
+/* DHCP/network chip removed: with the WebRTC flow, devices reach the server through the comlos.com bridge -> localhost, so the server's LAN IP no longer matters to them. */
 
 function startCalib(table){calibTable=table;send({type:'admin.calib',table});send({type:'admin.calib.lock',table,on:true});   // block the clock's Calibrate while we're in here
   $('caltitle').textContent='Capturing…';$('calhint').textContent='Asking the camera for a frame…';
@@ -567,18 +513,14 @@ function connect(){
   ws.onclose=()=>{clearTimeout(guard);$('dot').classList.remove('on');setLive(false);setTimeout(connect,1500)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
-(function(){                                                  // "Add a device" QR -> the device PWA on comlos.com (WebRTC)
-  const BASE='https://comlos.com/relay/app/';                // edit if your relay lives elsewhere
-  const ri=$('rtcroom'); ri.value=localStorage.getItem('cm_rtc_room')||'club1';   // MUST match rtc_peer.py's RTC_ROOM (peer.bat)
-  function paint(){
-    const room=(ri.value||'club1').trim();
-    const url=BASE+'?rtc=1&room='+encodeURIComponent(room);
-    $('addurl').textContent=url; $('qr').innerHTML='';
-    if(typeof QRCode!=='undefined')new QRCode($('qr'),{text:url,width:118,height:118});
-  }
-  ri.oninput=()=>{localStorage.setItem('cm_rtc_room',ri.value.trim());paint();};
-  paint();
-})();
+let rtcRoom=null, addQRdone=false;                           // the club's unique signaling room arrives from the server (admin_state.rtc_room)
+function paintAddQR(){                                        // "Add a device" QR -> the device PWA on comlos.com (WebRTC); paints once the room is known
+  if(!rtcRoom||addQRdone)return;
+  const url='https://comlos.com/relay/app/?rtc=1&room='+encodeURIComponent(rtcRoom);   // edit if your relay lives elsewhere
+  $('addurl').textContent=url; const rv=$('rtcroomval'); if(rv)rv.textContent=rtcRoom;
+  $('qr').innerHTML='';
+  if(typeof QRCode!=='undefined'){new QRCode($('qr'),{text:url,width:118,height:118});addQRdone=true;}
+}
 connect();                                                 // no initial render -> no flash of "0 tables / 0 devices" before data
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!ws||ws.readyState>1))connect()});  // tab back in front + socket dead -> reconnect now, don't wait for a throttled timer
 setInterval(()=>send({type:'ping'}),20000);
