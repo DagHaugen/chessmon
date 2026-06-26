@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chessmon · WebRTC phase 1a</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#15171c;color:#e8eaed;margin:0;padding:24px}
+  .wrap{max-width:620px;margin:0 auto}
+  h2{font-size:18px}
+  #log{background:#1d2026;border:1px solid #2c313b;border-radius:10px;padding:14px;
+    font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;min-height:160px}
+  .s{color:#3ecf8e}.e{color:#ff6b6b}.i{color:#9aa3b2}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>chessmon · WebRTC data&#8209;channel test</h2>
+  <div id="log"></div>
+</div>
+<script>
+const L = (m, c) => { const d = document.getElementById('log'); d.innerHTML += '<span class="' + (c || 'i') + '">' + m + '</span>\n'; };
+function waitIce(pc) {
+  if (pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); res(); } };
+    pc.addEventListener('icegatheringstatechange', done);
+    setTimeout(res, 2500);                                  // fallback so we never hang on gathering
+  });
+}
+async function run() {
+  const pc = new RTCPeerConnection();
+  window._pc = pc; window._state = 'new'; window._echo = null;
+  pc.addEventListener('connectionstatechange', () => {
+    window._state = pc.connectionState;
+    L('peer: ' + pc.connectionState, pc.connectionState === 'connected' ? 's' : 'i');
+  });
+  const dc = pc.createDataChannel('chessmon');
+  window._dc = dc;
+  dc.onopen = () => { L('data channel OPEN', 's'); dc.send('hello from the browser'); L('sent: hello from the browser'); };
+  dc.onmessage = e => { window._echo = e.data; L('recv: ' + e.data, 's'); };
+  dc.onclose = () => L('data channel closed', 'i');
+  L('creating offer…');
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIce(pc);
+  L('posting offer → /offer …');
+  const r = await fetch('/offer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }) });
+  await pc.setRemoteDescription(await r.json());
+  L('answer set — negotiating…');
+}
+run().catch(e => { window._err = String(e); L('ERROR: ' + e, 'e'); });
+</script>
+</body>
+</html>
