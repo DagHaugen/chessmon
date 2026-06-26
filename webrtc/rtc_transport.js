@@ -17,7 +17,7 @@
       this.CONNECTING = 0; this.OPEN = 1; this.CLOSING = 2; this.CLOSED = 3;
       this.readyState = 0;
       this.binaryType = 'arraybuffer';
-      this.onopen = this.onmessage = this.onclose = this.onerror = null;
+      this.onopen = this.onmessage = this.onclose = this.onerror = this.onstatus = null;
       this._signal = opts.signal || 'signal.php';
       this._room = opts.room || 'demo';
       this._session = Math.random().toString(36).slice(2);
@@ -27,22 +27,27 @@
       this._connect();
     }
     async _connect() {
+      const T0 = (window.performance ? performance.now() : Date.now());
+      const st = (s) => { if (this.onstatus) this.onstatus(s, Math.round((window.performance ? performance.now() : Date.now()) - T0)); };
       try {
         const pc = new RTCPeerConnection(); this._pc = pc;
         const dc = pc.createDataChannel('chessmon'); this._dc = dc;
         dc.binaryType = 'arraybuffer';
-        dc.onopen = () => { this.readyState = 1; this.onopen && this.onopen({ type: 'open' }); };
+        dc.onopen = () => { this.readyState = 1; st('connected'); this.onopen && this.onopen({ type: 'open' }); };
         dc.onmessage = (e) => { this.onmessage && this.onmessage({ data: e.data }); };
         dc.onclose = () => { this._closed(); };
         pc.onconnectionstatechange = () => {
           if (['failed', 'disconnected', 'closed'].indexOf(pc.connectionState) >= 0) this._closed();
         };
+        st('offer');
         await pc.setLocalDescription(await pc.createOffer());
         await this._waitIce(pc);
+        st('signaling');
         await fetch(this._signal, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ room: this._room, session: this._session, kind: 'offer', sdp: pc.localDescription.sdp })
         });
+        st('waiting for server');
         let ans = null;
         for (let i = 0; i < this._tries && this.readyState === 0; i++) {
           const j = await (await fetch(this._signal + '?room=' + encodeURIComponent(this._room) +
@@ -51,6 +56,7 @@
           await new Promise((r) => setTimeout(r, this._poll));
         }
         if (!ans) { this._fail('no answer from the local server'); return; }
+        st('connecting (ICE)');
         await pc.setRemoteDescription({ type: 'answer', sdp: ans });
       } catch (e) { this._fail(e); }
     }

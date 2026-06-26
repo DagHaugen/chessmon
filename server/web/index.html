@@ -184,6 +184,7 @@ function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().t
 setupBattery();
 function connect(){
   ws=cmConnect('/ws');                                      // plain WS on the LAN, or a WebRTC data channel via comlos.com (?rtc / window.CM_RTC)
+  ws.onstatus=(s,ms)=>{$('msg').textContent=s+'… '+(ms/1000).toFixed(1)+'s';};   // live WebRTC connect phase + timing (so we can see where time goes)
   ws.onopen=()=>{
     ready();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,plat:navigator.platform,landing:true,

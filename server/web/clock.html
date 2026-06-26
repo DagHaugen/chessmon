@@ -276,7 +276,7 @@ function deviceName(){const u=navigator.userAgent;
   if(/Macintosh/.test(u))return'Mac';if(/Windows/.test(u))return'Windows PC';return'device'}
 const devName=deviceName();
 const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the camera-pairing QR (scan to pair, or pair from the console). Set false to hide.
-let ws,started=false,wakeLock=null,camLinked=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,calibrated=false,camAssigned=false,needsResume=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
+let ws,started=false,wakeLock=null,camLinked=false,gotState=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,calibrated=false,camAssigned=false,needsResume=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 const PREVIEW=/[?&]preview\b/.test(location.search);       // /app/clock.html?preview=1 -> driven by intern.html via postMessage; no WS, no SW, clocks don't tick
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 function applyRot(){$('board').className='board m'+rotMode}
@@ -390,7 +390,8 @@ function cancelMove(){send({type:'move.cancel'});warnMsg=null;reading=false;mark
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
 function enterReady(){phase='ready';needsResume=false;clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
 function updateWait(){                                  // the board overlay + status: START / WAIT / PAUSE
-  const reason = serverDown ? 'Server offline'
+  const reason = !gotState ? 'Connecting…'          // haven't heard the table/camera state yet -> loading, not a false "Camera offline"
+    : serverDown ? 'Server offline'
     : (!camLinked ? 'Camera offline'                    // a camera is assigned but its connection is down
     : (!calibrated ? 'Camera not calibrated' : null));  // online but the board isn't registered yet
   waiting = !!reason;
@@ -524,6 +525,7 @@ function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   switch(m.type){
     case 'session.ready':
+      gotState=true;
       camLinked=m.cameraLinked;calibrated=!!m.calibrated;camAssigned=!!m.cameraAssigned;
       if(m.pairToken)pairToken=m.pairToken;                                    // remember it -> can re-show the QR if the camera later leaves
       $('tid').textContent=m.name||('Table '+(table||'').slice(0,6));
