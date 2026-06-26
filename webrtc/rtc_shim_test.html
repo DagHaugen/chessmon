@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chessmon · transport shim test</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#15171c;color:#e8eaed;margin:0;padding:24px}
+  .wrap{max-width:620px;margin:0 auto}
+  h2{font-size:17px}
+  #log{background:#1d2026;border:1px solid #2c313b;border-radius:10px;padding:14px;
+    font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;min-height:150px}
+  .s{color:#3ecf8e}.e{color:#ff6b6b}.i{color:#9aa3b2}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>chessmon · ChessmonSocket (WebSocket shim) over WebRTC</h2>
+  <div id="log"></div>
+</div>
+<script src="rtc_transport.js"></script>
+<script>
+const L = (m, c) => { const d = document.getElementById('log'); d.innerHTML += '<span class="' + (c || 'i') + '">' + m + '</span>\n'; };
+const Q = new URLSearchParams(location.search);
+window._got = null; window._state = 'connecting'; window._err = null;
+// Used EXACTLY like a WebSocket — only the constructor differs from `new WebSocket(url)`.
+const sock = new ChessmonSocket({ signal: Q.get('signal') || '/signal', room: Q.get('room') || 'demo' });
+sock.onopen = () => {
+  window._state = 'open';
+  L('socket open (readyState ' + sock.readyState + ') — sending a chessmon-style message', 's');
+  sock.send(JSON.stringify({ type: 'hello', name: 'shim-test', role: 'landing' }));
+};
+sock.onmessage = e => { window._got = e.data; L('recv: ' + e.data, 's'); };
+sock.onclose = () => { window._state = 'closed'; L('socket closed', 'i'); };
+sock.onerror = ev => { window._state = 'error'; window._err = String(ev.error); L('error: ' + ev.error, 'e'); };
+L('readyState ' + sock.readyState + ' — connecting via the shim…');
+</script>
+</body>
+</html>

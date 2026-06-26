@@ -17,7 +17,7 @@ import urllib.request
 import uvicorn
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOM = os.environ.get("RTC_ROOM", "demo")                       # the club/room code a device joins
@@ -49,6 +49,14 @@ async def get_signal(room: str, kind: str, session: str = ""):
     if kind == "offer":
         return JSONResponse({"offers": OFFERS.pop(room, [])})            # consume-on-read
     return JSONResponse({"sdp": ANSWERS.pop(room + ":" + session, None)})
+
+
+@app.get("/{fname}")                                                    # serve webrtc/*.js + test pages, same origin as /signal
+async def static_file(fname: str):
+    path = os.path.join(HERE, fname)
+    if "/" not in fname and ".." not in fname and os.path.isfile(path):
+        return FileResponse(path)
+    return PlainTextResponse("not found", status_code=404)
 
 
 # ---- LOCAL-SERVER peer: poll the broker, answer offers ---------------------
