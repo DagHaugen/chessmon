@@ -20,10 +20,57 @@ import urllib.request
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
 
+# Skip the browser's mDNS (.local) ICE candidates instead of resolving them: aiortc's mDNS resolve is
+# slow when a VPN is up and fails ("unreachable host") when it's down. The device still connects to OUR
+# host candidate, and ICE peer-reflexive discovery learns its real address from that incoming check.
+import aioice.ice as _aii
+import aioice.mdns as _amd
+_orig_add_remote = _aii.Connection.add_remote_candidate
+async def _add_remote_skip_mdns(self, cand):
+    if cand is not None and _amd.is_mdns_hostname(cand.host):
+        return
+    return await _orig_add_remote(self, cand)
+_aii.Connection.add_remote_candidate = _add_remote_skip_mdns
+
 BROKER = os.environ.get("RTC_BROKER", "https://comlos.com/relay/signal.php")
 ROOM = os.environ.get("RTC_ROOM", "demo")
 TARGET = os.environ.get("RTC_TARGET", "")          # if set, bridge each channel to this WS (the chessmon server)
-EXCLUDE = [p.strip() for p in os.environ.get("RTC_EXCLUDE", "").split(",") if p.strip()]  # drop ICE candidates on these IPs (e.g. a VPN) -> faster connects
+EXCLUDE = [p.strip() for p in os.environ.get("RTC_EXCLUDE", "").split(",") if p.strip()]  # optional manual override of IP prefixes to drop
+
+
+def _physical_ipv4():
+    """IPv4 addresses on PHYSICAL adapters (auto-excludes VPN/virtual adapters of ANY IP range), via Windows
+    Get-NetAdapter -Physical. Returns [] on non-Windows / any failure -> then no auto-filtering is applied."""
+    ps = ("$i=(Get-NetAdapter -Physical -EA SilentlyContinue | Where-Object Status -eq 'Up').ifIndex;"
+          "Get-NetIPAddress -AddressFamily IPv4 -EA SilentlyContinue | "
+          "Where-Object {$_.InterfaceIndex -in $i -and $_.IPAddress -notmatch '^(127\\.|169\\.254\\.)'} | "
+          "Select-Object -Expand IPAddress")
+    try:
+        import subprocess
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, timeout=10)
+        return [s.strip() for s in r.stdout.splitlines() if s.strip()]
+    except Exception:
+        return []
+
+
+# Gather ICE host candidates only on physical-adapter IPv4s, so a VPN/virtual adapter (whatever its range)
+# is auto-excluded and the phone never tries an address it can't reach. RTC_EXCLUDE still works as a manual
+# override; IPv6 is left untouched.
+_PHYS = _physical_ipv4()
+print("bridge: gather IPs ->", (_PHYS or "all (physical detect failed)"), flush=True)
+_orig_get_host = _aii.get_host_addresses
+def _get_host_filtered(use_ipv4, use_ipv6):
+    keep = []
+    for a in _orig_get_host(use_ipv4, use_ipv6):
+        if ":" not in a:                                  # filter IPv4 only
+            if EXCLUDE and any(a.startswith(b) for b in EXCLUDE):
+                continue
+            if _PHYS and a not in _PHYS:
+                continue
+        keep.append(a)
+    return keep
+_aii.get_host_addresses = _get_host_filtered
+
 pcs = set()
 
 
