@@ -46,20 +46,20 @@
   .custom input{width:66px;background:#11141a;border:1px solid var(--line);color:var(--ink);
     border-radius:9px;padding:9px;font-size:16px;text-align:center}
   .custom input:focus{outline:none;border-color:var(--accent)}
-  .btn{appearance:none;border:none;border-radius:13px;font-size:18px;font-weight:800;padding:15px;width:100%;
+  .btn{-webkit-appearance:none;appearance:none;border:none;border-radius:13px;font-size:18px;font-weight:800;padding:15px;width:100%;
     cursor:pointer;color:#08110a;background:var(--good)}
   .btn:active{transform:translateY(1px)}
   .setfoot{color:var(--mut);font-size:13px}
   .setfoot a{color:var(--accent);text-decoration:none;font-weight:600}
-  .ver{color:var(--mut);opacity:.55;font-size:11px;margin-top:10px;letter-spacing:.05em}
+  .ver{color:var(--mut);opacity:.7;font-size:11px;margin-top:10px;letter-spacing:.05em}
   .ioshint{display:none;color:var(--mut);font-size:12px;line-height:1.4;margin-top:12px;max-width:300px;
     background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px}
   .ioshint.on{display:block} .ioshint b{color:var(--ink);font-weight:700}
 
   /* ---- game ---- */
   #game{display:flex;flex-direction:column;gap:8px;padding:8px}
-  .zone{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-    appearance:none;border:2px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);
+  .zone{flex:1;min-height:0;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    -webkit-appearance:none;appearance:none;border:2px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);
     cursor:pointer;font-family:inherit;width:100%;padding:10px;transition:background .12s,border-color .12s}
   .zone.black{transform:rotate(180deg)}                 /* faces the player across the table */
   .zone.go{background:var(--good);border-color:var(--good);color:#08110a}    /* your move — tap to pass */
@@ -68,7 +68,7 @@
   .zone.lose{background:var(--panel);border-color:var(--line);color:var(--mut)}
   .znm{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.85;
     max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ztm{font-variant-numeric:tabular-nums;font-weight:800;font-size:min(20vw,116px);line-height:1}
+  .ztm{font-variant-numeric:tabular-nums;font-weight:800;font-size:20vw;font-size:min(20vw,116px);line-height:1}
   .ztm.low{color:var(--warn)} .zone.go .ztm.low{color:#6a4400}
   .ztm.flag{color:var(--bad)} .zone.go .ztm.flag{color:#5c0d0d}
   .zhint{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;min-height:14px;opacity:.8}
@@ -115,7 +115,7 @@
   </div>
   <div class="setfoot">Want the board too? <a href="https://comlos.com/chessmon" target="_blank" rel="noopener">See chessmon &rarr;</a></div>
   <div class="ioshint" id="ioshint">Tip: <b>Add to Home Screen</b> (Share menu) for fullscreen.</div>
-  <div class="ver" id="ver"></div>
+  <div class="ver" id="ver">v1.03</div><!-- static fallback so the version shows even when the JS never runs (old Safari); keep in sync with VERSION -->
 </div>
 
 <div id="game" class="screen hidden">
@@ -145,37 +145,38 @@
 </div>
 
 <script>
-const $=id=>document.getElementById(id);
-const VERSION='1.01';                              // bump on each change -> shown on the setup screen to confirm you're on the latest
-const other=s=>s==='white'?'black':'white';
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-let baseMs=300000, incMs=0, wname='White', bname='Black';
-let clk={white:300000,black:300000,active:'white',running:false,last:0};
-let phase='setup', winner=null, over=null;
+var $=function(id){return document.getElementById(id);};
+var VERSION='1.03';                                // bump on each change -> shown on the setup screen to confirm you're on the latest
+$('ver').textContent='v'+VERSION;                  // render the version FIRST, before anything that could throw, so it's always a reliable "did it reload?" check
+var other=function(s){return s==='white'?'black':'white';};
+var clamp=function(v,a,b){return Math.max(a,Math.min(b,v));};
+var baseMs=300000, incMs=0, wname='White', bname='Black';
+var clk={white:300000,black:300000,active:'white',running:false,last:0};
+var phase='setup', winner=null, over=null;
 
-const PRESETS=[['1+0',1,0],['3+0',3,0],['3+2',3,2],['5+0',5,0],['5+3',5,3],
-               ['10+0',10,0],['10+5',10,5],['15+10',15,10],['30+0',30,0]];
+var PRESETS=[['1+0',1,0],['3+0',3,0],['3+2',3,2],['5+0',5,0],['5+3',5,3],
+             ['10+0',10,0],['10+5',10,5],['15+10',15,10],['30+0',30,0]];
 function buildPresets(){
-  $('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
-  $('presets').querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    const p=PRESETS[+b.dataset.i]; $('mins').value=p[1]; $('incs').value=p[2]; markPreset();
-  });
+  $('presets').innerHTML=PRESETS.map(function(p,i){return '<button data-i="'+i+'">'+p[0]+'</button>';}).join('');
+  [].forEach.call($('presets').querySelectorAll('button'),function(b){b.onclick=function(){
+    var p=PRESETS[+b.dataset.i]; $('mins').value=p[1]; $('incs').value=p[2]; markPreset();
+  };});
 }
 function markPreset(){
-  const m=+$('mins').value, s=+$('incs').value;
-  $('presets').querySelectorAll('button').forEach(b=>{const p=PRESETS[+b.dataset.i];
-    b.classList.toggle('sel', p[1]===m && p[2]===s);});
+  var m=+$('mins').value, s=+$('incs').value;
+  [].forEach.call($('presets').querySelectorAll('button'),function(b){var p=PRESETS[+b.dataset.i];
+    b.classList[(p[1]===m && p[2]===s)?'add':'remove']('sel');});
 }
 function fmt(ms){ms=Math.max(0,ms);
   if(ms<20000) return (ms/1000).toFixed(1);                         // tenths under 20s
-  const t=Math.round(ms/1000); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');}
+  var t=Math.round(ms/1000), s=t%60; return Math.floor(t/60)+':'+(s<10?'0':'')+s;}              // manual pad -- iOS 9.3 Safari has no String.padStart
 
 function saveSetup(){try{localStorage.setItem('cmclock',JSON.stringify({wn:$('wn').value,bn:$('bn').value,mins:$('mins').value,incs:$('incs').value}));}catch(e){}}
-function loadSetup(){try{const s=JSON.parse(localStorage.getItem('cmclock')||'{}');for(const k of ['wn','bn','mins','incs'])if(s[k]!=null)$(k).value=s[k];}catch(e){}}
+function loadSetup(){try{var s=JSON.parse(localStorage.getItem('cmclock')||'{}'),ks=['wn','bn','mins','incs'];for(var i=0;i<ks.length;i++)if(s[ks[i]]!=null)$(ks[i]).value=s[ks[i]];}catch(e){}}
 function startGame(){
   saveSetup();                                                     // remember names + time control for next time
   wname=($('wn').value.trim())||'White'; bname=($('bn').value.trim())||'Black';
-  let m=clamp(+$('mins').value||0,0,180), s=clamp(+$('incs').value||0,0,60);
+  var m=clamp(+$('mins').value||0,0,180), s=clamp(+$('incs').value||0,0,60);
   if(!m && !s) m=5;                                                 // 0+0 is no game — default to 5+0
   baseMs=m*60000; incMs=s*1000;
   $('nmw').textContent=wname; $('nmb').textContent=bname;
@@ -185,17 +186,17 @@ function startGame(){
   render(); goFullscreen();
 }
 function goFullscreen(){                            // Start is a user gesture, so fullscreen is allowed (no-op on iPhone Safari -- there, "Install as an app" gives the same)
-  const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+  var el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
   if(req){try{ req.call(el); }catch(e){}}
 }
 function maybeIosHint(){                            // iPhone Safari has no element fullscreen -> nudge to install (standalone IS fullscreen). iPad/desktop/Android don't need it.
-  const isIphone=/iPhone|iPod/.test(navigator.userAgent);
-  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches;
+  var isIphone=/iPhone|iPod/.test(navigator.userAgent);
+  var standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches;
   if(isIphone && !standalone) $('ioshint').classList.add('on');
 }
 function press(side){                                               // tap your own side to pass the turn
   if(phase!=='run' || !clk.running || clk.active!==side) return;
-  const now=Date.now(); clk[side]-=(now-clk.last);
+  var now=Date.now(); clk[side]-=(now-clk.last);
   if(clk[side]<=0){clk[side]=0; flag(side); return;}
   clk[side]+=incMs;                                                 // Fischer: bank increment on completing the move
   clk.active=other(side); clk.last=now; render();
@@ -203,7 +204,7 @@ function press(side){                                               // tap your 
 function flag(side){clk[side]=0; clk.running=false; phase='over'; winner=other(side); over='flag'; render();}
 function togglePause(){
   if(phase!=='run') return;
-  const now=Date.now();
+  var now=Date.now();
   if(clk.running){clk[clk.active]-=(now-clk.last); if(clk[clk.active]<0)clk[clk.active]=0; clk.running=false;}
   else {clk.running=true; clk.last=now;}
   render();
@@ -215,12 +216,12 @@ function resetGame(){
 function newGame(){phase='setup'; $('game').classList.add('hidden'); $('setup').classList.remove('hidden'); markPreset();}
 
 function paint(side){
-  const z=side==='white'?$('zw'):$('zb');
-  const tm=side==='white'?$('tmw'):$('tmb');
-  const h=side==='white'?$('hw'):$('hb');
+  var z=side==='white'?$('zw'):$('zb');
+  var tm=side==='white'?$('tmw'):$('tmb');
+  var h=side==='white'?$('hw'):$('hb');
   tm.textContent=fmt(clk[side]);
   tm.className='ztm'+(clk[side]<=0?' flag':(clk[side]<30000 && clk[side]>0?' low':''));
-  let cls='zone '+side, hint='';
+  var cls='zone '+side, hint='';
   if(phase==='over'){
     if(side===winner){cls+=' win'; hint='wins';}
     else {cls+=' lose'; hint=(over==='flag')?'lost on time':'';}
@@ -230,28 +231,28 @@ function paint(side){
   z.className=cls; h.textContent=hint;
 }
 function render(){paint('white'); paint('black');
-  const paused=(phase==='run' && !clk.running);
+  var paused=(phase==='run' && !clk.running);
   $('pause').disabled=(phase!=='run');
-  $('pause').classList.toggle('paused', paused);
+  $('pause').classList[paused?'add':'remove']('paused');
   $('pauselbl').textContent=paused?'Resume':'Pause';}
 
-setInterval(()=>{
+setInterval(function(){
   if(phase==='run' && clk.running){
-    const now=Date.now(); clk[clk.active]-=(now-clk.last); clk.last=now;
+    var now=Date.now(); clk[clk.active]-=(now-clk.last); clk.last=now;
     if(clk[clk.active]<=0){clk[clk.active]=0; flag(clk.active);}
   }
   if(phase==='run') render();
 },100);
 
-$('zw').onclick=()=>press('white');
-$('zb').onclick=()=>press('black');
+$('zw').onclick=function(){press('white');};
+$('zb').onclick=function(){press('black');};
 $('start').onclick=startGame;
 $('pause').onclick=togglePause;
 $('reset').onclick=resetGame;
 $('newg').onclick=newGame;
 $('mins').oninput=markPreset; $('incs').oninput=markPreset;
-buildPresets(); loadSetup(); markPreset(); $('ver').textContent='v'+VERSION; maybeIosHint();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});   // installable, offline-capable PWA
+buildPresets(); loadSetup(); markPreset(); maybeIosHint();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});   // installable, offline-capable PWA
 </script>
 </body>
 </html>

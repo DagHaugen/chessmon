@@ -516,7 +516,7 @@ function connect(){
 let rtcRoom=null, addQRdone=false;                           // the club's unique signaling room arrives from the server (admin_state.rtc_room)
 function paintAddQR(){                                        // "Add a device" QR -> the device PWA on comlos.com (WebRTC); paints once the room is known
   if(!rtcRoom||addQRdone)return;
-  const url='https://comlos.com/relay/app/?rtc=1&room='+encodeURIComponent(rtcRoom);   // edit if your relay lives elsewhere
+  const url='https://comlos.com/relay/app/?room='+encodeURIComponent(rtcRoom);          // bundle bakes in window.CM_RTC, so no ?rtc needed
   $('addurl').textContent=url; const rv=$('rtcroomval'); if(rv)rv.textContent=rtcRoom;
   $('qr').innerHTML='';
   if(typeof QRCode!=='undefined'){new QRCode($('qr'),{text:url,width:118,height:118});addQRdone=true;}

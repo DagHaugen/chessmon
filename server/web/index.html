@@ -78,6 +78,15 @@
     <div class="scanmsg" id="scanmsg">Point at the QR on a clock screen</div>
     <button class="scancancel" id="scancancel">Cancel</button>
   </div>
+<script>/* old-browser guard (ES5 only -- must parse on Safari < 11, where rtc_transport.js's async/await cannot). The ?rtc / comlos.com flow needs WebRTC, which Safari only got in iOS 11; on an older device show a clear message instead of a silent "Connecting..." hang. */
+(function(){
+  if((/[?&]rtc=/.test(location.search)||window.CM_RTC)&&!window.RTCPeerConnection){
+    var m=document.createElement('div');
+    m.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:#11141a;color:#e8eaed;padding:18% 26px 0;text-align:center;font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:17px;line-height:1.55;font-weight:600';
+    m.innerHTML='This device is too old for the QR connection &mdash; it needs <b>iOS 11+</b> or Android Chrome.<br><br>But it works great as a <b>standalone chess clock</b>:<br><br><a href="https://comlos.com/clock" style="color:#4f8cff;font-weight:800;text-decoration:none">Open comlos.com/clock &rarr;</a>';
+    (document.body||document.documentElement).appendChild(m);
+  }
+})();</script>
 <script src="rtc_transport.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
