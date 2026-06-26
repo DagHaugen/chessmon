@@ -9,7 +9,8 @@ Run this on the club PC; it only needs OUTBOUND access to comlos.com (no inbound
 
 With RTC_TARGET set, every data channel is bridged to a fresh WebSocket on the chessmon server, so the
 device speaks the normal chessmon protocol (hello / table.join / capture.req / move.result ...) over
-WebRTC and the server's handlers are untouched. Without it, the peer just echoes (phase 1b).
+WebRTC and the server's handlers are untouched. Each message (incl. a camera JPEG) is one data-channel
+message both ways. Without RTC_TARGET the peer just echoes (phase 1b).
 """
 import asyncio
 import json
@@ -26,7 +27,7 @@ pcs = set()
 
 def _bridge(channel):
     """Pipe a device's data channel <-> a fresh WebSocket to the chessmon server. Early channel messages
-    are buffered until the WS is up; text and binary (camera frames) both pass through unchanged."""
+    are buffered until the WS is up; each message (text or one-shot binary frame) passes straight through."""
     import websockets
     state = {"ws": None}
     buf = []

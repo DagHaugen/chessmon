@@ -10,7 +10,10 @@ import websockets
 
 async def echo(ws):
     async for m in ws:
-        await ws.send("ws-echo: " + (m if isinstance(m, str) else m.decode("utf-8", "replace")))
+        if isinstance(m, (bytes, bytearray)):
+            await ws.send("ws-echo-bin: " + str(len(m)) + " bytes")   # report the reassembled frame size
+        else:
+            await ws.send("ws-echo: " + m)
 
 
 async def main():

@@ -20,6 +20,9 @@
 </div>
 <script src="rtc_transport.js"></script>
 <script>
+window.addEventListener('error', e => { window._jsErr = e.message || String(e.error); });
+window.addEventListener('unhandledrejection', e => { window._rej = String(e.reason); });
+window._dbg = {};
 const L = (m, c) => { const d = document.getElementById('log'); d.innerHTML += '<span class="' + (c || 'i') + '">' + m + '</span>\n'; };
 const Q = new URLSearchParams(location.search);
 window._got = null; window._state = 'connecting'; window._err = null;
@@ -27,11 +30,21 @@ window._got = null; window._state = 'connecting'; window._err = null;
 const sock = new ChessmonSocket({ signal: Q.get('signal') || '/signal', room: Q.get('room') || 'demo' });
 sock.onopen = () => {
   window._state = 'open';
-  L('socket open (readyState ' + sock.readyState + ') — sending a chessmon-style message', 's');
+  window._dbg.openAt = Date.now();
+  window._maxMsg = (sock._pc && sock._pc.sctp && sock._pc.sctp.maxMessageSize) || 'n/a';
+  window._binEchoes = [];
+  L('open · sctp.maxMessageSize=' + window._maxMsg, 's');
   sock.send(JSON.stringify({ type: 'hello', name: 'shim-test', role: 'landing' }));
+  const FRAME = 48000;                                   // a downscaled board JPEG fits in one message
+  window._sent = FRAME;
+  L('sending a ' + FRAME + 'B frame (one message)…');
+  sock.send(new Uint8Array(FRAME).fill(9).buffer);
 };
-sock.onmessage = e => { window._got = e.data; L('recv: ' + e.data, 's'); };
-sock.onclose = () => { window._state = 'closed'; L('socket closed', 'i'); };
+sock.onmessage = e => {
+  if (typeof e.data === 'string' && e.data.indexOf('ws-echo-bin') === 0) { window._binEchoes.push(e.data); window._gotBin = e.data; L('recv: ' + e.data, 's'); }
+  else { window._got = e.data; L('recv: ' + e.data, 's'); }
+};
+sock.onclose = () => { window._state = 'closed'; if (window._dbg.openAt) window._dbg.closeAtMs = Date.now() - window._dbg.openAt; L('socket closed', 'i'); };
 sock.onerror = ev => { window._state = 'error'; window._err = String(ev.error); L('error: ' + ev.error, 'e'); };
 L('readyState ' + sock.readyState + ' — connecting via the shim…');
 </script>

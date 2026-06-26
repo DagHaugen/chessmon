@@ -7,8 +7,9 @@
 //   sock.onopen    = () => sock.send(JSON.stringify({ type:'hello', ... }));
 //   sock.onmessage = e  => handle(JSON.parse(e.data));
 //
-// Binary (camera JPEG) rides the channel too (.binaryType='arraybuffer'); large frames will need
-// chunking — that is phase 3, not here.
+// Binary (camera JPEG) rides the channel as ONE message. A WebRTC data channel caps a single message
+// at the negotiated maxMessageSize (aiortc advertises 64KB) and is unhappy with rapid multi-part sends,
+// so keep frames <=~48KB (a downscaled board JPEG easily fits) rather than chunking.
 (function (g) {
   class ChessmonSocket {
     constructor(opts) {
@@ -63,7 +64,12 @@
     }
     _closed() { if (this.readyState !== 3) { this.readyState = 3; this.onclose && this.onclose({ type: 'close' }); } }
     _fail(e) { this.onerror && this.onerror({ type: 'error', error: e }); this._closed(); }
-    send(data) { if (this.readyState === 1) this._dc.send(data); }   // string or ArrayBuffer/Blob, just like WebSocket
+    send(data) {                                     // string / ArrayBuffer / Blob, one message — just like WebSocket
+      if (this.readyState !== 1) return;
+      if (data instanceof Blob) { data.arrayBuffer().then((ab) => { if (this.readyState === 1) this._dc.send(ab); }); return; }
+      if (data && data.byteLength > 60000) console.warn('ChessmonSocket: ' + data.byteLength + 'B exceeds the ~64KB data-channel limit — downscale the frame');
+      this._dc.send(data);
+    }
     close() {
       this.readyState = 2;
       try { this._dc && this._dc.close(); } catch (e) {}
