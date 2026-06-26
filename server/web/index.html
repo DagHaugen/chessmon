@@ -182,14 +182,8 @@ let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
 function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
 setupBattery();
-function rtcConfig(){                                        // WebRTC build? (served from comlos.com, or ?rtc=1 to test)
-  const Q=new URLSearchParams(location.search),c=window.CM_RTC||{};
-  if(Q.get('rtc')||c.signal)return{signal:Q.get('signal')||c.signal||'/relay/signal.php',room:Q.get('room')||c.room||'demo'};
-  return null;
-}
 function connect(){
-  const rc=rtcConfig();                                     // ChessmonSocket speaks the SAME protocol over a WebRTC data channel
-  ws=rc?new ChessmonSocket(rc):new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws=cmConnect('/ws');                                      // plain WS on the LAN, or a WebRTC data channel via comlos.com (?rtc / window.CM_RTC)
   ws.onopen=()=>{
     ready();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,plat:navigator.platform,landing:true,

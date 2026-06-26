@@ -261,6 +261,7 @@
 </div>
 
 <script src="qrcode.min.js"></script>
+<script src="rtc_transport.js"></script>
 <script>
 const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const params=new URLSearchParams(location.search);
@@ -631,7 +632,7 @@ $('pairinp').onchange=()=>{const v=$('pairinp').value.trim();localStorage.setIte
 $('pairinp').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('pairinp').blur();}});
 paintDevName();
 function connect(){
-  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws=cmConnect('/ws');
   ws.onopen=()=>{$('dot').classList.add('on');serverDown=false;updateWait();keepAwake();pushBattery();
     send({type:'hello',devId,name:devName,role:'clock',plat:navigator.platform,screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}});
     if(table)send({type:'table.join',tableToken:table})};

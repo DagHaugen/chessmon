@@ -52,6 +52,7 @@
 </div>
 <canvas id="cv" style="display:none"></canvas>
 <div class="screenoff hidden" id="screenoff" onclick="this.classList.add('hidden')">tap to wake the screen</div>
+<script src="rtc_transport.js"></script>
 <script>
 let pair=new URLSearchParams(location.search).get('pair')||localStorage.getItem('cm_pair');
 if(pair)localStorage.setItem('cm_pair',pair);            // reuse the last table on reopen — no rescan
@@ -121,9 +122,13 @@ function setupZoom(track){
   sendCamStatus();                                       // torch capability + zoom range now known -> tell the console
 }
 async function grab(){await zoomSettle;                                      // a pending zoom must land before we capture
-  const vw=v.videoWidth||1280,vh=v.videoHeight||960;cv.width=vw;cv.height=vh;const sw=vw/zoom,sh=vh/zoom;   // central crop for digital zoom
-  cv.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,cv.width,cv.height);
-  return new Promise(res=>cv.toBlob(res,'image/jpeg',0.85))}
+  const vw=v.videoWidth||1280,vh=v.videoHeight||960;let cw=vw,ch=vh;
+  if(window._cmRtc){const maxW=640;if(cw>maxW){ch=Math.round(ch*maxW/cw);cw=maxW;}}   // WebRTC: one frame must stay <=48KB -> downscale
+  cv.width=cw;cv.height=ch;const sw=vw/zoom,sh=vh/zoom;                       // central crop for digital zoom
+  cv.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,cw,ch);
+  let q=window._cmRtc?0.6:0.85,b=await new Promise(res=>cv.toBlob(res,'image/jpeg',q));
+  while(window._cmRtc&&b&&b.size>46000&&q>0.25){q-=0.15;b=await new Promise(res=>cv.toBlob(res,'image/jpeg',q));}   // squeeze under the channel limit
+  return b}
 async function sendCalib(step){const b=await grab();ws.send(JSON.stringify({type:'calib',step}));ws.send(b);log('sent '+step+' frame')}
 
 $('b-cal').onclick=()=>sendCalib('corners');           // one-step: relay the set-up board to the clock
@@ -154,7 +159,7 @@ $('motionchk').onchange=()=>{                             // ticking the box is 
   }else motionEnable();                                   // Android / older iOS: no gate
 };
 function connect(){
-  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  ws=cmConnect('/ws');
   ws.onopen=()=>{$('dot').classList.add('on');pushBattery();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,role:'camera',plat:navigator.platform,screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
     if(camRes)ws.send(JSON.stringify({type:'device.meta',cam:camRes}));

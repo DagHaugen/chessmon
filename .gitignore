@@ -37,6 +37,9 @@ chessmon-ca-key.pem
 cloud.json
 broadcast.bat
 
+# WebRTC phase-4 device PWA bundle (output of webrtc/build_app.py)
+/webrtc/dist/
+
 # OS cruft
 Thumbs.db
 .DS_Store

@@ -78,4 +78,13 @@
     }
   }
   g.ChessmonSocket = ChessmonSocket;
+  g.cmConnect = function (wsPath) {                  // pick the transport: WebRTC via comlos.com (?rtc / window.CM_RTC), else plain WS
+    const Q = new URLSearchParams(location.search), c = window.CM_RTC || {};
+    if (Q.get('rtc') || c.signal) {
+      g._cmRtc = true;
+      return new ChessmonSocket({ signal: Q.get('signal') || c.signal || '/relay/signal.php', room: Q.get('room') || c.room || 'demo' });
+    }
+    g._cmRtc = false;
+    return new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + (wsPath || '/ws'));
+  };
 })(typeof window !== 'undefined' ? window : this);
