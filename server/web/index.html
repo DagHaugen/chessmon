@@ -158,7 +158,7 @@ function handleScanResult(raw){
   let tok=null;
   try{const url=new URL(String(raw),location.href);if(/camera\.html$/.test(url.pathname))tok=url.searchParams.get('pair');}catch(_){}
   if(!tok){setScanMsg('That isn’t a clock pairing QR — point at the code on a clock screen.');return false;}
-  closeScanner();location.href='camera.html?pair='+encodeURIComponent(tok);return true;
+  closeScanner();cmNav('camera.html?pair='+encodeURIComponent(tok));return true;
 }
 function closeScanner(){
   if(scanTimer){clearTimeout(scanTimer);scanTimer=null;}
@@ -203,8 +203,8 @@ function connect(){
       localStorage.setItem('cm_devname',m.userName||'');$('nameinp').value=m.userName||'';showConnected();
     }
     else if(m.type==='assign'){                              // the console gave this device a role -> go there
-      if(m.role==='clock'&&m.table){location.href='clock.html?table='+m.table;}
-      else if(m.role==='camera'&&m.pair){location.href='camera.html?pair='+m.pair;}
+      if(m.role==='clock'&&m.table){cmNav('clock.html?table='+m.table);}
+      else if(m.role==='camera'&&m.pair){cmNav('camera.html?pair='+m.pair);}
     }
   };
   ws.onclose=()=>{$('card').classList.remove('ready');$('title').textContent='Reconnecting…';

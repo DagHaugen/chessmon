@@ -545,10 +545,10 @@ function handle(m){
       if(m.role==='clock'){table=m.table;localStorage.setItem('cm_table',table);started=false;
         show('setup',false);show('game',true);renderBoard('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
         send({type:'table.join',tableToken:table});}
-      else if(m.role==='camera'){location.href='camera.html?pair='+m.pair;}
+      else if(m.role==='camera'){cmNav('camera.html?pair='+m.pair);}
       break;
     case 'unassigned':                                          // console pulled this unit off its table -> back to the landing
-      localStorage.removeItem('cm_table');location.href='index.html';break;
+      localStorage.removeItem('cm_table');cmNav('index.html');break;
     case 'match': curMatch=m.match; onMatch(); break;           // Basic Setup / Tournament assigned this table -> names + start time
     case 'state':                                               // refresh/reconnect -> restore the view
       if('match' in m){curMatch=m.match;applyNames();}

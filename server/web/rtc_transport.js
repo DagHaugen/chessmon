@@ -87,4 +87,13 @@
     g._cmRtc = false;
     return new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + (wsPath || '/ws'));
   };
+  g.cmNav = function (url) {                          // navigate between device pages, carrying the WebRTC params forward
+    const Q = new URLSearchParams(location.search), c = window.CM_RTC || {};
+    if (Q.get('rtc') || c.signal) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'rtc=1';
+      const room = Q.get('room') || c.room; if (room) url += '&room=' + encodeURIComponent(room);
+      const sig = Q.get('signal') || c.signal; if (sig) url += '&signal=' + encodeURIComponent(sig);
+    }
+    location.href = url;
+  };
 })(typeof window !== 'undefined' ? window : this);
