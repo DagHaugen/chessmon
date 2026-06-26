@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chessmon · WebRTC phase 1b</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#15171c;color:#e8eaed;margin:0;padding:24px}
+  .wrap{max-width:620px;margin:0 auto}
+  h2{font-size:18px}
+  #log{background:#1d2026;border:1px solid #2c313b;border-radius:10px;padding:14px;
+    font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;min-height:170px}
+  .s{color:#3ecf8e}.e{color:#ff6b6b}.i{color:#9aa3b2}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>chessmon · WebRTC through a polled broker</h2>
+  <div id="log"></div>
+</div>
+<script>
+const L = (m, c) => { const d = document.getElementById('log'); d.innerHTML += '<span class="' + (c || 'i') + '">' + m + '</span>\n'; };
+const ROOM = 'demo', SESSION = Math.random().toString(36).slice(2);
+function waitIce(pc) {
+  if (pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise(res => {
+    const d = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', d); res(); } };
+    pc.addEventListener('icegatheringstatechange', d); setTimeout(res, 2500);
+  });
+}
+async function run() {
+  const pc = new RTCPeerConnection();
+  window._pc = pc; window._state = 'new'; window._echo = null;
+  pc.addEventListener('connectionstatechange', () => {
+    window._state = pc.connectionState;
+    L('peer: ' + pc.connectionState, pc.connectionState === 'connected' ? 's' : 'i');
+  });
+  const dc = pc.createDataChannel('chessmon');
+  window._dc = dc;
+  dc.onopen = () => { L('data channel OPEN', 's'); dc.send('hello via the broker'); L('sent: hello via the broker'); };
+  dc.onmessage = e => { window._echo = e.data; L('recv: ' + e.data, 's'); };
+  L('creating offer…');
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIce(pc);
+  L('posting offer to the broker (room ' + ROOM + ')…');
+  await fetch('/signal', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room: ROOM, session: SESSION, kind: 'offer', sdp: pc.localDescription.sdp }) });
+  L('polling the broker for the server’s answer…');
+  let ans = null;
+  for (let i = 0; i < 40; i++) {
+    const j = await (await fetch('/signal?room=' + ROOM + '&session=' + SESSION + '&kind=answer')).json();
+    if (j.sdp) { ans = j.sdp; break; }
+    await new Promise(r => setTimeout(r, 400));
+  }
+  if (!ans) { L('no answer from the broker', 'e'); window._err = 'no answer'; return; }
+  L('answer received via the broker — connecting…');
+  await pc.setRemoteDescription({ type: 'answer', sdp: ans });
+}
+run().catch(e => { window._err = String(e); L('ERROR: ' + e, 'e'); });
+</script>
+</body>
+</html>
