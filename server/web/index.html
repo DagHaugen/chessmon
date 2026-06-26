@@ -78,6 +78,7 @@
     <div class="scanmsg" id="scanmsg">Point at the QR on a clock screen</div>
     <button class="scancancel" id="scancancel">Cancel</button>
   </div>
+<script src="rtc_transport.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
@@ -181,8 +182,14 @@ let battMgr=null;
 function pushBattery(){if(battMgr&&ws&&ws.readyState===1)ws.send(JSON.stringify({type:'device.meta',battery:{level:Math.round(battMgr.level*100),charging:battMgr.charging}}))}
 function setupBattery(){if(!navigator.getBattery)return;navigator.getBattery().then(b=>{battMgr=b;b.addEventListener('levelchange',pushBattery);b.addEventListener('chargingchange',pushBattery);pushBattery()}).catch(()=>{})}  // iOS Safari has no getBattery
 setupBattery();
+function rtcConfig(){                                        // WebRTC build? (served from comlos.com, or ?rtc=1 to test)
+  const Q=new URLSearchParams(location.search),c=window.CM_RTC||{};
+  if(Q.get('rtc')||c.signal)return{signal:Q.get('signal')||c.signal||'/relay/signal.php',room:Q.get('room')||c.room||'demo'};
+  return null;
+}
 function connect(){
-  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+  const rc=rtcConfig();                                     // ChessmonSocket speaks the SAME protocol over a WebRTC data channel
+  ws=rc?new ChessmonSocket(rc):new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
   ws.onopen=()=>{
     ready();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,plat:navigator.platform,landing:true,

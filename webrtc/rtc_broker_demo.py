@@ -51,11 +51,13 @@ async def get_signal(room: str, kind: str, session: str = ""):
     return JSONResponse({"sdp": ANSWERS.pop(room + ":" + session, None)})
 
 
-@app.get("/{fname}")                                                    # serve webrtc/*.js + test pages, same origin as /signal
+@app.get("/{fname}")                                                    # serve webrtc/* + the real client (server/web/), same origin as /signal
 async def static_file(fname: str):
-    path = os.path.join(HERE, fname)
-    if "/" not in fname and ".." not in fname and os.path.isfile(path):
-        return FileResponse(path)
+    if "/" not in fname and ".." not in fname:
+        for base in (os.path.join(HERE, "..", "server", "web"), HERE):   # real client (server/web/) wins over the demo's index.html
+            path = os.path.join(base, fname)
+            if os.path.isfile(path):
+                return FileResponse(path)
     return PlainTextResponse("not found", status_code=404)
 
 
