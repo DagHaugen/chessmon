@@ -16,7 +16,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$Path = (Join-Path (Split-Path $PSScriptRoot -Parent) 'cert.pem'),
+  [string]$Path = (Join-Path (Split-Path $PSScriptRoot -Parent) 'chessmon-ca.pem'),   # the root CA — trust / export THIS
   [switch]$Trust,
   [switch]$Untrust,
   [switch]$Machine,

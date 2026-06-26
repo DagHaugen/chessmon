@@ -1,4 +1,4 @@
-const C = 'chessmon-clock-v96';
+const C = 'chessmon-clock-v97';
 const PIECES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']
   .map(p => 'pieces/' + p + '.svg');
 const SHELL = ['clock.html', 'manifest.webmanifest', 'icon.svg', 'icon-maskable.svg', 'qrcode.min.js', ...PIECES];
@@ -13,6 +13,14 @@ self.addEventListener('activate', e => e.waitUntil(
 
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (u.pathname.endsWith('/ws') || u.pathname.startsWith('/tables')) return;  // never cache live data
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  if (u.origin !== location.origin) return;                                    // cross-origin -> the browser
+  if (u.pathname.endsWith('/ws') || u.pathname.startsWith('/tables')) return;  // live data -> the browser
+  const path = u.pathname.replace(/^\/app\//, '');                             // shell entries are stored relative to /app/
+  if (!SHELL.includes(path)) return;            // only the cached clock shell is SW-served; the landing, camera, console
+                                                // and API go to the network natively, so a cert/offline failure shows the
+                                                // browser's own message instead of a cryptic FetchEvent.respondWith error
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request).catch(() =>
+      e.request.mode === 'navigate' ? caches.match('clock.html') : Response.error()))
+  );
 });

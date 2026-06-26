@@ -29,6 +29,8 @@ sessions.pkl
 cert.pem
 key.pem
 dev.cer
+chessmon-ca.pem
+chessmon-ca-key.pem
 
 # Stockfish binary (auto-downloaded by setup) + cloud broadcast config (holds the event key)
 /server/engines/
