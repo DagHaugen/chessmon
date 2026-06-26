@@ -4,7 +4,7 @@ Run this on the club PC; it only needs OUTBOUND access to comlos.com (no inbound
 
     set RTC_BROKER=https://comlos.com/relay/signal.php
     set RTC_ROOM=<your club/room code>
-    set RTC_TARGET=ws://localhost:8000/ws        # phase 2: bridge each channel to the local chessmon server
+    set RTC_TARGET=ws://localhost:8000/ws        # the local chessmon server (plain HTTP); OR wss://localhost:8000/ws for serve_https.py
     chessmon-webrtc\\.venv\\Scripts\\python webrtc\\rtc_peer.py
 
 With RTC_TARGET set, every data channel is bridged to a fresh WebSocket on the chessmon server, so the
@@ -15,6 +15,7 @@ message both ways. Without RTC_TARGET the peer just echoes (phase 1b).
 import asyncio
 import json
 import os
+import ssl
 import urllib.request
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -46,7 +47,13 @@ def _bridge(channel):
 
     async def _run():
         try:
-            ws = await websockets.connect(TARGET, max_size=None)
+            kw = {}
+            if TARGET.startswith("wss"):                  # serve_https.py uses a self-signed cert -> don't verify it (localhost)
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                kw["ssl"] = ctx
+            ws = await websockets.connect(TARGET, max_size=None, **kw)
         except Exception as e:
             print("bridge: can't reach", TARGET, ":", e)
             channel.close()
