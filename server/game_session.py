@@ -11,6 +11,7 @@ Verdict mapping (what `CameraGame.observe` returns -> what the clock unit receiv
     unseen    -> move.unseen {candidates}
     gesture   -> game.end {result, pgn}        (kings-to-centre)
     nochange  -> move.nochange
+    unsettled -> move.unsettled                (hand/object over the board; the I/O layer re-shoots)
     error     -> move.unclear {reason}
     baseline  -> session.baselined             (first grid seeds the reference)
 The clock resolves ambiguous/unseen by sending move.resolve {uci} -> resolve().
@@ -183,6 +184,8 @@ class Session:
                 return {"type": "session.baselined", **self.calibrate_start(frame)}
             if step == "refresh":
                 return self.resnap(frame)
+            if step == "startverify":                  # START pressed -> snapshot + re-baseline + verify the start position
+                return self.start_baseline(frame)
             if self.board_reader is None:
                 return {"type": "calib.failed", "reason": "camera not calibrated"}
             moved = self.check_alignment(frame)        # has the camera/board shifted since calibration? resnap can't fix that -- re-calibrate
@@ -210,6 +213,24 @@ class Session:
         self.board_reader.update_bg(frame, self.game.board)
         self.seed_baseline(self.board_reader.classify(frame))
         return {"type": "refreshed", "fen": self.game.board.fen()}
+
+    def start_baseline(self, frame):
+        """START pressed: re-baseline the detector to the board AS SET UP NOW (players straighten the
+        pieces right before the clock starts, so Reset's snapshot is too early), and verify every piece
+        is in the start position. The verify uses the PRE-resnap classification (best-effort -- refs can
+        be stale until a fresh calibration -- but it catches a missing or stray piece) so it is not
+        circular with the re-learn that follows."""
+        if self.board_reader is None:
+            return {"type": "calib.failed", "reason": "camera not calibrated"}
+        expected = board_to_grid(self.game.board)                # the start position the game expects
+        observed = self.board_reader.classify(frame)             # what is actually on the board right now
+        off = [self._sq((r, c)) for r in range(8) for c in range(8)
+               if (expected[r, c] == Cell.EMPTY) != (observed[r, c] == Cell.EMPTY)]   # occupancy mismatch
+        self.resnap(frame)                                       # re-baseline to the board as set up
+        msg = {"type": "started", "fen": self.game.board.fen()}
+        if off:
+            msg["offsquares"] = sorted(off)                      # squares the operator should check
+        return msg
 
     # --- camera-movement detection -------------------------------------------------------------
     # The corner homography is only valid while the board sits where it was calibrated. A bumped
@@ -375,6 +396,8 @@ class Session:
             return {"type": "move.unseen", "candidates": self._cands(extra)}
         if kind == "nochange":
             return {"type": "move.nochange"}
+        if kind == "unsettled":                        # hand / object over the board (not a move)
+            return {"type": "move.unsettled"}          # -> the I/O layer waits + re-requests a frame
         if kind == "baseline":
             return {"type": "session.baselined"}
         if kind == "error":                            # a change that fits no legal move -> flag it

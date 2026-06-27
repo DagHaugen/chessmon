@@ -41,8 +41,10 @@
   .cbtn{position:absolute;left:0;top:0;right:0;bottom:0;width:100%;height:100%;appearance:none;border:2px solid transparent;border-radius:16px;
     font-size:16vw;font-size:min(16vw,88px);font-weight:700;line-height:1;cursor:pointer;color:#08110a;background:var(--good);transition:.12s}
   .cbtn.go{background:var(--good);border-color:var(--good);color:#08110a}
+  #pausebtn.resume{background:var(--good);border-color:var(--good);color:#08110a}   /* Resume turns green while paused */
   .cbtn.off{background:var(--panel);border-color:var(--line);color:transparent;cursor:default}  /* blank when not your move */
   .cbtn.reading{background:var(--panel);border-color:var(--line);color:var(--mut);cursor:default}
+  .cbtn.settling{background:#3a2e16;border-color:#e0a020;color:#e0a020;cursor:default}  /* amber ✋ only while re-shooting an obscured board */
   .cbtn.wait{background:var(--panel);border-color:var(--line);color:var(--mut);font-size:10vw;font-size:min(10vw,42px);letter-spacing:.12em;cursor:default}  /* blocked: camera/server lost */
   .cbtn.warn{background:#3a2226;border-color:var(--bad);color:var(--bad);font-size:min(7.5vw,27px);
     line-height:1.2;white-space:pre-line;padding:6px;letter-spacing:.01em}
@@ -291,6 +293,8 @@ let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = 
 function applyRot(){$('board').className='board m'+rotMode}
 
 function $(id){return document.getElementById(id)}
+const CM_VER='1.14';   // BUMP on every clock.html change so the phone shows which build it actually loaded
+(function(){const v=()=>document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;left:5px;bottom:3px;font:10px monospace;color:#999;opacity:.55;z-index:99999;pointer-events:none">v'+CM_VER+'</div>');document.body?v():addEventListener('DOMContentLoaded',v)})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
@@ -331,7 +335,7 @@ function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn
   $('report').textContent=(winner[0].toUpperCase()+winner.slice(1))+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
 
-let reading=false, warnMsg=null, gameResult=null;         // gameResult: '1-0' / '0-1' / '1/2-1/2' once over
+let reading=false, warnMsg=null, gameResult=null, settling=false, setupOK=false;         // settling: server re-shooting an obscured board (✋); setupOK: a READY check confirmed the start position
 function paint(){                                          // big ✓ for the side to move; blank for the other
   for(const side of ['white','black']){
     const b=$('cb-'+side),active=clk.active===side&&phase==='run';let cls='cbtn off',txt='',dis=true;
@@ -340,9 +344,11 @@ function paint(){                                          // big ✓ for the si
       if(gameResult==='1/2-1/2'){cls='cbtn draw';txt='DRAW'}
       else{const won=(side==='white')===(gameResult==='1-0');cls=won?'cbtn won':'cbtn lost';txt=won?'WON':'LOST'}}
     else if(active&&warnMsg){cls='cbtn warn';txt=warnMsg;dis=false}  // bad read -> red, message in the button
+    else if(active&&settling){cls='cbtn settling';txt='✋'}          // re-shooting an obscured board -> amber hand
     else if(active&&reading){cls='cbtn reading';txt='✓'}            // confirmed, reading the board
     else if(active){cls='cbtn go';txt='✓';dis=false}               // your move -> green check
     b.className=cls;b.textContent=txt;b.disabled=dis;}
+  $('pausebtn').classList.toggle('resume', phase==='paused');   // Resume turns green while paused
   updateQrBtn();
   if(camOn())warpBoardCam();        // keep the overlay aligned through renders / board-rotation changes
 }
@@ -362,13 +368,15 @@ function hgVec(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5
 function hgBasis(p){const m=[p[0][0],p[1][0],p[2][0], p[0][1],p[1][1],p[2][1], 1,1,1],v=hgVec(hgAdj(m),[p[3][0],p[3][1],1]);return hgMul(m,[v[0],0,0, 0,v[1],0, 0,0,v[2]]);}
 function hgProj(src,dst){return hgMul(hgBasis(dst),hgAdj(hgBasis(src)));}    // 3x3 homography mapping src quad -> dst quad
 function camOn(){return $('dimbtn').classList.contains('lit');}
+let curT=0; const CAM_ROT=0;   // curT: calibrated board orientation (dihedral 0-7) from the server; CAM_ROT: bump by 1 if the overlay lands a quarter-turn off
 function warpBoardCam(){                                       // map the 4 calibrated corners onto the board square, as a CSS matrix3d
   const img=$('boardcam');
   if(!camOn()||!img.naturalWidth||!curCorners||curCorners.length!==4)return;
   const S=$('board').clientWidth; if(!S)return;
   $('camoverlay').style.transform=getComputedStyle($('board')).transform;     // follow the board's rotation mode (m1 = -90deg)
   const W=img.naturalWidth,H=img.naturalHeight;
-  const sq=[[0,0],[S,0],[S,S],[0,S]],dst=[sq[1],sq[2],sq[3],sq[0]];           // board square, rotated +90deg to match the camera (swap to [sq[3],sq[0],sq[1],sq[2]] for -90)
+  const sq=[[0,0],[S,0],[S,S],[0,S]];
+  const k=(((curT||0)%4)+CAM_ROT)&3, dst=[sq[k],sq[(k+1)&3],sq[(k+2)&3],sq[(k+3)&3]];   // rotate the overlay by the calibrated orientation t (k quarter-turns; k=1 reproduces the old fixed +90deg)
   const src=curCorners.map(c=>[c[0]*W,c[1]*H]);                               // calibrated quad in image px -> dst
   const t=hgProj(src,dst);for(let i=0;i<9;i++)t[i]/=t[8];
   img.style.transform='matrix3d('+[t[0],t[3],0,t[6], t[1],t[4],0,t[7], 0,0,1,0, t[2],t[5],0,t[8]].join(',')+')';
@@ -395,9 +403,12 @@ function renderCands(){const c=$('cands-'+clk.active);c.innerHTML='';     // up 
   if(!candAll && candList.length>LIM)mk('Other…',()=>{candAll=true;renderCands()});   // reveal the rest of the guesses
   mk('✕ Cancel',cancelMove);                                                          // give up: set the piece back, play a real move
   c.appendChild(g);$('act-'+clk.active).classList.add('resolving')}
-function cancelMove(){send({type:'move.cancel'});warnMsg=null;reading=false;markBad([]);clearCands();paint()}
+function cancelMove(){send({type:'move.cancel'});warnMsg=null;reading=false;clk.running=(phase==='run');clk.last=Date.now();
+  if(curMatch&&curMatch.format&&curMatch.format.inc_type==='fischer'&&curMatch.format.increment_ms)clk[clk.active]-=curMatch.format.increment_ms;   // CONFIRM added a Fischer increment for a move now cancelled -> take it back (else confirm->misread->cancel->re-confirm double-counts it)
+  markBad([]);clearCands();paint()}   // also resume the clock the pick-prompt paused
 function showCtrls(on){show('pausebtn',on);show('resetbtn',on)}
-function enterReady(){phase='ready';needsResume=false;clk.running=false;reading=false;warnMsg=null;gameResult=null;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait()}
+function enterReady(){phase='ready';needsResume=false;clk.running=false;reading=false;warnMsg=null;gameResult=null;setupOK=false;show('startov',true);show('rotbtn',true);showCtrls(false);showUndo(false);clearCands();paint();renderClocks();updateWait();
+  if(camLinked&&calibrated&&!serverDown)send({type:'setup.check'});}   // auto-verify on entering ready -> START shows directly if the board's already correct (skip the manual READY after Reset / new game)
 function updateWait(){                                  // the board overlay + status: START / WAIT / PAUSE
   const reason = !gotState ? 'Connecting…'          // haven't heard the table/camera state yet -> loading, not a false "Camera offline"
     : serverDown ? 'Server offline'
@@ -409,7 +420,7 @@ function updateWait(){                                  // the board overlay + s
   if(phase==='paused'){ ov='PAUSE'; status='PAUSE: Press Resume to continue'; }
   else if(waiting){ ov='WAIT'; status=reason; }
   else if(phase==='run' && needsResume){ ov='START'; status='Camera ready — press START to resume'; }   // back mid-game
-  else if(phase==='ready'){ ov='START'; status='Ready — press START'; }
+  else if(phase==='ready'){ ov= setupOK?'START':'READY'; status= setupOK?'Board ready — press START':'Press READY to check the setup'; }
   else if(phase==='run'){ status=turnName(clk.active)+' to move'; }
   if(ov!==null){
     show('startov',true);
@@ -435,7 +446,7 @@ function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen|
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
-function resetGame(){phase='ready';clk.white=clk.black=baseMs();clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;
+function resetGame(){phase='ready';clk.white=clk.black=baseMs();clk.active='white';clk.running=false;reading=false;warnMsg=null;gameResult=null;setupOK=false;
   lastMove=null;renderBoard((curMatch&&curMatch.start_fen)||'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');send({type:'game.reset'});   // pieces are back at start (chess960 if assigned)
   $('s-white').classList.remove('win');$('s-black').classList.remove('win');
   showCtrls(false);show('startov',true);show('rotbtn',true);showUndo(false);clearCands();paint();renderClocks();updateWait()}
@@ -532,6 +543,7 @@ function showPairScreen(){                                  // the "Add a camera
 }
 function handle(m){
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
+  if(m.type!=='settling')settling=false;   // any real verdict clears the re-shoot ✋
   switch(m.type){
     case 'session.ready':
       gotState=true;
@@ -586,12 +598,12 @@ function handle(m){
       if(phase!=='run'){enterReady();$('report').className='report';$('report').textContent='Ready — press START';}
       else updateWait();break;   // mid-game re-baseline (e.g. replaced camera, now calibrated) -> refresh overlay, START to resume   // a move that re-seeded the baseline mustn't yank a running game back to START
     case 'calib.image':
-      lastFrame=m.image; curCorners=(m.corners&&m.corners.length===4)?m.corners:null;            // remember for the overlay + the dialog markers
+      lastFrame=m.image; curCorners=(m.corners&&m.corners.length===4)?m.corners:null; if(m.t!=null)curT=m.t;            // remember for the overlay + the dialog markers
       if(!$('calib').classList.contains('hidden')){const i=$('cimg');i.onload=null;i.src=m.image;}  // Camera-dialog preview
       if(camOn())$('boardcam').src=m.image;                                                        // refresh the live overlay
       break;
     case 'preview.image':                                                                          // cached real-board frame for the overlay (no grab)
-      lastFrame=m.image; if(m.corners&&m.corners.length===4)curCorners=m.corners;
+      lastFrame=m.image; if(m.corners&&m.corners.length===4)curCorners=m.corners; if(m.t!=null)curT=m.t;
       if(camOn())$('boardcam').src=m.image;
       break;
     case 'calib.lock': consoleCalibrating=!!m.on;$('ccalibrate').disabled=consoleCalibrating;   // console entered/left its calibration -> block ours
@@ -601,6 +613,11 @@ function handle(m){
     case 'calib.failed': $('report').textContent='calibration: '+m.reason;
       if(!$('calib').classList.contains('hidden'))$('chint').textContent='Failed — '+m.reason+'. Adjust the corners and try again.'; break;
     case 'refreshed': $('report').textContent='board refreshed ✓ · '+turnName(clk.active)+' to move'; break;
+    case 'started':                                              // READY check result: setup confirmed (-> show START) or a piece off (-> stay READY)
+      if(m.offsquares&&m.offsquares.length){setupOK=false;markBad(m.offsquares);updateWait();$('report').className='report warn';$('report').textContent='Board not ready';}
+      else{setupOK=true;markBad([]);updateWait();}               // updateWait re-renders the overlay: READY (not ready) or START (ready)
+      break;
+    case 'settling': settling=true;reading=true;paint();break;   // server is re-grabbing an obscured board -> show the ✋
     case 'move.result':
       started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
@@ -608,8 +625,8 @@ function handle(m){
       showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
       $('report').className='report';$('report').textContent=m.san+'  ·  '+turnName(m.turn)+' to move';
       reading=false;warnMsg=null;gameResult=null;clearCands();paint();hideCam();break;   // a move landed -> drop the real-board overlay
-    case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;showCands(m.candidates);paint();break;
-    case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;showCands(m.candidates);paint();break;
+    case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up — a misread is not the player's time to lose
+    case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up
     case 'move.unclear': case 'move.nochange':
       clk.running=true;clk.last=Date.now();reading=false;
       if(m.fen)renderBoard(m.fen);                                 // show the moved piece where the camera sees it, not where it was
@@ -657,7 +674,7 @@ document.querySelectorAll('.obtn').forEach(b=>b.onclick=()=>{           // one-s
 $('refreshbtn').onclick=()=>{send({type:'refresh'});$('report').textContent='re-reading the board…'};
 $('undobtn').onclick=()=>{send({type:'game.undo'});$('report').textContent='taking back…'};
 $('startov').onclick=()=>{
-  if(phase==='ready'&&camLinked&&calibrated&&!serverDown)startGame();                              // start a fresh game
+  if(phase==='ready'&&camLinked&&calibrated&&!serverDown){if(setupOK)startGame();else{send({type:'setup.check'});$('report').className='report';$('report').textContent='checking the board…';}}   // READY -> verify setup; START (after a clean check) -> begin                              // start a fresh game
   else if(phase==='run'&&needsResume&&camLinked&&calibrated&&!serverDown){needsResume=false;clk.last=Date.now();updateWait();}   // camera back mid-game -> resume
   else if(phase==='paused')togglePause();};                                                        // WAIT does nothing
 $('pausebtn').onclick=togglePause;

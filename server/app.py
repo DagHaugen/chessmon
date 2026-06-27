@@ -39,6 +39,9 @@ from .manager import SessionManager
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
+# Obscured-board re-shoot: when the detector reports `move.unsettled` (a hand or object over the
+# board), wait briefly and re-request a frame, up to RESHOOT_MAX times, before giving up.
+RESHOOT_MAX, RESHOOT_DELAY = 4, 0.6
 DEVICES_FILE = os.environ.get("CHESSMON_DEVICES",
                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "devices.json"))
 SESSIONS_FILE = os.environ.get("CHESSMON_SESSIONS",
@@ -442,7 +445,7 @@ async def ws_endpoint(ws: WebSocket):
                         _ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
                         durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
                         for a in list(admins):
-                            await send(a, {"type": "snap.image", "table": s.table_token, "image": durl, "corners": s.corners})
+                            await send(a, {"type": "snap.image", "table": s.table_token, "image": durl, "corners": s.corners, "t": (s.board_reader.t if s.board_reader is not None else 0)})
                         continue
                     if step == "corners" and frame is not None:    # relay to the clock for the corner-tap UI
                         s._calib_step, s._calib_frame = None, frame
@@ -456,13 +459,24 @@ async def ws_endpoint(ws: WebSocket):
                                else {"type": "calib.failed", "reason": "undecodable frame"})
                     shape = "x".join(map(str, frame.shape)) if frame is not None else "decode-fail"
                     print(f"[frame] {step} {shape} -> {verdict.get('type')}: {verdict.get('reason', '')}")
+                    if verdict.get("type") == "move.unsettled":     # hand/object over the board -> re-shoot, don't guess a move
+                        s._reshoots = getattr(s, "_reshoots", 0) + 1
+                        if s._reshoots <= RESHOOT_MAX:
+                            await send(hub(s.table_token)["clock"], {"type": "settling"})   # tell the clock it is re-grabbing -> show the hand
+                            await asyncio.sleep(RESHOOT_DELAY)       # give the hand a moment to clear
+                            await send(ws, {"type": "capture.req"})  # grab a fresh frame and try again
+                            continue
+                        s._reshoots = 0                              # gave up: board persistently blocked
+                        verdict = {"type": "move.unclear", "reason": "board obscured - clear it and re-confirm", "squares": []}
+                    else:
+                        s._reshoots = 0                              # a clean read -> reset the re-shoot counter
                     await send(hub(s.table_token)["clock"], verdict)
                     await send(ws, verdict)                         # echo to the camera operator
                     # A warning / prompt verdict (illegal, no-change, ambiguous, unseen) did NOT change the
                     # board -- re-pushing 'state' to the clock would wipe the warning it just rendered (the
                     # "flash then back to green" bug). Refresh the console only (keeps the camera-moved badge
                     # live); anything that actually advanced the game broadcasts state as before.
-                    if verdict.get("type") in ("move.unclear", "move.nochange", "move.ambiguous", "move.unseen"):
+                    if verdict.get("type") in ("move.unclear", "move.nochange", "move.ambiguous", "move.unseen", "started"):   # 'started' carries the START setup warning -> a state re-push would wipe it
                         await broadcast_tables()
                     else:
                         await broadcast_state(s)
@@ -653,7 +667,7 @@ async def ws_endpoint(ws: WebSocket):
                 if f is not None:
                     _ok, buf = cv2.imencode(".jpg", f, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                     durl = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
-                    await send(ws, {"type": "preview.image", "table": sess.table_token, "image": durl, "corners": sess.corners})
+                    await send(ws, {"type": "preview.image", "table": sess.table_token, "image": durl, "corners": sess.corners, "t": (sess.board_reader.t if sess.board_reader is not None else 0)})
             elif t == "formats.save":                             # management page added/edited a time control
                 fmt = data.get("format") or {}
                 if fmt.get("id"):
@@ -844,7 +858,7 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "move.cancel":                              # clock gave up on the guesses -> retry
                 if s is not None:
                     s.revert_to_valid()                           # re-anchor to the last valid move (player sets the piece back)
-                    await broadcast_state(s)
+                    await broadcast_tables()                      # console-only refresh; a full state re-push would restore the clock from the last move and roll the player's time back
             elif t == "flag":                                     # a clock hit 0 -> loss on time
                 result = "1-0" if data.get("side") == "black" else "0-1"
                 await send(hub(s.table_token)["clock"], s.end(result))
@@ -852,13 +866,14 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "refresh":                                  # clock wants a fresh read (board moved?)
                 s.set_calib_step("refresh")
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})
-            elif t == "game.start":                               # clock pressed START -> mark the game running
-                s.mark_started()
+            elif t == "setup.check":                              # clock pressed READY -> snapshot + re-baseline + verify the start position (no clock started yet)
                 cam = hub(s.table_token)["camera"]
-                if getattr(s, "needs_anchor", False) and cam is not None and s.board_reader is not None:
-                    s.needs_anchor = False                        # board was (re)assigned -> re-anchor the detector to the start before the first move
-                    s.set_calib_step("refresh")
+                if cam is not None and s.board_reader is not None:
+                    s.needs_anchor = False
+                    s.set_calib_step("startverify")
                     await send(cam, {"type": "capture.req"})
+            elif t == "game.start":                               # clock pressed START (after a clean READY check) -> mark the game running
+                s.mark_started()
                 await broadcast_state(s)
             elif t == "game.status":                              # clock reports running / paused / waiting
                 s.status = data.get("status", "")
@@ -866,11 +881,7 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "game.reset":                               # operator reset the pieces to the start
                 s.reset_game()
                 mgr.save(SESSIONS_FILE)
-                await broadcast_state(s)
-                cam = hub(s.table_token)["camera"]
-                if cam is not None and s.board_reader is not None:
-                    s.set_calib_step("refresh")                   # re-anchor the baseline to the start position
-                    await send(cam, {"type": "capture.req"})
+                await broadcast_state(s)                          # the clock re-enters 'ready' and auto-sends setup.check (re-baseline + verify) -> START shows directly if the board's already correct
             elif t == "game.undo":                                # take back the last (wrong) move
                 if s.undo_move():
                     mgr.save(SESSIONS_FILE)

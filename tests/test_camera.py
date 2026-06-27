@@ -224,6 +224,21 @@ def test_unchanged_frame_is_nochange():
     check(kind == "nochange", f"got {kind}")
 
 
+def test_obscured_board_is_unsettled():
+    print("obscured: a hand-sized burst of change is 'unsettled', not a move or illegal")
+    g = CameraGame()
+    g.observe(board_to_grid(chess.Board()))            # baseline at the start
+    kind, san, _ = g.observe(after("e2e4"))            # a real 2-square move passes the gate
+    check(kind == "move" and san == "e4", f"a normal move is NOT tripped by the gate (got {kind} {san})")
+    g = CameraGame()
+    g.observe(board_to_grid(chess.Board()))
+    hand = board_to_grid(chess.Board()).copy()
+    for r, c in [(2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (3, 0), (3, 1)]:
+        hand[r, c] = Cell.LIGHT                         # 10 phantom occupied squares = a hand over the board
+    kind, san, _ = g.observe(hand)
+    check(kind == "unsettled", f"10 changed squares (a hand) -> unsettled, not error (got {kind})")
+
+
 def main():
     for t in [test_orientation_all_eight, test_orientation_from_colours,
               test_ninety_degree_specifically,
@@ -238,7 +253,8 @@ def main():
               test_single_king_move_is_not_gesture,
               test_visible_move_still_commits_not_unseen,
               test_per_square_colour_sample_beats_glare,
-              test_unchanged_frame_is_nochange]:
+              test_unchanged_frame_is_nochange,
+              test_obscured_board_is_unsettled]:
         t()
     print()
     if _FAIL:

@@ -10,8 +10,9 @@ Pipeline per frame:
   warp to canonical (homography from the empty board's inner corners)
   -> for each square, sample only its MIDDLE (avoids grid lines, fold seam and
      the tops of leaning neighbour pieces)
-  -> occupied if it changed vs the empty board (per-pixel) OR has edge texture,
-     using absolute thresholds just above the empty-board floor
+  -> occupied if it has edge texture, or a background change (cdiff) BACKED by at
+     least bare-board texture -- a brightness-only change with no edges is exposure
+     drift / shadow on an empty square, not a piece (absolute thresholds)
   -> light/dark from the MEDIAN luma of the core (median ignores specular glare)
   -> apply the calibrated board orientation -> grid in inference convention.
 """
@@ -189,6 +190,9 @@ class RealBoard:
         # fire on an empty square - only genuinely high-texture squares clear it.
         self.cdiff_thr = cdiff_thr
         self.edge_thr = float(np.max(empty_edges)) + edge_margin
+        # A cdiff-only fire must also carry more texture than any BARE square, or it is exposure
+        # drift / shadow (a brightness change with no piece edges) rather than a piece -- see _measure.
+        self.edge_floor = float(np.max(empty_edges))
         self.color_thr = 110.0      # set by calibrate_color / calibrate_orientation
         self.t = 0                  # orientation transform index (set by calibrate_orientation)
         # Adaptive per-square piece-colour samples (inference orientation), learned
@@ -246,6 +250,7 @@ class RealBoard:
                         ws[er * SQ:(er + 1) * SQ, ec * SQ:(ec + 1) * SQ]
         self.cdiff_thr = cdiff_thr
         self.edge_thr = float(np.max(edges[empty])) + edge_margin
+        self.edge_floor = float(np.max(edges[empty]))   # bare-board texture ceiling (see _measure)
         self.color_thr = 110.0
         self.t = 0
         self.ref_light = np.full((8, 8), np.nan)
@@ -267,7 +272,13 @@ class RealBoard:
                 bg = _roi(self.we, r, c, OCC_ROI).astype(np.float32)   # from the live reference
                 cdiff = float(np.mean(np.abs(roi - bg)))
                 edge = _edge(_roi(w, r, c, OCC_ROI))
-                occ[r, c] = (cdiff > self.cdiff_thr) or (edge > self.edge_thr)
+                # Occupied if it has strong texture (edge), OR a background change (cdiff) BACKED by
+                # at least bare-board texture. A high cdiff with near-zero edge is exposure drift /
+                # shadow on an empty square (the phone re-exposes between moves), not a piece, so it
+                # must also clear edge_floor. Keeps low-contrast pieces (they carry real edge) while
+                # rejecting the empty-square ghost that left Nb1-c3 with no visible vacate.
+                floor = getattr(self, "edge_floor", self.edge_thr - 8.0)   # tolerate older pickles
+                occ[r, c] = (edge > self.edge_thr) or (cdiff > self.cdiff_thr and edge > floor)
                 lum[r, c] = _median_luma(_roi(w, r, c, COLOR_ROI))
         return occ, lum
 
@@ -368,7 +379,7 @@ class CameraGame:
         self.board = board.copy() if board is not None else chess.Board()
         self.prev: np.ndarray | None = None
 
-    def observe(self, obs, max_noise=10):
+    def observe(self, obs, max_noise=10, obscured=8):
         """Identify the move from the DELTA to the previous frame, using detectability
         + legality (after Haugen): we know each square's colour, so for every legal
         move we can predict whether its effect *should* be visible.
@@ -379,8 +390,8 @@ class CameraGame:
         same-colour square - is FORGIVEN ('soft'). Among the survivors we rank by
         (soft, then unrelated flicker); if ONE move best explains what we reliably
         see, we take it - stray flicker doesn't veto a unique legal answer, it only
-        breaks ties. Genuinely competing reads are reported ambiguous; a hand over
-        the board (huge change) trips `max_noise`."""
+        breaks ties. Genuinely competing reads are reported ambiguous; a hand or object
+        over the board (more squares than any move) returns `unsettled` so the caller re-shoots."""
         obs = np.asarray(obs)
         if self.prev is None:
             self.prev = obs.copy()
@@ -391,6 +402,12 @@ class CameraGame:
         if gesture is not None:                  # (checked before move-matching so it is
             return ("gesture", gesture, None)    # never squeezed into a bogus king move)
         delta = self.prev != obs                 # the squares we actually saw change
+        # OBSCURED gate: more squares changed than any legal move could make (a move touches 2,
+        # en-passant 3, castling/missed-ply up to ~6) -> a hand or object is over the board, not a
+        # move. Bail BEFORE move-matching so it is never mis-read as an illegal move (the illegal
+        # gate runs first and would otherwise mislabel the hand); the I/O layer re-shoots a frame.
+        if int(np.count_nonzero(delta)) > obscured:
+            return ("unsettled", None, None)
         believed = board_to_grid(self.board)     # the position we BELIEVE is on the board (the game state)
         viable, viable_arrivals, viable_vacates, viable_changed = [], set(), set(), []   # squares a move can fill / clear / touch
         for m in self.board.legal_moves:
