@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#15171c">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<title>chessmon console</title>
+<title>console · chessmon</title>
 <style>
   :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
     --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
@@ -98,7 +98,7 @@
   .grow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--panel);
     border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-bottom:8px}
   .grow .gnm{font-weight:600}
-  .gstat{font-size:12px;font-weight:700;margin-left:6px}.gstat.pause{color:var(--accent)}.gstat.wait{color:var(--bad)}
+  .gstat{font-size:12px;font-weight:700;margin-left:6px}.gstat.pause{color:var(--accent)}.gstat.wait{color:var(--bad)}.gstat.ready{color:var(--mut)}
   .grow .gsub{font-size:12px;color:var(--mut);margin-top:3px;font-variant-numeric:tabular-nums}
   .grow .gres{font-size:12px;font-weight:700;color:var(--cam)}
   .ginline{color:var(--cam);font-weight:600;font-size:13px;margin-left:8px}   /* assigned match, inline after the running-game name */
@@ -171,7 +171,7 @@
   </div>
 
   <div class="section">
-    <h2>Running games<span class="cnt" id="rcnt"></span></h2>
+    <h2>Games<span class="cnt" id="rcnt"></span></h2>
     <div id="running"></div>
   </div>
 
@@ -220,8 +220,9 @@ function osText(d){return d.plat||''}                       // OS/platform only 
 function battText(d){if(!d.battery)return '';const b=d.battery;return (b.charging?'⚡':'')+b.level+'%'}
 function battHTML(d){if(!d.battery)return '';const b=d.battery;const cls=b.charging?' good':(b.level<=20?' bad':'');
   return ' <span class="batt'+cls+'">'+(b.charging?'⚡':'')+b.level+'%</span>';}
+let CMSET={};   // global display prefs (time/date format) from the server
 function fmtTime(s){if(!s)return '';const d=new Date(s*1000);
-  return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:CMSET.time_format==='12h'});}
 
 let renderPending=false;
 function render(){
@@ -326,21 +327,23 @@ function renderTables(){
 }
 
 function renderRunning(){
-  const list=tabs.filter(t=>(t.started_at||t.moves>0)&&!t.result)   // active = started (or has moves) and not finished
-                 .sort((a,b)=>(a.name||'').localeCompare(b.name||''));   // by table name, like the Configured list
+  const list=tabs.filter(t=>!t.result&&(t.started_at||t.moves>0||t.calibrated))   // not finished, and active OR calibrated-and-ready
+                 .sort((a,b)=>(a.name||'').localeCompare(b.name||''));   // always by table name
   $('rcnt').textContent=list.length?String(list.length):'';
   const L=$('running');L.innerHTML='';
-  if(!list.length){L.innerHTML='<div class="empty">No games in progress.</div>';return}
+  if(!list.length){L.innerHTML='<div class="empty">No games yet.</div>';return}
   list.forEach(t=>{
     const row=document.createElement('div');row.className='grow';
     const open=expanded.has(t.token);
     const left=document.createElement('div');left.style.cursor='pointer';left.title='Show / hide the live board';
     left.onclick=()=>{if(open)expanded.delete(t.token);else expanded.add(t.token);renderRunning();};
     const nm=document.createElement('div');nm.className='gnm';
-    nm.innerHTML='<span class="gcar">'+(open?'▾':'▸')+'</span>'+(t.name||'unnamed table')+(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''))+(t.moved?' <span class="gstat wait" title="Camera/board shifted since calibration — re-calibrate.">⚠ CAMERA MOVED</span>':'');
+    const pend=!t.started_at&&!t.moves;
+    const stat=pend?' <span class="gstat ready">NOT STARTED</span>':(t.status==='paused'?' <span class="gstat pause">⏸ PAUSED</span>':(t.status==='waiting'?' <span class="gstat wait">⚠ WAITING</span>':''));
+    nm.innerHTML='<span class="gcar">'+(open?'▾':'▸')+'</span>'+(t.name||'unnamed table')+stat+(t.moved?' <span class="gstat wait" title="Camera/board shifted since calibration — re-calibrate.">⚠ CAMERA MOVED</span>':'');
     const camDev=devById(t.camera);
     const sub=document.createElement('div');sub.className='gsub';
-    sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  ':'')+t.moves+' move'+(t.moves===1?'':'s')+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
+    sub.textContent=(t.started_at?'started '+fmtTime(t.started_at)+'  ·  '+t.moves+' move'+(t.moves===1?'':'s'):(t.moves>0?t.moves+' moves':''))+(camDev&&camDev.battery?'  ·  cam '+battText(camDev):'');
     if(t.match){const gi=document.createElement('span');gi.className='ginline';gi.textContent=matchLine(t.match);nm.append(gi);}
     left.append(nm,sub);
     const acts=document.createElement('div');acts.className='gacts';
@@ -349,9 +352,10 @@ function renderRunning(){
       const fb=document.createElement('button');fb.className='mini ctl'+(cs.flash?' on':'');
       fb.textContent=cs.flashNote?'Flash: —':('Flash: '+(cs.flash?'on':'off'));
       fb.title=cs.flashNote?('Flashlight: '+cs.flashNote):'Toggle the camera flashlight';
-      fb.onclick=()=>{cs.flash=!cs.flash;send({type:'camera.control',table:t.token,what:'flash',on:cs.flash});render()};
-      const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen: '+(cs.screen?'on':'off');
-      sb.onclick=()=>{cs.screen=!cs.screen;send({type:'camera.control',table:t.token,what:'screen',on:cs.screen});render()};
+      fb.dataset.ctl='flash:'+t.token;
+      fb.onclick=()=>{cs.flash=!cs.flash;send({type:'camera.control',table:t.token,what:'flash',on:cs.flash});paintCtl(fb,'flash',cs);};
+      const sb=document.createElement('button');sb.className='mini ctl'+(cs.screen?' on':'');sb.textContent='Screen: '+(cs.screen?'on':'off');sb.dataset.ctl='screen:'+t.token;
+      sb.onclick=()=>{cs.screen=!cs.screen;send({type:'camera.control',table:t.token,what:'screen',on:cs.screen});paintCtl(sb,'screen',cs);};
       acts.append(fb,sb);
     }
     const del=document.createElement('button');del.className='mini bin';del.innerHTML=BIN;
@@ -366,7 +370,7 @@ function renderRunning(){
       const img=document.createElement('img');img.alt='';img.draggable=false;img.setAttribute('data-t',t.token);
       const ph=document.createElement('div');ph.className='ph';ph.textContent=(camDev&&camDev.online)?'loading camera…':'camera offline';cam.append(img,ph);
       gv.append(bd,mv,cam);row.append(gv);
-      if(camFrames[t.token]){ph.remove();img.onload=()=>warpCam(img,camFrames[t.token].corners);img.src=camFrames[t.token].image;}
+      if(camFrames[t.token]){const cf=camFrames[t.token];ph.remove();img.onload=()=>warpCam(img,cf.corners,cf.t);img.src=cf.image;}
       if(camMoves[t.token]!==t.moves){camMoves[t.token]=t.moves;reqCam(t.token);}}   // auto-refresh the camera board when a move lands (or on first open)
     L.appendChild(row);
   });
@@ -376,6 +380,11 @@ $('newtable').onclick=()=>{const n=prompt('Name for the new table:','Table '+(ta
   if(n!==null)send({type:'table.create',name:n.trim()})};
 
 /* ---- inline live game: per-row board + scrollable moves ---- */
+function paintCtl(btn,what,cs){   // repaint one flash/screen control in place (no list re-render -> no preview reload)
+  if(what==='flash'){btn.className='mini ctl'+(cs.flash?' on':'');
+    btn.textContent=cs.flashNote?'Flash: —':('Flash: '+(cs.flash?'on':'off'));
+    btn.title=cs.flashNote?('Flashlight: '+cs.flashNote):'Toggle the camera flashlight';}
+  else{btn.className='mini ctl'+(cs.screen?' on':'');btn.textContent='Screen: '+(cs.screen?'on':'off');}}
 const expanded=new Set();                                  // running-game tokens the operator has expanded to a live board
 const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};   // fallback if a piece SVG is missing
 function mkGSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
@@ -391,21 +400,23 @@ function renderGMoves(el,san,result){let h='';
   if(result)h+='<div class="mvres">'+result+'</div>';
   el.innerHTML=h||'<div class="mvempty">no moves yet</div>';el.scrollTop=el.scrollHeight;}
 /* ---- inline camera board: perspective-warp the last real-board frame into a square ---- */
-const camFrames={};                                        // table token -> {image, corners} from the last grabbed frame
+const CAM_ROT=0;                                           // bump by 1 if a preview lands a quarter-turn off (matches the clock overlay)
+const camFrames={};                                        // table token -> {image, corners, t} from the last grabbed frame
 const camMoves={};                                         // table token -> move count when we last pulled a frame (auto-refresh on a new move)
 function hgAdj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
 function hgMul(a,b){const c=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=a[3*i+k]*b[3*k+j];c[3*i+j]=s;}return c;}
 function hgVec(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
 function hgBasis(p){const m=[p[0][0],p[1][0],p[2][0],p[0][1],p[1][1],p[2][1],1,1,1],v=hgVec(hgAdj(m),[p[3][0],p[3][1],1]);return hgMul(m,[v[0],0,0,0,v[1],0,0,0,v[2]]);}
 function hgProj(src,dst){return hgMul(hgBasis(dst),hgAdj(hgBasis(src)));}
-function warpCam(img,corners){const ov=img.parentElement,S=ov.clientWidth;
+function warpCam(img,corners,ct){const ov=img.parentElement,S=ov.clientWidth;
   if(!img.naturalWidth||!corners||corners.length!==4||!S)return;
   const W=img.naturalWidth,H=img.naturalHeight,src=corners.map(c=>[c[0]*W,c[1]*H]);
-  const sq=[[0,0],[S,0],[S,S],[0,S]],dst=[sq[1],sq[2],sq[3],sq[0]];   // +90deg to match the camera, like the clock overlay
+  const sq=[[0,0],[S,0],[S,S],[0,S]];
+  const k=(((ct||0)%4)+CAM_ROT)&3, dst=[sq[k],sq[(k+1)&3],sq[(k+2)&3],sq[(k+3)&3]];   // rotate by the calibrated orientation t so white is at the bottom (was a fixed +90deg)
   const t=hgProj(src,dst);for(let i=0;i<9;i++)t[i]/=t[8];
   img.style.transform='matrix3d('+[t[0],t[3],0,t[6],t[1],t[4],0,t[7],0,0,1,0,t[2],t[5],0,t[8]].join(',')+')';}
 function paintCam(token){const img=document.querySelector('.gcam img[data-t="'+token+'"]'),f=camFrames[token];
-  if(img&&f){const ph=img.parentElement.querySelector('.ph');if(ph)ph.remove();img.onload=()=>warpCam(img,f.corners);img.src=f.image;}}
+  if(img&&f){const ph=img.parentElement.querySelector('.ph');if(ph)ph.remove();img.onload=()=>warpCam(img,f.corners,f.t);img.src=f.image;}}
 function reqCam(token){send({type:'preview.req',table:token});}   // latest cached frame -> preview.image (no grab, no move-read race)
 let snapTable=null;
 function openSnap(t){snapTable=t.token;$('snaptitle').textContent=(t.name||'Table')+' — camera';
@@ -432,17 +443,18 @@ $('snapgridbtn').onclick=()=>{const hid=$('snapgrid').classList.toggle('hidden')
 /* ---- calibration (same flow as before) ---- */
 function handle(m){
   setLive(true);                                            // any message means the server is alive -> leave the offline state
-  if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];if(m.rtc_room){rtcRoom=m.rtc_room;paintAddQR();}render();}
+  if(m.type==='devices'){devs=m.devices||[];tabs=m.tables||[];if(m.settings)CMSET=m.settings;if(m.rtc_room){rtcRoom=m.rtc_room;paintAddQR();}render();}
   else if(m.type==='tables'){tabs=m.tables||[];render();}      // live moves/result without a full devices push
   else if(m.type==='camera.controlled'){const cs=camState[m.table];if(cs){   // ack from the camera
     if(m.what==='flash'){cs.flash=m.ok?m.on:false;cs.flashNote=m.ok?'':(m.reason||'unavailable');}
     else if(m.what==='screen'){cs.screen=m.on;}
-    render();}}
+    const btn=document.querySelector('[data-ctl="'+m.what+':'+m.table+'"]');   // repaint just the button, don't reload the preview
+    if(btn)paintCtl(btn,m.what,cs);}}
   else if(m.type==='camera.status'){                          // camera reported its actual flash/screen on connect/link
     camState[m.table]={flash:!!m.flash, screen:m.screen!==false, flashNote:m.flashAvail===false?'no torch (iOS Safari has none)':'', zoom:m.zoom, zoomMin:m.zoomMin, zoomMax:m.zoomMax};
     render();}
   else if(m.type==='calib.image'){if(m.table===calibTable)onCalImage(m.image,m.corners)}
-  else if(m.type==='preview.image'){if(m.table&&expanded.has(m.table)){camFrames[m.table]={image:m.image,corners:m.corners};paintCam(m.table);}}   // inline camera board (cached frame)
+  else if(m.type==='preview.image'){if(m.table&&expanded.has(m.table)){camFrames[m.table]={image:m.image,corners:m.corners,t:m.t};paintCam(m.table);}}   // inline camera board (cached frame)
   else if(m.type==='camera.moved'){if(calibTable&&m.table===calibTable)recapCalib()}      // camera moved -> refresh the live frame
   else if(m.type==='orient.ask'){if(m.table===calibTable)showOrientCal()}
   else if(m.type==='session.baselined'){if(m.table===calibTable){closeCalib()}}

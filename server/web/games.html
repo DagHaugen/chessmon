@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#15171c">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<title>chessmon · games</title>
+<title>games · chessmon</title>
 <style>
   :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
     --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
@@ -99,7 +99,7 @@ function $(id){return document.getElementById(id)}
 window.name='cm_games';
 const START='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
-let ws, list=[], filt='', cur=null, idx=0, pendingPgn='';
+let ws, list=[], filt='', cur=null, idx=0, pendingPgn='', CMSET={};   // CMSET: global display prefs (time/date format) from the server
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
@@ -109,14 +109,17 @@ function connect(){
     else if(m.type==='game'){cur=m.game;idx=0;if(cur)openModal();}
     else if(m.type==='games_pgn'){if(m.pgn)downloadPgn(m.pgn,pendingPgn||'chessmon.pgn');}
     else if(m.type==='games_changed'){send({type:'games.list'});}
+    else if(m.type==='devices'){if(m.settings)CMSET=m.settings;if(list.length)renderList();}   // grab display prefs; re-render dates if they changed
   };
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function safe(s){return String(s||'').replace(/[^\w-]+/g,'_').replace(/^_+|_+$/g,'')||'game'}
 function fmtRes(r){return r==='1-0'?'1–0':r==='0-1'?'0–1':r==='1/2-1/2'?'½–½':(r||'*');}
-function fmtDate(ts){if(!ts)return '';const d=new Date(ts*1000);
-  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});}
+function fmtDate(ts){if(!ts)return '';const d=new Date(ts*1000),p=n=>String(n).padStart(2,'0');
+  if(CMSET.date_format==='iso')   // 2026-06-27 13:11 (ISO is always 24h)
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:CMSET.time_format==='12h'});}
 function gmeta(g){return esc(g.format||'')+(g.variant==='chess960'?' · Chess960'+(g.chess960!=null?' #'+g.chess960:''):'');}
 function gtour(g){return g.tournament_name?esc(g.tournament_name)+(g.round!=null?' · R'+(g.round+1):''):'';}
 function tourMap(){const s={};list.forEach(g=>{if(g.tournament)s[g.tournament]=g.tournament_name||'Tournament';});return s;}

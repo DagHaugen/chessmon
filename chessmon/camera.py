@@ -378,6 +378,7 @@ class CameraGame:
     def __init__(self, board: chess.Board | None = None):
         self.board = board.copy() if board is not None else chess.Board()
         self.prev: np.ndarray | None = None
+        self.confidence: float | None = None   # 0-1 for the last 'move' read (fraction of the seen change it explains); None otherwise
 
     def observe(self, obs, max_noise=10, obscured=8):
         """Identify the move from the DELTA to the previous frame, using detectability
@@ -393,6 +394,7 @@ class CameraGame:
         breaks ties. Genuinely competing reads are reported ambiguous; a hand or object
         over the board (more squares than any move) returns `unsettled` so the caller re-shoots."""
         obs = np.asarray(obs)
+        self.confidence = None
         if self.prev is None:
             self.prev = obs.copy()
             return ("baseline", None, None)
@@ -514,6 +516,9 @@ class CameraGame:
             chosen = next((v for v in group if v[3].promotion == chess.QUEEN), group[0])
         if chosen[2] == 0 and len(distinct) > 1:  # chosen move itself has no visible support
             return ("unseen", None, sorted({self.board.san(v[3]) for v in best}))
+        delta_n = int(np.count_nonzero(delta))                       # how many squares we saw change
+        conf = (delta_n - chosen[1]) / delta_n if delta_n else 1.0   # fraction the chosen move explains; unexplained changes (a hand) drag it down
+        self.confidence = round(max(0.0, min(1.0, conf)), 2)
         move = chosen[3]
         san = self.board.san(move)
         self.board.push(move)

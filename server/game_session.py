@@ -186,6 +186,8 @@ class Session:
                 return self.resnap(frame)
             if step == "startverify":                  # START pressed -> snapshot + re-baseline + verify the start position
                 return self.start_baseline(frame)
+            if step == "verifymove":                   # double-check a low-confidence move against a fresh frame
+                return self.verify_move(frame)
             if self.board_reader is None:
                 return {"type": "calib.failed", "reason": "camera not calibrated"}
             moved = self.check_alignment(frame)        # has the camera/board shifted since calibration? resnap can't fix that -- re-calibrate
@@ -232,11 +234,33 @@ class Session:
             msg["offsquares"] = sorted(off)                      # squares the operator should check
         return msg
 
+    def verify_move(self, frame):
+        """Double-check a just-shown low-confidence move against a fresh frame. If the board held still
+        (the two frames agree) the move was real -> confirm it. If it changed (a hand was moving through
+        the first frame and is now gone) the read was on an unsettled board -> revert the guessed move,
+        re-anchor to what is actually there, and ask the player to confirm again."""
+        if self.board_reader is None:
+            return {"type": "move.unclear", "reason": "camera not calibrated"}
+        grid2 = self.board_reader.classify(frame)
+        ref, self._verify_grid = getattr(self, "_verify_grid", None), None
+        diff = int(np.count_nonzero(grid2 != ref)) if ref is not None else 0
+        if diff <= self.VERIFY_TOL:                              # the board held still -> the move stands
+            self.board_reader.learn(frame, self.game.board)      # refine refs from this clean frame + re-baseline
+            self.board_reader.update_bg(frame, self.game.board)
+            self.seed_baseline(grid2)
+            return {"type": "move.verified", "fen": self.game.board.fen()}
+        self.revert_to_valid()                                   # the board was moving -> undo the guessed move
+        self.resnap(frame)                                       # re-anchor to the real position
+        return {"type": "move.reverted", "reason": "board was moving — confirm again",
+                "turn": ("White" if self.game.board.turn else "Black"), "fen": self.game.board.fen()}
+
     # --- camera-movement detection -------------------------------------------------------------
     # The corner homography is only valid while the board sits where it was calibrated. A bumped
     # camera (or board) makes the warp map to the wrong squares, and resnap CAN'T fix it (it would
     # re-learn colours on a misaligned grid) -- only re-calibration can. We catch that by template-
     # matching a small patch from each calibrated corner in every move frame.
+    VERIFY_CONF = 0.8        # below this read-confidence, double-check the move against a 2nd frame before trusting it
+    VERIFY_TOL = 2           # squares the verify frame may differ from the move frame and still count as "the board held still"
     _ALIGN_PATCH = 0.028     # corner-patch half-size, fraction of frame width
     _ALIGN_SEARCH = 0.030    # search radius around the calibrated corner, fraction of width
     _ALIGN_MOVE = 0.012      # a corner shift past this (fraction of width) counts as displaced
@@ -386,7 +410,14 @@ class Session:
             if frame is not None and self.board_reader is not None:
                 self.board_reader.learn(frame, self.game.board)
                 self.board_reader.update_bg(frame, self.game.board)
-            return self._record(san)
+            res = self._record(san)
+            conf = self.game.confidence
+            if conf is not None:
+                res["confidence"] = conf
+                if conf < self.VERIFY_CONF:            # shaky read -> have the I/O layer double-check with a 2nd frame
+                    res["verify"] = True
+                    self._verify_grid = grid           # the move-frame occupancy, to compare the verify frame against
+            return res
         if kind == "gesture":
             self.result = san
             return {"type": "game.end", "result": san, "pgn": self.pgn()}

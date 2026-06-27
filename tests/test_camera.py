@@ -239,6 +239,23 @@ def test_obscured_board_is_unsettled():
     check(kind == "unsettled", f"10 changed squares (a hand) -> unsettled, not error (got {kind})")
 
 
+def test_confidence_reflects_unexplained_change():
+    print("confidence: a clean move scores 1.0; an unexplained stray square lowers it")
+    g = CameraGame()
+    g.observe(board_to_grid(chess.Board()))
+    kind, san, m = g.observe(after("e2e4"))
+    check(kind == "move" and g.confidence == 1.0,
+          f"clean e2e4 -> confidence 1.0 (got {kind} {g.confidence})")
+    g = CameraGame()
+    g.observe(board_to_grid(chess.Board()))
+    obs = after("e2e4").copy()
+    rc = square_to_rc(chess.F5)
+    obs[rc] = Cell.LIGHT if _square_is_light(*rc) else Cell.DARK   # a low-contrast stray the move can't explain
+    kind, san, m = g.observe(obs)
+    check(kind == "move" and san == "e4" and g.confidence is not None and g.confidence < 1.0,
+          f"e2e4 + a stray square -> still a move, confidence < 1.0 (got {kind} {san} {g.confidence})")
+
+
 def main():
     for t in [test_orientation_all_eight, test_orientation_from_colours,
               test_ninety_degree_specifically,
@@ -254,7 +271,8 @@ def main():
               test_visible_move_still_commits_not_unseen,
               test_per_square_colour_sample_beats_glare,
               test_unchanged_frame_is_nochange,
-              test_obscured_board_is_unsettled]:
+              test_obscured_board_is_unsettled,
+              test_confidence_reflects_unexplained_change]:
         t()
     print()
     if _FAIL:

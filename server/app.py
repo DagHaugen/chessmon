@@ -54,17 +54,25 @@ TOURNAMENTS_FILE = os.environ.get("CHESSMON_TOURNAMENTS",
                                   os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tournaments.json"))
 GAMES_FILE = os.environ.get("CHESSMON_GAMES",
                             os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "games.json"))
+SETTINGS_FILE = os.environ.get("CHESSMON_SETTINGS",
+                               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.json"))
+ENGINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines")
+STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe")   # bundled engine for suggested moves (installed by setup.ps1)
+CLOUD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cloud.json")   # chessmon-cloud relay config (gates web broadcast)
 
 app = FastAPI(title="chessmon server")
 mgr = SessionManager()
 mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a restart
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
+cam_status: dict = {}              # table_token -> last camera.status payload (flash/screen/zoom) so a console (re)join restores it
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
+viewers: set = set()               # local-network viewers.html pages; fed the live tables while broadcast_local is on
 formats: dict = {}                 # format id -> {id, name, base_ms, increment_ms, inc_type, category, variant}
 players: dict = {}                 # player id -> {id, name}
 tournaments: dict = {}             # tournament id -> {id, name, format, players[], rounds[]}
 games: list = []                   # append-only archive of finished games (moves + pgn + metadata)
+settings: dict = {}                # global console prefs: time/date format, suggested-moves, broadcast (+ detected stockfish)
 RTC_ROOM_FILE = os.environ.get("CHESSMON_RTC_ROOM_FILE",
                                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rtc_room.txt"))
 
@@ -147,6 +155,8 @@ def tables_public():
     return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
              "calibrated": s.board_reader is not None, "moved": getattr(s, "alignment_alert", False), "moves": len(s.moves),
              "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(), "match": getattr(s, "match", None),   # live board + match for the console
+             "clock_white": (s.moves[-1].get("clock_white") if s.moves else None),   # last reported clocks -> viewers tick locally
+             "clock_black": (s.moves[-1].get("clock_black") if s.moves else None),
              "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
 
@@ -226,7 +236,7 @@ def game_pgn(g):
 def admin_state():
     return {"type": "devices", "devices": [dev_public(d) for d in devices.values()], "tables": tables_public(),
             "formats": list(formats.values()), "players": list(players.values()),
-            "tournaments": list(tournaments.values()), "rtc_room": rtc_room}
+            "tournaments": list(tournaments.values()), "rtc_room": rtc_room, "settings": settings}
 
 
 async def broadcast_devices():
@@ -237,10 +247,13 @@ async def broadcast_devices():
 
 
 async def broadcast_tables():
-    """Just the table list (live moves / started / result) -> the console, without re-saving devices."""
+    """Just the table list (live moves / started / result) -> the console, and to local viewers when broadcast_local is on."""
     msg = {"type": "tables", "tables": tables_public()}
     for ws in list(admins):
         await send(ws, msg)
+    if settings.get("broadcast_local"):
+        for ws in list(viewers):
+            await send(ws, msg)
 
 
 async def broadcast_admin():
@@ -360,11 +373,50 @@ def save_games():
         pass
 
 
+DEFAULT_SETTINGS = {"time_format": "24h",   # "12h" -> "04:54 PM"          | "24h" -> "16:54"
+                    "date_format": "iso",   # "iso" -> "2026-06-27 13:11"  | "long" -> "Jun 27 01:11 PM"
+                    "show_suggested_moves": False,
+                    "broadcast_local": False, "broadcast_web": False}
+
+
+def is_stockfish_installed():
+    return os.path.exists(STOCKFISH_EXE)
+
+
+def is_cloud_configured():
+    try:
+        with open(CLOUD_FILE) as f:
+            c = json.load(f)
+        return bool(c.get("url") and c.get("key"))
+    except Exception:
+        return False
+
+
+def load_settings():
+    settings.update(DEFAULT_SETTINGS)
+    try:
+        with open(SETTINGS_FILE) as f:
+            settings.update({k: v for k, v in json.load(f).items() if k in DEFAULT_SETTINGS})
+    except Exception:
+        pass
+    settings["stockfish_installed"] = is_stockfish_installed()   # auto-detected each start, not persisted
+    settings["cloud_configured"] = is_cloud_configured()         # web broadcast is offered only when chessmon-cloud is set up
+
+
+def save_settings():
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump({k: settings.get(k) for k in DEFAULT_SETTINGS}, f, indent=1)
+    except Exception:
+        pass
+
+
 load_devices()
 load_formats()
 load_players()
 load_tournaments()
 load_games()
+load_settings()
 for _s in mgr._by_table.values():          # rebuild the live device<->table link from persisted table configs
     for _role, _devid in (("clock", _s.clock_dev), ("camera", _s.camera_dev)):
         if _devid and _devid in devices:
@@ -472,11 +524,17 @@ async def ws_endpoint(ws: WebSocket):
                         s._reshoots = 0                              # a clean read -> reset the re-shoot counter
                     await send(hub(s.table_token)["clock"], verdict)
                     await send(ws, verdict)                         # echo to the camera operator
+                    if verdict.get("verify"):                      # low-confidence move shown -> double-check it with a fresh frame
+                        s.set_calib_step("verifymove")             # next frame routes to verify_move
+                        await broadcast_state(s)                    # show the move on the console while we re-check
+                        await asyncio.sleep(RESHOOT_DELAY)          # let a reaching hand clear / the board settle
+                        await send(ws, {"type": "capture.req"})
+                        continue
                     # A warning / prompt verdict (illegal, no-change, ambiguous, unseen) did NOT change the
                     # board -- re-pushing 'state' to the clock would wipe the warning it just rendered (the
                     # "flash then back to green" bug). Refresh the console only (keeps the camera-moved badge
                     # live); anything that actually advanced the game broadcasts state as before.
-                    if verdict.get("type") in ("move.unclear", "move.nochange", "move.ambiguous", "move.unseen", "started"):   # 'started' carries the START setup warning -> a state re-push would wipe it
+                    if verdict.get("type") in ("move.unclear", "move.nochange", "move.ambiguous", "move.unseen", "started", "move.reverted"):   # 'started' / 'move.reverted' carry a warning/prompt -> a state re-push would wipe it
                         await broadcast_tables()
                     else:
                         await broadcast_state(s)
@@ -562,6 +620,12 @@ async def ws_endpoint(ws: WebSocket):
                 role = "admin"
                 admins.add(ws)
                 await send(ws, admin_state())
+                for st in cam_status.values():                    # restore each camera's flash/screen after a console refresh / (re)join
+                    await send(ws, st)
+            elif t == "viewer.join":                              # a local-network viewers.html page
+                viewers.add(ws)
+                await send(ws, {"type": "tables", "tables": tables_public()} if settings.get("broadcast_local")
+                           else {"type": "broadcast_off"})
             elif t == "device.rename":                            # console (or the device itself) set a user-defined name
                 d = devices.get(data.get("devId"))
                 if d is not None:
@@ -571,6 +635,16 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "device.remove":                            # console forgot a device (stale / phantom)
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
+            elif t == "settings.update":                          # console changed a global pref (time/date format, suggested-moves, broadcast)
+                for k in ("time_format", "date_format", "show_suggested_moves", "broadcast_local", "broadcast_web"):
+                    if k in data:
+                        settings[k] = data[k]
+                save_settings()
+                await broadcast_devices()                          # push the new settings to every console
+                if "broadcast_local" in data:                     # toggled -> show or hide the live games on the viewer pages
+                    push = {"type": "tables", "tables": tables_public()} if settings.get("broadcast_local") else {"type": "broadcast_off"}
+                    for v in list(viewers):
+                        await send(v, push)
             elif t == "table.create":                             # console makes a new, empty table
                 mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)
@@ -640,6 +714,10 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "camera.control":                           # console -> the table's camera: screen on/off, flashlight
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
+                    if data.get("what") in ("flash", "screen"):   # cache the console's INTENT now so a refresh restores it even if the camera never reports status
+                        st = cam_status.setdefault(sess.table_token, {"type": "camera.status", "table": sess.table_token,
+                                                                      "flash": False, "screen": True, "flashAvail": True})
+                        st[data.get("what")] = bool(data.get("on"))
                     await send(hub(sess.table_token)["camera"],
                                {"type": "camera.control", "what": data.get("what"), "on": bool(data.get("on")), "value": data.get("value")})
             elif t == "admin.watch":                              # console opens the live board for a running game
@@ -891,20 +969,29 @@ async def ws_endpoint(ws: WebSocket):
                         s.set_calib_step("refresh")               # re-anchor to the reverted position
                         await send(cam, {"type": "capture.req"})
             elif t == "camera.controlled":                        # camera -> console: did the screen/torch control apply?
+                if s is not None and data.get("what") in ("flash", "screen"):
+                    st = cam_status.get(s.table_token)            # reconcile the cache with the applied control (mirrors the console's rule)
+                    if st is not None:
+                        if data.get("what") == "flash":
+                            st["flash"] = bool(data.get("on")) if data.get("ok") else False
+                        else:
+                            st["screen"] = bool(data.get("on"))
                 for a in list(admins):
                     await send(a, {"type": "camera.controlled", "table": s.table_token,
                                    "what": data.get("what"), "on": bool(data.get("on")),
                                    "ok": bool(data.get("ok")), "reason": data.get("reason", "")})
             elif t == "camera.status":                            # camera -> console: its actual flash/screen state on connect/link
                 if s is not None:
+                    msg = {"type": "camera.status", "table": s.table_token,
+                           "flash": bool(data.get("flash")),
+                           "flashAvail": bool(data.get("flashAvail", True)),
+                           "screen": bool(data.get("screen", True)),
+                           "zoom": data.get("zoom"),
+                           "zoomMin": data.get("zoomMin"),
+                           "zoomMax": data.get("zoomMax")}
+                    cam_status[s.table_token] = msg               # cache so a console refresh / (re)join restores it
                     for a in list(admins):
-                        await send(a, {"type": "camera.status", "table": s.table_token,
-                                       "flash": bool(data.get("flash")),
-                                       "flashAvail": bool(data.get("flashAvail", True)),
-                                       "screen": bool(data.get("screen", True)),
-                                       "zoom": data.get("zoom"),
-                                       "zoomMin": data.get("zoomMin"),
-                                       "zoomMax": data.get("zoomMax")})
+                        await send(a, msg)
             elif t == "camera.moved":                             # camera's gyro felt movement -> nudge the console to re-grab the calibration frame
                 if s is not None:
                     for a in list(admins):
@@ -922,6 +1009,7 @@ async def ws_endpoint(ws: WebSocket):
                 if role == "camera":                          # tell the clock its camera dropped -> WAIT (or "removed" if it was unassigned)
                     await send(h["clock"], {"type": "camera.offline", "cameraAssigned": s.camera_dev is not None})
         admins.discard(ws)
+        viewers.discard(ws)
         for hb in conns.values():
             hb["spectators"].discard(ws)                # an admin that was watching a board
         if dev_id in devices and devices[dev_id].get("ws") is ws:

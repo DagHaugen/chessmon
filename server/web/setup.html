@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#15171c">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<title>chessmon · setup</title>
+<title>setup · chessmon</title>
 <style>
   :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;
     --accent:#4f8cff;--good:#3ecf8e;--bad:#ff6b6b;--cam:#ffb454}
@@ -42,6 +42,12 @@
   .mini .sq{display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;color:#1a1a1a}
   .mini .sq.l{background:#fff}.mini .sq.d{background:#d9d9d9}
   .mini .pc{width:88%;height:88%;display:block}
+  .ck{display:flex;align-items:center;gap:9px;font-size:14px;cursor:pointer;flex-wrap:wrap}
+  .ck input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+  .ck small{flex-basis:100%;color:var(--mut);font-size:12px;margin:2px 0 0 25px}
+  .ckrow{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+  .sfstat{font-size:12.5px;color:var(--mut)}.sfstat.ok{color:var(--good)}
+  #prefs .dlbtn{background:var(--cam);color:#0b1020;border:none;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -56,6 +62,24 @@
     <span class="dot" id="dot" title="server link"></span>
   </nav>
   <h1>Setup</h1>
+  <div class="tcard" id="prefs">
+    <div class="tname" style="margin-bottom:12px">Display &amp; engine</div>
+    <div class="sgrid">
+      <div class="field"><label>Time format</label>
+        <select id="set_time"><option value="24h">24-hour · 16:54</option><option value="12h">12-hour · 4:54 PM</option></select></div>
+      <div class="field"><label>Date format</label>
+        <select id="set_date"><option value="iso">2026-06-27 13:11</option><option value="long">Jun 27 01:11 PM</option></select></div>
+    </div>
+    <div class="ckrow">
+      <label class="ck"><input type="checkbox" id="set_suggest"> Show suggested moves to viewers</label>
+      <span class="sfstat" id="sf_stat"></span>
+      <button class="dlbtn" id="sf_dl" style="display:none">Get Stockfish</button>
+    </div>
+    <label class="ck" style="margin-top:14px"><input type="checkbox" id="set_bc_local"> Broadcast on the local network
+      <small>Anyone on this Wi‑Fi can watch the live games on the viewers page.</small></label>
+    <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_bc_web"> Broadcast to the web
+      <small id="bc_web_note">Relays games to chessmon‑cloud for public viewing.</small></label>
+  </div>
   <p class="lead">Assign two players and a time control to each table. Names and the clock then follow on the table's clock.</p>
   <div id="list"></div>
 </div>
@@ -69,7 +93,7 @@ function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
-    if(m.type==='devices'){tables=m.tables||[];players=m.players||[];formats=m.formats||[];maybeRender();}
+    if(m.type==='devices'){tables=m.tables||[];players=m.players||[];formats=m.formats||[];applySettings(m.settings);maybeRender();}
     else if(m.type==='tables'){tables=m.tables||[];maybeRender();}};   // match.set broadcasts 'tables' -> refresh the summary (sig guard ignores move-only changes)
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
@@ -154,6 +178,23 @@ function render(){
     card.append(head,grid,fRow,acts);L.appendChild(card);
   });
 }
+function show(id,on){$(id).style.display=on?'':'none'}
+function applySettings(s){if(!s)return;
+  $('set_time').value=s.time_format||'24h'; $('set_date').value=s.date_format||'iso';
+  $('set_suggest').checked=!!s.show_suggested_moves;
+  $('set_bc_local').checked=!!s.broadcast_local; $('set_bc_web').checked=!!s.broadcast_web;
+  const cloud=!!s.cloud_configured; $('set_bc_web').disabled=!cloud;
+  $('bc_web_note').textContent=cloud?'Relays games to chessmon‑cloud for public viewing.':'Set up chessmon‑cloud (cloud.json) first to enable web broadcast.';
+  const inst=!!s.stockfish_installed;
+  $('sf_stat').textContent=inst?'✓ Stockfish ready':'Stockfish not installed';
+  $('sf_stat').className='sfstat'+(inst?' ok':'');
+  $('set_suggest').disabled=!inst; show('sf_dl',!inst);}
+$('set_time').onchange=()=>send({type:'settings.update',time_format:$('set_time').value});
+$('set_date').onchange=()=>send({type:'settings.update',date_format:$('set_date').value});
+$('set_suggest').onchange=()=>send({type:'settings.update',show_suggested_moves:$('set_suggest').checked});
+$('set_bc_local').onchange=()=>send({type:'settings.update',broadcast_local:$('set_bc_local').checked});
+$('set_bc_web').onchange=()=>send({type:'settings.update',broadcast_web:$('set_bc_web').checked});
+$('sf_dl').onclick=()=>window.open('https://stockfishchess.org/download/','_blank');
 connect();
 </script>
 </body>
