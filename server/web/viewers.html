@@ -44,8 +44,8 @@
   .pl.white{background:#eceef2;color:#1a1d24;border-color:#cfd4dc}
   .pl .nm{font-weight:700;font-size:14px}
   .pl .ck{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums}
-  .pl.act{border-color:var(--good)}.pl.act .ck{color:var(--good)}
-  .pl.white.act .ck{color:#178a52}
+  .pl.act{border-color:var(--good);border-width:2px}.pl.act .ck{color:var(--good)}
+  .pl.white.act{border-color:#15803d}.pl.white.act .ck{color:#178a52}
   .mid{display:flex;flex-direction:column;gap:12px;flex:none}
   .moves{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 13px;max-height:240px;overflow:auto;font-size:13px;line-height:1.7}
   .moves .mvn{color:var(--mut);margin-right:5px}
@@ -54,7 +54,7 @@
   .wdl .ww{background:#e9edf2}.wdl .wd{background:#6b7280}.wdl .wb{background:#0c0d11}
   .wdlk{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-top:3px}
   .sug{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 13px}
-  .sgh{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+  .sgh{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;text-align:center}
   .sgt{width:100%;border-collapse:collapse;font-size:13px}
   .sgt th{color:var(--mut);font-weight:600;font-size:11px;text-align:right;padding:3px 6px;border-bottom:1px solid var(--line)}
   .sgt th:first-child{text-align:left}
@@ -188,7 +188,7 @@ function moveColor(m){if(m.mate!=null)return m.mate>0?'#2fe08a':'#ff5a5a';
 function moveTable(moves){let rows='';
   moves.forEach(m=>{const w=m.wdl||[0,0,0],c=moveColor(m);
     rows+='<tr><td class="mc" style="color:'+c+'"><span class="pcg">'+pieceGlyph(m.san)+'</span>'+esc(m.san)+'</td><td>'+pctOf(w,0)+'%</td><td>'+pctOf(w,1)+'%</td><td>'+pctOf(w,2)+'%</td></tr>';});
-  return '<div class="sgh">Stockfish suggests</div><table class="sgt"><thead><tr><th>Move</th><th>Win</th><th>Draw</th><th>Lose</th></tr></thead><tbody>'+rows+'</tbody></table>';}
+  return '<div class="sgh">Stockfish suggestions</div><table class="sgt"><thead><tr><th>Move</th><th>Win</th><th>Draw</th><th>Lose</th></tr></thead><tbody>'+rows+'</tbody></table>';}
 function tickWatch(g){$('plTop').querySelector('.ck').textContent=fmtClk(live(g,'b'));$('plBot').querySelector('.ck').textContent=fmtClk(live(g,'w'));}
 function renderBoard(grid,fen){grid.innerHTML='';const place=(fen||'8/8/8/8/8/8/8/8').split(' ')[0];
   place.split('/').forEach((row,r)=>{let f=0;for(const ch of row){

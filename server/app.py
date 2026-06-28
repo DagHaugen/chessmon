@@ -153,18 +153,25 @@ async def broadcast_state(s):
 
 async def analyze_and_push(s):
     """Stockfish suggestion for the current position -> the viewer/monitor overlay. Gated by
-    show_suggested_moves; runs the engine in a thread so it never blocks the move flow."""
-    try:
-        sug = await asyncio.to_thread(engine.analyse, STOCKFISH_EXE, s.game.board.copy())
-    except Exception as e:
-        print("[engine] analyse failed:", e)
-        return
-    if sug is None:
-        return
-    msg = {"type": "suggest", "table": s.table_token, **sug}
-    suggest_state[s.table_token] = msg
-    for v in list(viewers):
-        await send(v, msg)
+    show_suggested_moves; runs the engine in a thread so it never blocks the move flow. Deepens
+    in a few passes on the same position, pushing each refinement, and bails the moment the
+    position moves on (Stockfish reuses its hash between passes, so the deep one is cheap)."""
+    board = s.game.board.copy()
+    fen = board.fen()
+    for movetime in (0.5, 1.5, 4.0):
+        if s.result or s.game.board.fen() != fen:
+            return                                        # game ended / a move landed -> stop deepening
+        try:
+            sug = await asyncio.to_thread(engine.analyse, STOCKFISH_EXE, board, movetime)
+        except Exception as e:
+            print("[engine] analyse failed:", e)
+            return
+        if sug is None or s.game.board.fen() != fen:      # moved during the analysis -> drop the stale result
+            return
+        msg = {"type": "suggest", "table": s.table_token, **sug}
+        suggest_state[s.table_token] = msg
+        for v in list(viewers):
+            await send(v, msg)
 
 
 def dev_public(d):
