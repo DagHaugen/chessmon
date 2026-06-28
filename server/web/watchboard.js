@@ -69,11 +69,14 @@
     if (bar) bar.innerHTML = fin ? '<div class="wb-banner">' + esc(settled(t)) + '</div>' : ((sug && sug.wdl_white) ? posBar(sug.wdl_white) : '');
     const mid = el.querySelector('.wb-mid');
     if (mid) {
+      const mv = mid.querySelector('.wb-moves');
+      const wasBottom = mv && (mv.scrollHeight - mv.scrollTop - mv.clientHeight < 24);   // was it pinned to the latest move?
       let sg = mid.querySelector('.wb-sug');
       if (!fin && sug && sug.moves && sug.moves.length) {
         if (!sg) { sg = document.createElement('div'); sg.className = 'wb-sug'; mid.append(sg); }
         sg.innerHTML = moveTable(sug.moves);
       } else if (sg) { sg.remove(); }
+      if (mv && wasBottom) requestAnimationFrame(function () { mv.scrollTop = mv.scrollHeight; });   // re-pin to the latest move after the sug table resizes the moves area (deferred so the new height is settled; skipped if scrolled up)
     }
   };
   // small shared helpers the lobby / ingest reuse, so a page doesn't keep its own copy
