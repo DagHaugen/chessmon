@@ -46,11 +46,17 @@
 .wb-pl.win{box-shadow:0 0 0 2px var(--good) inset}
 
 .wb-mid{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
-.wb.port .wb-mid{grid-area:mid;flex-direction:row;align-items:stretch;min-height:0}
+.wb.port .wb-mid{grid-area:mid;flex-direction:row-reverse;align-items:stretch;min-height:0}   /* portrait: suggestions left, moves right */
 .wb-moves{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;overflow:auto;
   font-size:clamp(11px,1.5vh,13px);line-height:1.6;flex:1;min-height:0}
 .wb.port .wb-moves{flex:1;min-width:0;max-height:none}
 .wb-moves .mvn{color:var(--mut);margin-right:5px}
+/* discrete scrollbar, thumb inset (transparent border) so it floats clear of the rounded corners */
+.wb-moves{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.wb-moves::-webkit-scrollbar{width:11px}
+.wb-moves::-webkit-scrollbar-track{background:transparent}
+.wb-moves::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:3px solid transparent;background-clip:padding-box}
+.wb-moves::-webkit-scrollbar-thumb:hover{background:var(--mut)}
 .wb-sug{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px}
 .wb.port .wb-sug{flex:1;min-width:0}
 .wb-sgh{font-size:clamp(9px,1.2vh,11px);font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;text-align:center}

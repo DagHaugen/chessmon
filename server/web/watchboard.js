@@ -50,7 +50,9 @@
     return wb;
   };
   window.cmFit = function (wb) {   // landscape: size the board to the largest square that fits, match the eval bar to it
-    if (!wb || !wb.classList.contains('land')) return;   // portrait is sized by CSS
+    if (!wb) return;
+    const mv = wb.querySelector('.wb-moves'); if (mv) mv.scrollTop = mv.scrollHeight;   // keep the latest move in view
+    if (!wb.classList.contains('land')) return;   // portrait is sized by CSS
     const bwrap = wb.querySelector('.wb-bwrap'), board = wb.querySelector('.wb-board'), bar = wb.querySelector('.wb-bar');
     if (!bwrap || !board) return;
     const s = Math.min(bwrap.clientWidth, bwrap.clientHeight) | 0;
