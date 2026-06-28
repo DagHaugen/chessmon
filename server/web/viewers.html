@@ -76,15 +76,15 @@
   .cdone{font-size:14px;font-weight:700;color:var(--ink);padding:5px 0 1px}
   .rbanner{text-align:center;font-weight:800;font-size:15px;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
   .pl.win{box-shadow:0 0 0 2px var(--good) inset}
-  @media(max-width:720px),(max-height:520px){     /* phone in either orientation (portrait = narrow, landscape = short) */
-    body.watching .top{display:none}              /* mobile watch -> fill the screen with the game */
-    body.watching .wrap{padding:0}
-    .watch.on{height:100vh;height:100dvh;gap:6px}
-    body.watching .whead{display:none}             /* hidden by default; tap the game to reveal */
-    body.chrome .whead{display:flex;position:fixed;top:8px;left:8px;z-index:20;margin:0}
-    body.chrome .back{background:rgba(20,22,28,.62);color:#fff;border-color:rgba(255,255,255,.25)}
-    #qrwatch{display:none}                          /* already on a phone */
-  }
+  /* immersive "fill the screen with just the game" view -- driven by body.kiosk (set in JS when the QR
+     passed ?kiosk=1, OR the viewport is phone-sized), so a high-res tablet opened from the QR gets it too */
+  body.kiosk.watching .top{display:none}
+  body.kiosk.watching .wrap{padding:0}
+  body.kiosk .watch.on{height:100vh;height:100dvh;gap:6px}
+  body.kiosk.watching .whead{display:none}          /* hidden by default; tap the game to reveal */
+  body.kiosk.chrome .whead{display:flex;position:fixed;top:8px;left:8px;z-index:20;margin:0}
+  body.kiosk.chrome .back{background:rgba(20,22,28,.62);color:#fff;border-color:rgba(255,255,255,.25)}
+  body.kiosk #qrwatch{display:none}                 /* already on this device */
   /* QR -- "watch on a phone" */
   .qrbtn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:6px;cursor:pointer;line-height:0}
   .qrbtn:hover{border-color:var(--accent);color:var(--ink)}
@@ -139,7 +139,9 @@ window.name='cm_viewers';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 const QR_SVG='<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M4 4h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="2.6" height="2.6"/><rect x="17.4" y="14" width="2.6" height="2.6"/><rect x="14" y="17.4" width="2.6" height="2.6"/><rect x="17.4" y="17.4" width="2.6" height="2.6"/></svg>';
 let ws, broadcastOff=false, games={}, order=[], watchTok=null, wbEl=null;
-let _autoT=new URLSearchParams(location.search).get('t');   // ?t=<token> -> auto-open that game (from a scanned QR)
+const _params=new URLSearchParams(location.search);
+let _autoT=_params.get('t');           // ?t=<token> -> auto-open that game (from a scanned QR)
+const kioskFlag=_params.has('kiosk');   // ?kiosk=1 (set by the QR) -> immersive view regardless of resolution
 let lanIp=null;   // the server's LAN IP (from the 'net' message) -> the QR links to it, not localhost
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function reportWatch(){send({type:'watch',table:watchTok});}   // tell the server which game (if any) this page is showing
@@ -194,7 +196,7 @@ function render(){
   if(!order.length){L.innerHTML='';E.style.display='';E.textContent='No games in progress right now.';return;}
   E.style.display='none';L.innerHTML='';
   order.forEach(tok=>{const g=games[tok],t=g.t,nm=names(t),fin=!!t.result;
-    const card=document.createElement('div');card.className='card'+(fin?' fin':'');card.onclick=()=>{watchTok=tok;reportWatch();render();};
+    const card=document.createElement('div');card.className='card'+(fin?' fin':'');card.onclick=()=>{watchTok=tok;reportWatch();render();if(document.body.classList.contains('kiosk'))goFullscreen();};   // opening a game on a kiosk device -> fullscreen (this tap is the required gesture)
     card.innerHTML='<div class="crow"><div class="cnames">'+esc(nm[0])+' – '+esc(nm[1])+'</div>'+
       '<button class="qrbtn cardqr" title="Watch on a phone" aria-label="Watch on a phone">'+QR_SVG+'</button></div>'+
       '<div class="cmeta">'+esc(t.name||'table')+' · '+t.moves+' move'+(t.moves===1?'':'s')+
@@ -239,7 +241,7 @@ function sq(grid,r,f,piece){const d=document.createElement('div');d.className='s
 $('back').onclick=()=>{watchTok=null;reportWatch();render();};
 function qrBase(){return lanIp?(location.protocol+'//'+lanIp+(location.port?':'+location.port:'')):location.origin;}   // the LAN IP from the server, not localhost
 function showQR(tok){const g=tok&&games[tok];
-  const url=qrBase()+location.pathname+(tok?'?t='+encodeURIComponent(tok):'');
+  const url=qrBase()+location.pathname+'?kiosk=1'+(tok?'&t='+encodeURIComponent(tok):'');   // ?kiosk=1 -> the scanned device gets the immersive view + auto-fullscreen
   $('qrtitle').textContent=g?names(g.t).join(' – '):'Watch live games';
   $('qrcode').innerHTML='';
   if(typeof QRCode!=='undefined')new QRCode($('qrcode'),{text:url,width:212,height:212});
@@ -251,7 +253,7 @@ $('qrwatch').onclick=()=>showQR(watchTok);
 $('qrclose').onclick=hideQR;
 $('qrmodal').onclick=e=>{if(e.target===$('qrmodal'))hideQR();};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')hideQR();});
-$('watch').addEventListener('click',e=>{if((window.innerWidth<=720||window.innerHeight<=520)&&watchTok&&!e.target.closest('.whead'))document.body.classList.toggle('chrome');});   // phone (either orientation): tap the game to show/hide the back row
+$('watch').addEventListener('click',e=>{if(document.body.classList.contains('kiosk')&&watchTok&&!e.target.closest('.whead'))document.body.classList.toggle('chrome');});   // immersive view: tap the game to show/hide the back row
 function toggleFS(){const d=document.documentElement;
   if(!document.fullscreenElement&&!document.webkitFullscreenElement){(d.requestFullscreen||d.webkitRequestFullscreen||function(){}).call(d);}
   else{(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);}}
@@ -262,9 +264,11 @@ setInterval(()=>{
     const ew=document.querySelector('[data-c="'+tok+'-w"]'),eb=document.querySelector('[data-c="'+tok+'-b"]');
     if(ew)ew.textContent=fmtClk(live(g,'w'));if(eb)eb.textContent=fmtClk(live(g,'b'));});}
 },500);
-let _land=window.innerWidth>720;window.addEventListener('resize',()=>{const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);});   // re-orient on a land<->port crossing; else re-fit the board
+function updateKiosk(){document.body.classList.toggle('kiosk', kioskFlag||window.innerWidth<=720||window.innerHeight<=520);}   // immersive view: forced by the QR's ?kiosk=1, else by a phone-sized viewport
+function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen||e.webkitRequestFullscreen;if(!fn)return;try{const r=fn.call(e);if(r&&r.catch)r.catch(()=>{});}catch(_){}}   // iPad/Android/desktop support it; no-op on iPhone (Apple blocks page fullscreen there)
+let _land=window.innerWidth>720;window.addEventListener('resize',()=>{updateKiosk();const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);});   // re-orient on a land<->port crossing; else re-fit the board
 if(window.ResizeObserver)new ResizeObserver(()=>{if(wbEl)cmFit(wbEl);}).observe($('wbhost'));   // re-fit once the area SETTLES (phone rotation / URL bar) -- fires after layout, so the board can't keep a transient over-size
-connect();
+updateKiosk();connect();
 </script>
 </body>
 </html>
