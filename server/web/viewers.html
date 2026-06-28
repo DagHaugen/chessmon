@@ -24,6 +24,9 @@
   .card:hover{border-color:var(--accent)}
   .cnames{font-weight:700;font-size:15px;margin-bottom:3px}
   .cmeta{color:var(--mut);font-size:12px;margin-bottom:10px}
+  .crow{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+  .crow .cnames{flex:1;min-width:0;margin-bottom:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cardqr{flex:none}
   .gstat{font-size:11px;font-weight:700;color:var(--cam);margin-left:6px}
   .cclocks{display:flex;gap:8px}
   .cc{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;text-align:center;font-variant-numeric:tabular-nums}
@@ -70,14 +73,13 @@
   .rbanner{text-align:center;font-weight:800;font-size:15px;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
   .pl.win{box-shadow:0 0 0 2px var(--good) inset}
   @media(max-width:720px){
-    .watch.on{grid-template-columns:1fr}
-    .side{width:100%;max-width:560px;margin:0 auto;height:auto;display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"black white" "mid mid";gap:10px}
-    #plTop{grid-area:black;min-width:0}
-    #plBot{grid-area:white;min-width:0}
-    .pl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .mid{grid-area:mid;flex-direction:row;align-items:flex-start}
-    .mid .moves,.mid .sug{flex:1;min-width:0}
-    .mid .moves{max-height:none}
+    body.watching .top{display:none}              /* mobile watch -> fill the screen with the game */
+    body.watching .wrap{padding:0}
+    .watch.on{height:100vh;height:100dvh;gap:6px}
+    body.watching .whead{display:none}             /* hidden by default; tap the game to reveal */
+    body.chrome .whead{display:flex;position:fixed;top:8px;left:8px;z-index:20;margin:0}
+    body.chrome .back{background:rgba(20,22,28,.62);color:#fff;border-color:rgba(255,255,255,.25)}
+    #qrwatch{display:none}                          /* already on a phone */
   }
   /* QR -- "watch on a phone" */
   .qrbtn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:6px;cursor:pointer;line-height:0}
@@ -130,6 +132,7 @@
 function $(id){return document.getElementById(id)}
 window.name='cm_viewers';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
+const QR_SVG='<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M4 4h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="2.6" height="2.6"/><rect x="17.4" y="14" width="2.6" height="2.6"/><rect x="14" y="17.4" width="2.6" height="2.6"/><rect x="17.4" y="17.4" width="2.6" height="2.6"/></svg>';
 let ws, broadcastOff=false, games={}, order=[], watchTok=null, wbEl=null;
 let _autoT=new URLSearchParams(location.search).get('t');   // ?t=<token> -> auto-open that game (from a scanned QR)
 let lanIp=null;   // the server's LAN IP (from the 'net' message) -> the QR links to it, not localhost
@@ -176,7 +179,10 @@ function settled(t){if(!t||!t.result)return '';
   return how?who+' '+how:who;}
 function render(){
   const lob=$('lobby'),wat=$('watch');
-  if(watchTok&&games[watchTok]){lob.style.display='none';wat.classList.add('on');renderWatch();return;}
+  const watching=!!(watchTok&&games[watchTok]);
+  document.body.classList.toggle('watching',watching);   // mobile: fill the screen with the game
+  if(watching){lob.style.display='none';wat.classList.add('on');renderWatch();return;}
+  document.body.classList.remove('chrome');              // reset the tap-to-reveal back button in the lobby
   wat.classList.remove('on');lob.style.display='';
   const L=$('list'),E=$('lobempty');
   if(broadcastOff){L.innerHTML='';E.style.display='';E.textContent='Local broadcasting is off. Ask the organiser to enable it on the Setup page.';return;}
@@ -184,12 +190,14 @@ function render(){
   E.style.display='none';L.innerHTML='';
   order.forEach(tok=>{const g=games[tok],t=g.t,nm=names(t),fin=!!t.result;
     const card=document.createElement('div');card.className='card'+(fin?' fin':'');card.onclick=()=>{watchTok=tok;reportWatch();render();};
-    card.innerHTML='<div class="cnames">'+esc(nm[0])+' – '+esc(nm[1])+'</div>'+
+    card.innerHTML='<div class="crow"><div class="cnames">'+esc(nm[0])+' – '+esc(nm[1])+'</div>'+
+      '<button class="qrbtn cardqr" title="Watch on a phone" aria-label="Watch on a phone">'+QR_SVG+'</button></div>'+
       '<div class="cmeta">'+esc(t.name||'table')+' · '+t.moves+' move'+(t.moves===1?'':'s')+
         (fin?'<span class="gstat done">FINISHED</span>':(t.status==='paused'?'<span class="gstat">⏸ PAUSED</span>':''))+'</div>'+
       (fin?'<div class="cdone">'+esc(settled(t))+'</div>'
          :'<div class="cclocks"><div class="cc'+(g.turn==='w'&&g.running?' run':'')+'"><div class="who">White</div><div class="tt" data-c="'+tok+'-w">'+fmtClk(live(g,'w'))+'</div></div>'+
           '<div class="cc'+(g.turn==='b'&&g.running?' run':'')+'"><div class="who">Black</div><div class="tt" data-c="'+tok+'-b">'+fmtClk(live(g,'b'))+'</div></div></div>');
+    card.querySelector('.cardqr').onclick=e=>{e.stopPropagation();showQR(tok);};   // QR per tile, doesn't open the watch view
     L.append(card);});
 }
 function renderWatch(){const g=games[watchTok];if(!g)return;
@@ -238,6 +246,7 @@ $('qrwatch').onclick=()=>showQR(watchTok);
 $('qrclose').onclick=hideQR;
 $('qrmodal').onclick=e=>{if(e.target===$('qrmodal'))hideQR();};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')hideQR();});
+$('watch').addEventListener('click',e=>{if(window.innerWidth<=720&&watchTok&&!e.target.closest('.whead'))document.body.classList.toggle('chrome');});   // mobile: tap the game to show/hide the back button
 setInterval(()=>{
   if(watchTok&&games[watchTok]){if(wbEl)cmTickBoard(wbEl,games[watchTok]);}
   else{order.forEach(tok=>{const g=games[tok];if(!g)return;
