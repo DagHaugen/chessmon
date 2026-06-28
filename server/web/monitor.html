@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#15171c">
+<meta name="theme-color" content="#23272f">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>monitor · chessmon</title>
 <style>
-  :root{--bg:#15171c;--panel:#1d2026;--line:#2c313b;--ink:#e8eaed;--mut:#9aa3b2;--accent:#4f8cff;--good:#3ecf8e;--lt:#ebecd0;--dk:#6f8f5f}
+  :root{--bg:#23272f;--panel:#2b3039;--line:#3a414e;--ink:#e8eaed;--mut:#9aa3b2;--accent:#4f8cff;--good:#3ecf8e;--lt:#ebecd0;--dk:#6f8f5f}
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden}
@@ -25,10 +25,13 @@
   .stage.quad{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
   .empty{display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:15px;text-align:center}
   .tile{display:flex;flex-direction:column;gap:5px;min-height:0;min-width:0}
-  .pl{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none}
+  .pl{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none;padding:5px 10px;border-radius:8px;border:1px solid var(--line)}
+  .pl.black{background:#0c0d11;color:#eef1f5;border-color:#000}
+  .pl.white{background:#eceef2;color:#1a1d24;border-color:#cfd4dc}
   .pl .nm{font-weight:700;font-size:clamp(12px,2.1vh,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .pl .ck{font-size:clamp(15px,3vh,30px);font-weight:800;font-variant-numeric:tabular-nums;color:var(--mut)}
+  .pl .ck{font-size:clamp(15px,3vh,30px);font-weight:800;font-variant-numeric:tabular-nums}
   .pl.act .ck{color:var(--good)}
+  .pl.white.act .ck{color:#178a52}
   .bwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
   .board{height:100%;width:auto;aspect-ratio:1;max-width:100%;max-height:100%;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
   .sq{display:flex;align-items:center;justify-content:center}
@@ -38,7 +41,7 @@
   .sgs{display:flex;align-items:center;gap:8px;flex:none;font-size:clamp(11px,1.8vh,16px)}
   .sgs .sgmv{font-weight:700;color:var(--accent);white-space:nowrap}
   .sgs .wdl{flex:1;display:flex;height:8px;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
-  .sgs .ww{background:#e9edf2}.sgs .wd{background:#6b7280}.sgs .wb{background:#262b36}
+  .sgs .ww{background:#e9edf2}.sgs .wd{background:#6b7280}.sgs .wb{background:#0c0d11}
 </style>
 </head>
 <body>
@@ -104,12 +107,12 @@ function renderStage(){const S=$('stage');S.className='stage '+layout;S.innerHTM
   show.forEach(tok=>{const g=games[tok];if(g)S.append(tile(g));});}
 function tile(g){const t=g.t,nm=names(t);
   const el=document.createElement('div');el.className='tile';
-  const top=document.createElement('div');top.className='pl'+(g.turn==='b'?' act':'');
+  const top=document.createElement('div');top.className='pl black'+(g.turn==='b'?' act':'');
   top.innerHTML='<span class="nm">'+esc(nm[1])+'</span><span class="ck" data-tok="'+esc(t.token)+'" data-side="b">'+fmtClk(live(g,'b'))+'</span>';
   const bw=document.createElement('div');bw.className='bwrap';const bd=document.createElement('div');bd.className='board';renderBoard(bd,t.fen);bw.append(bd);
-  const bot=document.createElement('div');bot.className='pl'+(g.turn==='w'?' act':'');
+  const bot=document.createElement('div');bot.className='pl white'+(g.turn==='w'?' act':'');
   bot.innerHTML='<span class="nm">'+esc(nm[0])+'</span><span class="ck" data-tok="'+esc(t.token)+'" data-side="w">'+fmtClk(live(g,'w'))+'</span>';
-  el.append(top,bw,bot);if(g.sug)el.append(sugStrip(g.sug));return el;}
+  el.append(top);if(g.sug)el.append(sugStrip(g.sug));el.append(bw,bot);return el;}
 function sugStrip(s){const d=document.createElement('div');d.className='sgs';
   const w=s.wdl_white,best=(s.moves&&s.moves[0])?s.moves[0].san:'–';let bar='';
   if(w){const t=(w[0]+w[1]+w[2])||1;
