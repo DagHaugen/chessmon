@@ -13,12 +13,13 @@
     return '<div class="wb-wdl"><span class="ww" style="width:'+(w[0]/t*100)+'%"></span><span class="wd" style="width:'+(w[1]/t*100)+'%"></span><span class="wb2" style="width:'+(w[2]/t*100)+'%"></span></div>'
          +'<div class="wb-wdlk"><span>White '+pctOf(w,0)+'%</span><span>Draw '+pctOf(w,1)+'%</span><span>Black '+pctOf(w,2)+'%</span></div>';}
   function pieceGlyph(san){const c=(san[0]==='O')?'k':(('KQRBN'.includes(san[0])?san[0]:'P').toLowerCase());return G[c]||'';}
+  function pieceImg(san,turn){const p=(san[0]==='O')?'K':('KQRBN'.includes(san[0])?san[0]:'P'),c=(turn==='b')?'b':'w';return '<img class="pcg'+(c==='b'?' chip':'')+'" src="pieces/'+c+p+'.svg" alt="">';}   // SVG piece in the side-to-move colour (the Unicode glyph was unreadable on iOS); black pieces get a light chip so they don't vanish into the dark panel
   function moveColor(m){if(m.mate!=null)return m.mate>0?'#2fe08a':'#ff5a5a';const cp=m.cp;if(cp==null)return 'var(--mut)';if(cp>=150)return '#2fe08a';if(cp>=40)return '#82c4a0';if(cp>-40)return 'var(--mut)';if(cp>-150)return '#d39090';return '#ff5a5a';}
-  function moveTable(moves){moves=moves||[];let rows='';
+  function moveTable(moves,turn){moves=moves||[];let rows='';
     for(let i=0;i<3;i++){const m=moves[i];
       if(m){const w=m.wdl||[0,0,0],c=moveColor(m);
-        rows+='<tr><td class="mc" style="color:'+c+'"><span class="pcg">'+pieceGlyph(m.san)+'</span>'+esc(m.san)+'</td><td>'+pctOf(w,0)+'%</td><td>'+pctOf(w,1)+'%</td><td>'+pctOf(w,2)+'%</td></tr>';}
-      else rows+='<tr class="wb-empty"><td class="mc"><span class="pcg">&nbsp;</span></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';}   // always 3 rows -> fixed height while Stockfish thinks
+        rows+='<tr><td class="mc" style="color:'+c+'">'+pieceImg(m.san,turn)+esc(m.san)+'</td><td>'+pctOf(w,0)+'%</td><td>'+pctOf(w,1)+'%</td><td>'+pctOf(w,2)+'%</td></tr>';}
+      else rows+='<tr class="wb-empty"><td class="mc"><span class="pcg"></span></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';}   // always 3 rows -> fixed height while Stockfish thinks
     return '<div class="wb-sgh">Stockfish suggestions</div><table class="wb-sgt"><thead><tr><th>Move</th><th>Win</th><th>Draw</th><th>Lose</th></tr></thead><tbody>'+rows+'</tbody></table>';}
   function settled(t){if(!t||!t.result)return '';const who=t.result==='1-0'?'White won':t.result==='0-1'?'Black won':'Draw';
     const how={checkmate:'by checkmate',stalemate:'by stalemate',insufficient_material:'insufficient material',threefold_repetition:'by repetition',fivefold_repetition:'by repetition',fifty_moves:'by the 50-move rule',seventyfive_moves:'by the 75-move rule',timeout:'on time',resignation:'by resignation',agreement:'by agreement'}[t.termination]||'';
@@ -39,7 +40,7 @@
     if(!g.sug)return '';                                   // suggestions off / none seen yet -> bar collapses
     const s=(g.sug.fen===t.fen)?g.sug:null;return posBar(s&&s.wdl_white?s.wdl_white:null);}   // eval bar or placeholder
   function sugInner(g,t,fin){if(fin||!g.sug)return null;   // null -> no suggestions area at all
-    const s=(g.sug.fen===t.fen)?g.sug:null;return moveTable(s?s.moves:[]);}   // fixed 3-row table (blank while waiting)
+    const s=(g.sug.fen===t.fen)?g.sug:null;return moveTable(s?s.moves:[],g.turn);}   // fixed 3-row table (blank while waiting)
 
   window.cmWatchBoard = function (g, orient) {
     const t=g.t,nm=names(t),fin=!!t.result;
