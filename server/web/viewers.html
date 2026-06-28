@@ -72,7 +72,7 @@
   .cdone{font-size:14px;font-weight:700;color:var(--ink);padding:5px 0 1px}
   .rbanner{text-align:center;font-weight:800;font-size:15px;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
   .pl.win{box-shadow:0 0 0 2px var(--good) inset}
-  @media(max-width:720px){
+  @media(max-width:720px),(max-height:520px){     /* phone in either orientation (portrait = narrow, landscape = short) */
     body.watching .top{display:none}              /* mobile watch -> fill the screen with the game */
     body.watching .wrap{padding:0}
     .watch.on{height:100vh;height:100dvh;gap:6px}
@@ -87,7 +87,7 @@
   #qrlobby{margin-left:auto}
   .whead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
   .whead .back{margin-bottom:0}
-  #qrwatch{margin-left:auto}
+  #fsbtn{margin-left:auto}
   .qrmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
   .qrmodal[hidden]{display:none}
   .qrbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:330px;width:100%;text-align:center}
@@ -112,6 +112,7 @@
   <div id="watch" class="watch">
     <div class="whead">
       <button class="back" id="back">&larr; all games</button>
+      <button class="qrbtn" id="fsbtn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
       <button class="qrbtn" id="qrwatch" title="Watch this game on a phone" aria-label="Watch this game on a phone"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M4 4h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="2.6" height="2.6"/><rect x="17.4" y="14" width="2.6" height="2.6"/><rect x="14" y="17.4" width="2.6" height="2.6"/><rect x="17.4" y="17.4" width="2.6" height="2.6"/></svg></button>
     </div>
     <div id="wbhost"></div>
@@ -246,7 +247,11 @@ $('qrwatch').onclick=()=>showQR(watchTok);
 $('qrclose').onclick=hideQR;
 $('qrmodal').onclick=e=>{if(e.target===$('qrmodal'))hideQR();};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')hideQR();});
-$('watch').addEventListener('click',e=>{if(window.innerWidth<=720&&watchTok&&!e.target.closest('.whead'))document.body.classList.toggle('chrome');});   // mobile: tap the game to show/hide the back button
+$('watch').addEventListener('click',e=>{if((window.innerWidth<=720||window.innerHeight<=520)&&watchTok&&!e.target.closest('.whead'))document.body.classList.toggle('chrome');});   // phone (either orientation): tap the game to show/hide the back row
+function toggleFS(){const d=document.documentElement;
+  if(!document.fullscreenElement&&!document.webkitFullscreenElement){(d.requestFullscreen||d.webkitRequestFullscreen||function(){}).call(d);}
+  else{(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);}}
+$('fsbtn').onclick=toggleFS;
 setInterval(()=>{
   if(watchTok&&games[watchTok]){if(wbEl)cmTickBoard(wbEl,games[watchTok]);}
   else{order.forEach(tok=>{const g=games[tok];if(!g)return;
