@@ -50,7 +50,7 @@
 .wb-moves{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;overflow:auto;
   font-size:clamp(11px,1.5vh,13px);line-height:1.6;flex:1;min-height:0}
 .wb.port .wb-moves{flex:1;min-width:0;max-height:none}
-.wb-moves .mvn{color:var(--mut);margin-right:5px}
+.wb-moves .mvn{display:inline-block;min-width:1.8em;text-align:right;color:var(--mut);margin-right:6px}   /* right-align the number so the moves line up */
 /* discrete scrollbar, thumb inset (transparent border) so it floats clear of the rounded corners */
 .wb-moves{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .wb-moves::-webkit-scrollbar{width:11px}
