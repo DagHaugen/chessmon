@@ -69,7 +69,11 @@
   .pl.win{box-shadow:0 0 0 2px var(--good) inset}
   @media(max-width:720px){
     .watch.on{grid-template-columns:1fr}
-    .mid{flex-direction:row;align-items:flex-start}
+    .side{width:100%;max-width:560px;margin:0 auto;height:auto;display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"black white" "mid mid";gap:10px}
+    #plTop{grid-area:black;min-width:0}
+    #plBot{grid-area:white;min-width:0}
+    .pl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mid{grid-area:mid;flex-direction:row;align-items:flex-start}
     .mid .moves,.mid .sug{flex:1;min-width:0}
     .mid .moves{max-height:none}
   }
