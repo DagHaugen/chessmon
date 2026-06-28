@@ -531,9 +531,9 @@ function connect(){
   ws.onmessage=e=>handle(JSON.parse(e.data));
 }
 let rtcRoom=null, addQRdone=false;                           // the club's unique signaling room arrives from the server (admin_state.rtc_room)
-function paintRoom(){                                         // room label (club name, else the cm- id) + the simplified share URL; re-rendered on every settings push
+function paintRoom(){                                         // room label (club/user name, blank if unset) + the simplified share URL; re-rendered on every settings push
   if(!rtcRoom)return;
-  const rv=$('rtcroomval'); if(rv)rv.textContent=(CMSET&&CMSET.room_name)?CMSET.room_name:('room '+rtcRoom);
+  const rv=$('rtcroomval'); if(rv)rv.textContent=(CMSET&&CMSET.room_name)?CMSET.room_name:'';
   const a=$('addurl'); if(a)a.textContent='comlos.com/chess?'+rtcRoom.replace(/^cm-/,'');   // -> redirects to /relay/app/?room=cm-...
 }
 function paintAddQR(){                                        // "Add a device" QR -> the device PWA on comlos.com (WebRTC) direct, painted once; bundle bakes in window.CM_RTC, so no ?rtc needed
