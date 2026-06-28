@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#15171c">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="stylesheet" href="watchboard.css">
 <title>live · chessmon</title>
 <style>
   :root{--bg:#23272f;--panel:#2b3039;--line:#3a414e;--ink:#e8eaed;--mut:#9aa3b2;
@@ -29,8 +30,9 @@
   .cc .who{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
   .cc .tt{font-size:17px;font-weight:700}
   .cc.run{border-color:var(--good)}
-  .watch{display:none;grid-template-columns:minmax(0,1fr) 250px;gap:18px;align-items:start}
-  .watch.on{display:grid}
+  .watch{display:none}
+  .watch.on{display:flex;flex-direction:column;gap:12px;height:calc(100vh - 100px)}
+  #wbhost{flex:1;min-height:0}
   .back{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:7px 13px;font-size:13px;cursor:pointer;margin-bottom:14px}
   .board{width:100%;max-width:560px;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:0 auto}
   .sq{display:flex;align-items:center;justify-content:center}
@@ -87,22 +89,16 @@
     <div id="lobempty" class="empty" style="display:none"></div>
   </div>
   <div id="watch" class="watch">
-    <div class="bcol"><button class="back" id="back">&larr; all games</button><div class="sugbar" id="sugbar"></div><div class="board" id="board"></div></div>
-    <div class="side">
-      <div class="pl black" id="plTop"><span class="nm"></span><span class="ck"></span></div>
-      <div class="mid">
-        <div class="moves" id="mv"></div>
-        <div class="sug" id="sug"></div>
-      </div>
-      <div class="pl white" id="plBot"><span class="nm"></span><span class="ck"></span></div>
-    </div>
+    <button class="back" id="back">&larr; all games</button>
+    <div id="wbhost"></div>
   </div>
 </div>
+<script src="watchboard.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
 window.name='cm_viewers';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
-let ws, broadcastOff=false, games={}, order=[], watchTok=null;
+let ws, broadcastOff=false, games={}, order=[], watchTok=null, wbEl=null;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function reportWatch(){send({type:'watch',table:watchTok});}   // tell the server which game (if any) this page is showing
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -160,24 +156,16 @@ function render(){
           '<div class="cc'+(g.turn==='b'&&g.running?' run':'')+'"><div class="who">Black</div><div class="tt" data-c="'+tok+'-b">'+fmtClk(live(g,'b'))+'</div></div></div>');
     L.append(card);});
 }
-function renderWatch(){const g=games[watchTok],t=g.t,nm=names(t),fin=!!t.result;
-  renderBoard($('board'),t.fen);
-  $('plTop').querySelector('.nm').textContent=nm[1];$('plTop').classList.toggle('act',!fin&&g.turn==='b');$('plTop').classList.toggle('win',t.result==='0-1');
-  $('plBot').querySelector('.nm').textContent=nm[0];$('plBot').classList.toggle('act',!fin&&g.turn==='w');$('plBot').classList.toggle('win',t.result==='1-0');
-  tickWatch(g);
-  const san=t.san||[];let h='';for(let i=0;i<san.length;i+=2)h+='<div><span class="mvn">'+(i/2+1)+'.</span>'+esc(san[i])+(san[i+1]?' '+esc(san[i+1]):'')+'</div>';
-  $('mv').innerHTML=h||'<span style="color:var(--mut)">no moves yet</span>';$('mv').scrollTop=$('mv').scrollHeight;
-  renderSug();syncSideHeight();
+function renderWatch(){const g=games[watchTok];if(!g)return;
+  wbEl=cmWatchBoard(g, window.innerWidth>720?'land':'port');   // the shared live board (identical to the monitor)
+  $('wbhost').replaceChildren(wbEl);
 }
 function syncSideHeight(){const board=document.querySelector('.board'),s=document.querySelector('.side');if(!s)return;
   if(window.innerWidth<=720||!board||!board.offsetHeight){s.style.height='';s.style.marginTop='';return;}   // stacked -> natural
   s.style.marginTop='0px';
   const off=board.getBoundingClientRect().top-s.getBoundingClientRect().top;   // align side to the board's top edge
   s.style.marginTop=Math.max(0,off)+'px';s.style.height=board.offsetHeight+'px';}
-function renderSug(){const g=watchTok&&games[watchTok],t=g&&g.t,s=(g&&g.sug&&g.sug.fen===(t&&t.fen))?g.sug:null;
-  if(t&&t.result){$('sugbar').innerHTML='<div class="rbanner">'+esc(settled(t))+'</div>';$('sug').innerHTML='';return;}
-  $('sugbar').innerHTML=(s&&s.wdl_white)?posBar(s.wdl_white):'';
-  $('sug').innerHTML=(s&&s.moves&&s.moves.length)?moveTable(s.moves):'';}
+function renderSug(){if(wbEl&&watchTok&&games[watchTok])cmUpdateSug(wbEl,games[watchTok]);}
 function pctOf(a,i){const t=(a[0]+a[1]+a[2])||1;return Math.round(a[i]/t*100);}
 function posBar(w){const t=(w[0]+w[1]+w[2])||1;
   return '<div class="wdl"><span class="ww" style="width:'+(w[0]/t*100)+'%"></span><span class="wd" style="width:'+(w[1]/t*100)+'%"></span><span class="wb" style="width:'+(w[2]/t*100)+'%"></span></div>'
@@ -200,12 +188,12 @@ function sq(grid,r,f,piece){const d=document.createElement('div');d.className='s
     i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
 $('back').onclick=()=>{watchTok=null;reportWatch();render();};
 setInterval(()=>{
-  if(watchTok&&games[watchTok]){tickWatch(games[watchTok]);}
+  if(watchTok&&games[watchTok]){if(wbEl)cmTickBoard(wbEl,games[watchTok]);}
   else{order.forEach(tok=>{const g=games[tok];if(!g)return;
     const ew=document.querySelector('[data-c="'+tok+'-w"]'),eb=document.querySelector('[data-c="'+tok+'-b"]');
     if(ew)ew.textContent=fmtClk(live(g,'w'));if(eb)eb.textContent=fmtClk(live(g,'b'));});}
 },500);
-if(window.ResizeObserver){const _b=document.querySelector('.bcol');if(_b)new ResizeObserver(()=>{if(watchTok)syncSideHeight();}).observe(_b);}
+let _land=window.innerWidth>720;window.addEventListener('resize',()=>{const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}});   // re-orient on a land<->port crossing
 connect();
 </script>
 </body>
