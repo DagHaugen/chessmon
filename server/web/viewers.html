@@ -75,7 +75,8 @@ function connect(){
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'})};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
     if(m.type==='tables'){broadcastOff=false;ingest(m.tables||[]);}
-    else if(m.type==='broadcast_off'){broadcastOff=true;render();setTimeout(()=>send({type:'viewer.join'}),5000);}};
+    else if(m.type==='broadcast_off'){broadcastOff=true;render();setTimeout(()=>send({type:'viewer.join'}),5000);}
+    else if(m.type==='clock.tick'){const g=games[m.table];if(g){g.w=m.white_ms;g.b=m.black_ms;g.turn=(m.active==='black')?'b':'w';g.running=!!m.running;g.syncAt=performance.now();}}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function baseMs(t){return t.match&&t.match.format?t.match.format.base_ms:null}

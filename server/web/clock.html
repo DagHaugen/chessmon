@@ -293,7 +293,7 @@ let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = 
 function applyRot(){$('board').className='board m'+rotMode}
 
 function $(id){return document.getElementById(id)}
-const CM_VER='1.15';   // BUMP on every clock.html change so the phone shows which build it actually loaded
+const CM_VER='1.16';   // BUMP on every clock.html change so the phone shows which build it actually loaded
 (function(){const v=()=>document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;left:5px;bottom:3px;font:10px monospace;color:#999;opacity:.55;z-index:99999;pointer-events:none">v'+CM_VER+'</div>');document.body?v():addEventListener('DOMContentLoaded',v)})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
@@ -330,6 +330,8 @@ function renderClocks(){
 setInterval(()=>{const now=Date.now();
   if(clk.running&&!PREVIEW){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
   clk.last=now;renderClocks()},100);
+setInterval(()=>{if(!PREVIEW&&(phase==='run'||phase==='paused'))   // push the live clock to viewers once a second (the server relays + caches it)
+  send({type:'clock.tick',white_ms:Math.round(clk.white),black_ms:Math.round(clk.black),active:clk.active,running:clk.running})},1000);
 function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');gameResult=winner==='white'?'1-0':'0-1';$('report').className='report over';
   $('report').textContent=(winner[0].toUpperCase()+winner.slice(1))+' wins on time';paint();

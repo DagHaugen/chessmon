@@ -65,6 +65,7 @@ mgr = SessionManager()
 mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a restart
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
 cam_status: dict = {}              # table_token -> last camera.status payload (flash/screen/zoom) so a console (re)join restores it
+clock_state: dict = {}             # table_token -> last clock.tick (live white/black/active/running) so viewers mirror the device clock
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
 viewers: set = set()               # local-network viewers.html pages; fed the live tables while broadcast_local is on
@@ -624,8 +625,12 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, st)
             elif t == "viewer.join":                              # a local-network viewers.html page
                 viewers.add(ws)
-                await send(ws, {"type": "tables", "tables": tables_public()} if settings.get("broadcast_local")
-                           else {"type": "broadcast_off"})
+                if settings.get("broadcast_local"):
+                    await send(ws, {"type": "tables", "tables": tables_public()})
+                    for cs in clock_state.values():               # mirror the live device clocks right away
+                        await send(ws, cs)
+                else:
+                    await send(ws, {"type": "broadcast_off"})
             elif t == "device.rename":                            # console (or the device itself) set a user-defined name
                 d = devices.get(data.get("devId"))
                 if d is not None:
@@ -927,6 +932,15 @@ async def ws_endpoint(ws: WebSocket):
                 await send(hub(s.table_token)["camera"], verdict)
                 if verdict.get("type") == "session.baselined":
                     await broadcast_state(s)
+            elif t == "clock.tick":                               # clock -> live clock state; cache it + relay to local viewers
+                if s is not None:
+                    msg = {"type": "clock.tick", "table": s.table_token,
+                           "white_ms": data.get("white_ms"), "black_ms": data.get("black_ms"),
+                           "active": data.get("active"), "running": bool(data.get("running"))}
+                    clock_state[s.table_token] = msg
+                    if settings.get("broadcast_local"):
+                        for v in list(viewers):
+                            await send(v, msg)
             elif t == "move.confirm":
                 s.confirm(data["side"], data.get("clockWhite"), data.get("clockBlack"))
                 await send(hub(s.table_token)["camera"], {"type": "capture.req"})

@@ -367,10 +367,13 @@ function renderRunning(){
       const bd=document.createElement('div');bd.className='gboard';renderGBoard(bd,t.fen);
       const mv=document.createElement('div');mv.className='gmoves';renderGMoves(mv,t.san||[],t.result);
       const cam=document.createElement('div');cam.className='gcam';cam.title='Camera view — tap to refresh';cam.onclick=()=>reqCam(t.token);
-      const img=document.createElement('img');img.alt='';img.draggable=false;img.setAttribute('data-t',t.token);
+      let img=camImgs[t.token];                                  // reuse the preview <img> across re-renders -> no reload on a pause/status push
+      if(!img){img=document.createElement('img');img.alt='';img.draggable=false;img.setAttribute('data-t',t.token);camImgs[t.token]=img;}
       const ph=document.createElement('div');ph.className='ph';ph.textContent=(camDev&&camDev.online)?'loading camera…':'camera offline';cam.append(img,ph);
       gv.append(bd,mv,cam);row.append(gv);
-      if(camFrames[t.token]){const cf=camFrames[t.token];ph.remove();img.onload=()=>warpCam(img,cf.corners,cf.t);img.src=cf.image;}
+      if(camFrames[t.token]){const cf=camFrames[t.token];ph.remove();
+        if(img.getAttribute('src')!==cf.image){img.onload=()=>warpCam(img,cf.corners,cf.t);img.src=cf.image;}   // (re)load only when the frame actually changed
+        else warpCam(img,cf.corners,cf.t);}                       // same frame already shown -> just re-fit, no reload
       if(camMoves[t.token]!==t.moves){camMoves[t.token]=t.moves;reqCam(t.token);}}   // auto-refresh the camera board when a move lands (or on first open)
     L.appendChild(row);
   });
@@ -386,6 +389,7 @@ function paintCtl(btn,what,cs){   // repaint one flash/screen control in place (
     btn.title=cs.flashNote?('Flashlight: '+cs.flashNote):'Toggle the camera flashlight';}
   else{btn.className='mini ctl'+(cs.screen?' on':'');btn.textContent='Screen: '+(cs.screen?'on':'off');}}
 const expanded=new Set();                                  // running-game tokens the operator has expanded to a live board
+const camImgs={};                                          // token -> the preview <img>, reused across re-renders so a status push (e.g. pause) doesn't reload it
 const GLYPH={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};   // fallback if a piece SVG is missing
 function mkGSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
   if(ch){const i=document.createElement('img');i.className='pc';i.alt=ch;
