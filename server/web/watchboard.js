@@ -68,6 +68,7 @@
     if (s <= 0) return;
     board.style.width = board.style.height = s + 'px';
     if (bar) { bar.style.width = s + 'px'; bar.style.marginLeft = 'auto'; bar.style.marginRight = 'auto'; }
+    const side = wb.querySelector('.wb-side'); if (side) side.style.height = s + 'px';   // info column matches the board height -> white sits at the board's bottom edge
   };
   window.cmTickBoard = function (el, g) {
     el.querySelectorAll('.wb-pl .ck').forEach(c => { c.textContent = fmtClk(live(g, c.dataset.side)); });

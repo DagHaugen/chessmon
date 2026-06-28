@@ -33,7 +33,7 @@
 
 /* side: clock-style panels + moves + suggestions */
 .wb-side{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;justify-content:space-between}
-.wb.land .wb-side{grid-area:side}
+.wb.land .wb-side{grid-area:side;align-self:start}   /* top-aligned + height set by cmFit, so it spans exactly the board */
 .wb.port .wb-side{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"white black" "mid mid";grid-template-rows:auto minmax(0,1fr);gap:8px;justify-content:initial;flex:1}
 .wb-pl{border:1px solid var(--line);border-radius:10px;padding:6px 11px;display:flex;justify-content:space-between;align-items:center;flex:none;min-width:0;gap:8px}
 .wb-pl.black{background:#0c0d11;color:#eef1f5;border-color:#000}
