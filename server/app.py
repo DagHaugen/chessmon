@@ -255,15 +255,33 @@ def dev_public(d):
     return {k: d.get(k) for k in ("id", "name", "userName", "role", "table", "online", "screen", "cam", "plat", "battery")}
 
 
+def _magnus_squares(board):
+    """Where the two queenside ('b-file') knights are now -- replay the move stack from b1/b8, so 'Magnus
+    mode' can keep just those knights mirrored as they roam. Returns square names; a captured one drops out."""
+    wm, bm = chess.B1, chess.B8
+    for mv in board.move_stack:
+        if mv.to_square == wm:
+            wm = None
+        elif mv.to_square == bm:
+            bm = None
+        if mv.from_square == wm:
+            wm = mv.to_square
+        elif mv.from_square == bm:
+            bm = mv.to_square
+    return [chess.square_name(sq) for sq in (wm, bm) if sq is not None]
+
+
 def tables_public():
     """The configured tables (each persists its unit assignments + name + calibration)."""
+    mag = settings.get("magnus_mode")
     return [{"token": s.table_token, "name": s.name, "clock": s.clock_dev, "camera": s.camera_dev,
              "calibrated": s.board_reader is not None, "moved": getattr(s, "alignment_alert", False), "moves": len(s.moves),
              "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(), "match": getattr(s, "match", None),   # live board + match for the console
              "clock_white": (s.moves[-1].get("clock_white") if s.moves else None),   # last reported clocks -> viewers tick locally
              "clock_black": (s.moves[-1].get("clock_black") if s.moves else None),
              "started_at": s.started_at, "result": s.result, "termination": getattr(s, "termination", None),
-             "status": getattr(s, "status", "")}
+             "status": getattr(s, "status", ""),
+             "magnus": _magnus_squares(s.game.board) if mag else None}
             for s in mgr._by_table.values()]
 
 
@@ -513,7 +531,8 @@ DEFAULT_SETTINGS = {"time_format": "24h",   # "12h" -> "04:54 PM"          | "24
                     "date_format": "iso",   # "iso" -> "2026-06-27 13:11"  | "long" -> "Jun 27 01:11 PM"
                     "room_name": "",         # friendly club/room name -> shown in admin instead of the cm- room id
                     "show_suggested_moves": False,
-                    "broadcast_local": False, "broadcast_web": False}
+                    "broadcast_local": False, "broadcast_web": False,
+                    "magnus_mode": False}                # easter egg -- mirror the queenside knights
 
 
 def is_stockfish_installed():
@@ -828,7 +847,7 @@ async def ws_endpoint(ws: WebSocket):
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
             elif t == "settings.update":                          # console changed a global pref (time/date format, suggested-moves, broadcast)
-                for k in ("time_format", "date_format", "room_name", "show_suggested_moves", "broadcast_local", "broadcast_web"):
+                for k in ("time_format", "date_format", "room_name", "show_suggested_moves", "broadcast_local", "broadcast_web", "magnus_mode"):
                     if k in data:
                         settings[k] = data[k]
                 settings["room_name"] = str(settings.get("room_name") or "").strip()[:60]   # keep the club name tidy
@@ -846,6 +865,10 @@ async def ws_endpoint(ws: WebSocket):
                         _analyzed.clear()
                         for v in list(viewers):
                             await send(v, {"type": "suggest_off"})
+                if "magnus_mode" in data and settings.get("broadcast_local"):   # toggled -> re-render the live boards with/without the knight flip
+                    push = {"type": "tables", "tables": tables_public()}
+                    for v in list(viewers):
+                        await send(v, push)
             elif t == "stockfish.install":                        # console "Get Stockfish" -> the server fetches the engine
                 await send(ws, {"type": "stockfish.status", "state": "downloading"})
                 ok, msg = await asyncio.to_thread(download_stockfish)

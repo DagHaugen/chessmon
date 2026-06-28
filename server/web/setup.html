@@ -84,6 +84,7 @@
       <small>Anyone on this Wi‑Fi can watch the live games on the viewers page.</small></label>
     <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_bc_web"> Broadcast to the web
       <small id="bc_web_note">Relays games to chessmon‑cloud for public viewing.</small></label>
+    <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_magnus"> Magnus mode</label>
   </div>
   <p class="lead">Assign two players and a time control to each table. Names and the clock then follow on the table's clock.</p>
   <div id="list"></div>
@@ -190,6 +191,7 @@ function applySettings(s){if(!s)return;
   $('set_time').value=s.time_format||'24h'; $('set_date').value=s.date_format||'iso';
   $('set_suggest').checked=!!s.show_suggested_moves;
   $('set_bc_local').checked=!!s.broadcast_local; $('set_bc_web').checked=!!s.broadcast_web;
+  $('set_magnus').checked=!!s.magnus_mode;
   const cloud=!!s.cloud_configured; $('set_bc_web').disabled=!cloud;
   $('bc_web_note').textContent=cloud?'Relays games to chessmon‑cloud for public viewing.':'Set up chessmon‑cloud (cloud.json) first to enable web broadcast.';
   const inst=!!s.stockfish_installed;
@@ -202,6 +204,7 @@ $('set_suggest').onchange=()=>send({type:'settings.update',show_suggested_moves:
 $('set_bc_local').onchange=()=>send({type:'settings.update',broadcast_local:$('set_bc_local').checked});
 $('set_bc_web').onchange=()=>send({type:'settings.update',broadcast_web:$('set_bc_web').checked});
 $('set_room').onchange=()=>send({type:'settings.update',room_name:$('set_room').value.trim()});
+$('set_magnus').onchange=()=>send({type:'settings.update',magnus_mode:$('set_magnus').checked});
 $('sf_dl').onclick=()=>{send({type:'stockfish.install'});$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';$('sf_stat').textContent='fetching the latest Windows build…';$('sf_stat').className='sfstat';};
 function onSfStatus(m){
   if(m.state==='downloading'){$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';return;}

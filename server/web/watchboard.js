@@ -24,12 +24,13 @@
   function settled(t){if(!t||!t.result)return '';const who=t.result==='1-0'?'White won':t.result==='0-1'?'Black won':'Draw';
     const how={checkmate:'by checkmate',stalemate:'by stalemate',insufficient_material:'insufficient material',threefold_repetition:'by repetition',fivefold_repetition:'by repetition',fifty_moves:'by the 50-move rule',seventyfive_moves:'by the 75-move rule',timeout:'on time',resignation:'by resignation',agreement:'by agreement'}[t.termination]||'';
     return how?who+' '+how:who;}
-  function sq(grid,r,f,piece){const d=document.createElement('div');d.className='wb-sq '+((r+f)%2?'d':'l');
-    if(piece){const i=document.createElement('img');i.alt=piece;
-      i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
+  function sq(grid,r,f,piece,flip){const d=document.createElement('div');d.className='wb-sq '+((r+f)%2?'d':'l');
+    if(piece){const i=document.createElement('img');i.alt=piece;if(flip)i.style.transform='scaleX(-1)';   // Magnus mode: the queenside knight stays mirrored
+      i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';if(flip){sp.style.display='inline-block';sp.style.transform='scaleX(-1)';}d.append(sp);};
       i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
-  function renderBoard(grid,fen){grid.innerHTML='';const place=(fen||'8/8/8/8/8/8/8/8').split(' ')[0];
-    place.split('/').forEach((row,r)=>{let f=0;for(const ch of row){if(ch>='1'&&ch<='8'){for(let k=0;k<+ch;k++){sq(grid,r,f);f++;}}else{sq(grid,r,f,ch);f++;}}});}
+  function renderBoard(grid,fen,magnus){grid.innerHTML='';const place=(fen||'8/8/8/8/8/8/8/8').split(' ')[0];
+    const flips=(magnus&&magnus.length)?new Set(magnus):null;   // Magnus mode: square names of the queenside knights to mirror
+    place.split('/').forEach((row,r)=>{let f=0;for(const ch of row){if(ch>='1'&&ch<='8'){for(let k=0;k<+ch;k++){sq(grid,r,f);f++;}}else{sq(grid,r,f,ch,flips&&(ch==='N'||ch==='n')&&flips.has(String.fromCharCode(97+f)+(8-r)));f++;}}});}
   function movesHtml(t){const san=t.san||[];let h='';for(let i=0;i<san.length;i+=2)h+='<div><span class="mvn">'+(i/2+1)+'.</span>'+esc(san[i])+(san[i+1]?' '+esc(san[i+1]):'')+'</div>';return h||'<span style="color:var(--mut)">no moves yet</span>';}
   function panel(g,side,name,fin,t){const isW=side==='w';const el=document.createElement('div');
     el.className='wb-pl '+(isW?'white':'black')+((!fin&&g.turn===side)?' act':'')+(((isW&&t.result==='1-0')||(!isW&&t.result==='0-1'))?' win':'');
@@ -47,7 +48,7 @@
     const wb=document.createElement('div');wb.className='wb '+(orient==='port'?'port':'land');
     const bar=document.createElement('div');bar.className='wb-bar';bar.innerHTML=barInner(g,t,fin);
     const bwrap=document.createElement('div');bwrap.className='wb-bwrap';
-    const bd=document.createElement('div');bd.className='wb-board';renderBoard(bd,t.fen);bwrap.append(bd);
+    const bd=document.createElement('div');bd.className='wb-board';renderBoard(bd,t.fen,t.magnus);bwrap.append(bd);
     const side=document.createElement('div');side.className='wb-side';
     side.append(panel(g,'b',nm[1],fin,t));
     const mid=document.createElement('div');mid.className='wb-mid';
