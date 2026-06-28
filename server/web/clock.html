@@ -27,6 +27,8 @@
     aspect-ratio:1;width:100%;height:100%;border-radius:6px;overflow:hidden}   /* height:100% so it fills the (JS-squared) wrap on old browsers */
   .board.m1{transform:rotate(-90deg)}                         /* mode 1: board turned -90 (pieces too) */
   .board.m2 .sq.bp{transform:rotate(180deg)}                  /* mode 2: black pieces face the black side */
+  .board .sq .pc.mflip{transform:scaleX(-1)}                  /* Magnus mode (easter egg): queenside knight mirrored, board frame */
+  .board.m2 .sq.bp .pc.mflip{transform:scaleY(-1)}            /* ...in mode 2 the black piece is already rotate(180), so scaleY keeps the mirror horizontal */
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
   .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
@@ -292,6 +294,7 @@ const SHOW_PAIR_QR=true;      // a clock on a table with no camera shows the cam
 let ws,started=false,wakeLock=null,camLinked=false,gotState=false,serverDown=false,waiting=false,lastMove=null,phase='setup',pairToken=null,calibrated=false,camAssigned=false,needsResume=false,clk={white:300000,black:300000,active:'white',running:false,last:Date.now()};
 const PREVIEW=/[?&]preview\b/.test(location.search);       // /app/clock.html?preview=1 -> driven by intern.html via postMessage; no WS, no SW, clocks don't tick
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
+let curMagnus=null;                                        // Magnus mode (easter egg): queenside-knight squares the server says to mirror (null = off)
 function applyRot(){$('board').className='board m'+rotMode}
 
 function $(id){return document.getElementById(id)}
@@ -304,18 +307,19 @@ function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor
 function renderBoard(fen){
   const b=$('board');b.innerHTML='';
   const rows=(fen||'8/8/8/8/8/8/8/8').split(' ')[0].split('/');
+  const flips=(curMagnus&&curMagnus.length)?new Set(curMagnus):null;   // Magnus mode: queenside-knight squares to mirror
   rows.forEach((row,r)=>{let c=0;for(const ch of row){
     if(/\d/.test(ch)){for(let i=0;i<+ch;i++){b.appendChild(mkSq(r,c++,''))}}
-    else{b.appendChild(mkSq(r,c++,ch))}}});
+    else{const flip=flips&&(ch==='N'||ch==='n')&&flips.has(String.fromCharCode(97+c)+(8-r));b.appendChild(mkSq(r,c,ch,flip));c++;}}});
   layoutBoard();
 }
 function sqRC(s){return [8-(+s[1]),s.charCodeAt(0)-97]}     // 'e2' -> [row,col] (row 0 = rank 8)
 function isLast(r,c){if(!lastMove)return false;const f=sqRC(lastMove.from),t=sqRC(lastMove.to);
   return (r===f[0]&&c===f[1])||(r===t[0]&&c===t[1])}
-function mkSq(r,c,ch){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
+function mkSq(r,c,ch,flip){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
   if(isLast(r,c))d.classList.add('last');
   if(ch){if(ch>='a')d.classList.add('bp');                              // black piece -> rotatable in mode 2
-    const i=document.createElement('img');i.className='pc';i.alt=ch;
+    const i=document.createElement('img');i.className='pc'+(flip?' mflip':'');i.alt=ch;   // mflip = Magnus mode mirror
     i.onerror=()=>{i.remove();d.textContent=GLYPH[ch]};                  // fall back to the glyph
     i.src='pieces/'+(ch<'a'?'w':'b')+ch.toUpperCase()+'.svg';d.appendChild(i)}return d}
 function markBad(squares){$('board').querySelectorAll('.sq.bad').forEach(s=>s.classList.remove('bad'));   // flag illegal squares red
@@ -553,6 +557,7 @@ function showPairScreen(){                                  // the "Add a camera
   if(typeof QRCode!=='undefined'&&pairToken)new QRCode($('qr'),{text:location.origin+'/app/camera.html?pair='+pairToken,width:144,height:144});
 }
 function handle(m){
+  if('magnus' in m)curMagnus=m.magnus||null;   // Magnus mode: queenside-knight squares to mirror (null = off); the board render below picks it up
   if(m.type==='session.baselined'||m.type==='move.result'||m.type==='refreshed')show('refreshbtn',true);
   if(m.type!=='settling')settling=false;   // any real verdict clears the re-shoot ✋
   switch(m.type){

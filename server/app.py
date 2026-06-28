@@ -141,6 +141,7 @@ async def send(ws, obj):
 
 async def broadcast_state(s):
     snap = {"type": "state", **s.snapshot()}
+    snap["magnus"] = _magnus_squares(s.game.board) if settings.get("magnus_mode") else None   # Magnus mode (easter egg): queenside-knight squares so the clock mirrors them too (null = off)
     h = hub(s.table_token)
     for ws in [h["clock"], *list(h["spectators"])]:
         await send(ws, snap)
@@ -869,6 +870,9 @@ async def ws_endpoint(ws: WebSocket):
                     push = {"type": "tables", "tables": tables_public()}
                     for v in list(viewers):
                         await send(v, push)
+                if "magnus_mode" in data:                              # the clocks mirror the knights on their own boards too -> refresh them
+                    for sess2 in mgr._by_table.values():
+                        await broadcast_state(sess2)
             elif t == "stockfish.install":                        # console "Get Stockfish" -> the server fetches the engine
                 await send(ws, {"type": "stockfish.status", "state": "downloading"})
                 ok, msg = await asyncio.to_thread(download_stockfish)
