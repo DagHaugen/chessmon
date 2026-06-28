@@ -16,7 +16,7 @@
   .top{display:flex;align-items:center;gap:9px;margin-bottom:16px}
   .top h1{font-size:18px;margin:0;font-weight:800}
   .top .sub{color:var(--mut);font-size:13px}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);margin-left:auto}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
   .dot.on{background:var(--good)}
   .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:30px;text-align:center;font-size:14px;line-height:1.6}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
@@ -79,26 +79,59 @@
     .mid .moves,.mid .sug{flex:1;min-width:0}
     .mid .moves{max-height:none}
   }
+  /* QR -- "watch on a phone" */
+  .qrbtn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:6px;cursor:pointer;line-height:0}
+  .qrbtn:hover{border-color:var(--accent);color:var(--ink)}
+  #qrlobby{margin-left:auto}
+  .whead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .whead .back{margin-bottom:0}
+  #qrwatch{margin-left:auto}
+  .qrmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .qrmodal[hidden]{display:none}
+  .qrbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:330px;width:100%;text-align:center}
+  .qrbox h3{margin:0 0 4px;font-size:16px}
+  .qrbox .qsub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+  .qrbox .qimg{background:#fff;border-radius:10px;padding:12px;display:inline-block;line-height:0}
+  .qrbox .qimg canvas,.qrbox .qimg img{display:block}
+  .qrbox .qurl{color:var(--mut);font-size:11px;word-break:break-all;margin:12px 0 14px}
+  .qrbox .qclose{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  .qrbox .qclose:hover{border-color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>chessmon</h1><span class="sub">live games</span><span class="dot" id="dot"></span></div>
+  <div class="top"><h1>chessmon</h1><span class="sub">live games</span>
+    <button class="qrbtn" id="qrlobby" title="Watch on a phone" aria-label="Watch on a phone"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M4 4h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="2.6" height="2.6"/><rect x="17.4" y="14" width="2.6" height="2.6"/><rect x="14" y="17.4" width="2.6" height="2.6"/><rect x="17.4" y="17.4" width="2.6" height="2.6"/></svg></button>
+    <span class="dot" id="dot"></span></div>
   <div id="lobby">
     <div id="list" class="grid"></div>
     <div id="lobempty" class="empty" style="display:none"></div>
   </div>
   <div id="watch" class="watch">
-    <button class="back" id="back">&larr; all games</button>
+    <div class="whead">
+      <button class="back" id="back">&larr; all games</button>
+      <button class="qrbtn" id="qrwatch" title="Watch this game on a phone" aria-label="Watch this game on a phone"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M4 4h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 4h6v6h-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="2.6" height="2.6"/><rect x="17.4" y="14" width="2.6" height="2.6"/><rect x="14" y="17.4" width="2.6" height="2.6"/><rect x="17.4" y="17.4" width="2.6" height="2.6"/></svg></button>
+    </div>
     <div id="wbhost"></div>
   </div>
 </div>
+<div class="qrmodal" id="qrmodal" hidden>
+  <div class="qrbox">
+    <h3 id="qrtitle">Watch on your phone</h3>
+    <div class="qsub">Scan with a phone on the same Wi-Fi</div>
+    <div class="qimg" id="qrcode"></div>
+    <div class="qurl" id="qrurl"></div>
+    <button class="qclose" id="qrclose">Close</button>
+  </div>
+</div>
 <script src="watchboard.js"></script>
+<script src="qrcode.min.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
 window.name='cm_viewers';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 let ws, broadcastOff=false, games={}, order=[], watchTok=null, wbEl=null;
+let _autoT=new URLSearchParams(location.search).get('t');   // ?t=<token> -> auto-open that game (from a scanned QR)
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function reportWatch(){send({type:'watch',table:watchTok});}   // tell the server which game (if any) this page is showing
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -125,6 +158,7 @@ function ingest(tabs){
     g.turn=(t.fen.split(' ')[1]==='b')?'b':'w';g.running=(t.status!=='paused')&&!t.result;});   // finished -> clocks frozen
   Object.keys(games).forEach(k=>{if(!order.includes(k))delete games[k];});
   if(watchTok&&!games[watchTok]){watchTok=null;reportWatch();}   // table cleared/removed -> back to lobby
+  if(_autoT&&games[_autoT]){watchTok=_autoT;_autoT=null;reportWatch();}   // ?t -> open that game once available (consume once)
   render();
 }
 function live(g,side){let ms=side==='w'?g.w:g.b;if(ms==null)return null;
@@ -188,6 +222,19 @@ function sq(grid,r,f,piece){const d=document.createElement('div');d.className='s
     i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
     i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
 $('back').onclick=()=>{watchTok=null;reportWatch();render();};
+function showQR(tok){const g=tok&&games[tok];
+  const url=location.origin+location.pathname+(tok?'?t='+encodeURIComponent(tok):'');
+  $('qrtitle').textContent=g?names(g.t).join(' – '):'Watch live games';
+  $('qrcode').innerHTML='';
+  if(typeof QRCode!=='undefined')new QRCode($('qrcode'),{text:url,width:212,height:212});
+  else $('qrcode').textContent=url;
+  $('qrurl').textContent=url;$('qrmodal').hidden=false;}
+function hideQR(){$('qrmodal').hidden=true;}
+$('qrlobby').onclick=()=>showQR(null);
+$('qrwatch').onclick=()=>showQR(watchTok);
+$('qrclose').onclick=hideQR;
+$('qrmodal').onclick=e=>{if(e.target===$('qrmodal'))hideQR();};
+window.addEventListener('keydown',e=>{if(e.key==='Escape')hideQR();});
 setInterval(()=>{
   if(watchTok&&games[watchTok]){if(wbEl)cmTickBoard(wbEl,games[watchTok]);}
   else{order.forEach(tok=>{const g=games[tok];if(!g)return;
