@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#15171c">
+<meta name="apple-mobile-web-app-capable" content="yes">       <!-- Add to Home Screen (Safari) -> runs standalone = fullscreen on iPhone, like the clock -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="chessmon live">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="watchboard.css">
 <title>live · chessmon</title>
@@ -259,6 +263,7 @@ setInterval(()=>{
     if(ew)ew.textContent=fmtClk(live(g,'w'));if(eb)eb.textContent=fmtClk(live(g,'b'));});}
 },500);
 let _land=window.innerWidth>720;window.addEventListener('resize',()=>{const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);});   // re-orient on a land<->port crossing; else re-fit the board
+if(window.ResizeObserver)new ResizeObserver(()=>{if(wbEl)cmFit(wbEl);}).observe($('wbhost'));   // re-fit once the area SETTLES (phone rotation / URL bar) -- fires after layout, so the board can't keep a transient over-size
 connect();
 </script>
 </body>
