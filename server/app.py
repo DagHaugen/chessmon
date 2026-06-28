@@ -24,6 +24,7 @@ import base64
 import io
 import json
 import os
+import socket
 import time
 import uuid
 
@@ -349,6 +350,36 @@ async def broadcast_devices():
     msg = admin_state()
     for ws in list(admins):
         await send(ws, msg)
+
+
+def _lan_ip():
+    """The server's LAN IPv4 for the viewers 'watch on a phone' QR -- Wi-Fi/Ethernet (192.168.*/10.*) preferred,
+    matching the address serve_https prints. Returns None on failure (the client then falls back to the page host)."""
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except Exception:
+        pass
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))   # sends no packets; just reveals the default-route IP
+            ips.add(s.getsockname()[0])
+        finally:
+            s.close()
+    except Exception:
+        pass
+
+    def _priv(ip):
+        if ip.startswith("192.168.") or ip.startswith("10."):
+            return True
+        p = ip.split(".")
+        return len(p) == 4 and p[0] == "172" and p[1].isdigit() and 16 <= int(p[1]) <= 31
+
+    cand = sorted((ip for ip in ips if not ip.startswith("127.") and _priv(ip)),
+                  key=lambda ip: (0 if ip.startswith(("192.168.", "10.")) else 1, ip))
+    return cand[0] if cand else None
 
 
 async def broadcast_tables():
@@ -764,6 +795,7 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, st)
             elif t == "viewer.join":                              # a local-network viewers.html page
                 viewers.add(ws)
+                await send(ws, {"type": "net", "lan_ip": _lan_ip()})   # so the 'watch on a phone' QR links to the LAN address, not localhost
                 if settings.get("broadcast_local"):
                     await send(ws, {"type": "tables", "tables": tables_public()})
                     for cs in clock_state.values():               # mirror the live device clocks right away
