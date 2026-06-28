@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#23272f">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="stylesheet" href="watchboard.css">
 <title>monitor · chessmon</title>
 <style>
   :root{--bg:#23272f;--panel:#2b3039;--line:#3a414e;--ink:#e8eaed;--mut:#9aa3b2;--accent:#4f8cff;--good:#3ecf8e;--lt:#ebecd0;--dk:#6f8f5f}
@@ -21,48 +22,30 @@
   .chip .n{font-weight:700}
   .bbtn{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
   .stage{flex:1;display:grid;gap:10px;padding:10px;min-height:0}
-  .stage.single{grid-template-columns:1fr;grid-template-rows:1fr}
-  .stage.quad{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .stage.n1{grid-template-columns:1fr}
+  .stage.n2{grid-template-columns:1fr 1fr}
+  .stage.n3{grid-template-columns:1fr 1fr 1fr}
+  .stage.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
   .empty{display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:15px;text-align:center}
-  .tile{display:flex;flex-direction:column;gap:5px;min-height:0;min-width:0}
-  .pl{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none;padding:5px 10px;border-radius:8px;border:1px solid var(--line)}
-  .pl.black{background:#0c0d11;color:#eef1f5;border-color:#000}
-  .pl.white{background:#eceef2;color:#1a1d24;border-color:#cfd4dc}
-  .pl .nm{font-weight:700;font-size:clamp(12px,2.1vh,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .pl .ck{font-size:clamp(15px,3vh,30px);font-weight:800;font-variant-numeric:tabular-nums}
-  .pl.act .ck{color:var(--good)}
-  .pl.white.act .ck{color:#178a52}
-  .bwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
-  .board{height:100%;width:auto;aspect-ratio:1;max-width:100%;max-height:100%;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  .sq{display:flex;align-items:center;justify-content:center}
-  .sq.l{background:var(--lt)}.sq.d{background:var(--dk)}
-  .sq img{width:86%;height:86%;display:block}
-  .sq span{font-size:3.4vh;line-height:1}
-  .sgs{display:flex;align-items:center;gap:8px;flex:none;font-size:clamp(11px,1.8vh,16px)}
-  .sgs .sgmv{font-weight:700;color:var(--accent);white-space:nowrap}
-  .sgs .wdl{flex:1;display:flex;height:8px;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
-  .sgs .ww{background:#e9edf2}.sgs .wd{background:#6b7280}.sgs .wb{background:#0c0d11}
 </style>
 </head>
 <body>
 <div class="bar" id="bar">
   <span class="logo">chessmon</span><span class="dot" id="dot"></span>
   <div class="chips" id="chips"></div>
-  <button class="bbtn" id="layout">2×2</button>
   <button class="bbtn" id="full">Fullscreen</button>
   <button class="bbtn" id="hide" title="Hide this bar — move the mouse to the top edge to bring it back">Hide bar</button>
 </div>
-<div class="stage quad" id="stage"></div>
+<div class="stage" id="stage"></div>
+<script src="watchboard.js"></script>
 <script>
 function $(id){return document.getElementById(id)}
 window.name='cm_monitor';
-const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
-let ws, games={}, order=[], sel=[], layout='quad';
-try{const s=JSON.parse(localStorage.getItem('cm_monitor')||'{}');if(Array.isArray(s.sel))sel=s.sel;if(s.layout)layout=s.layout;}catch(e){}
-function saveSel(){try{localStorage.setItem('cm_monitor',JSON.stringify({sel,layout}))}catch(e){}}
+let ws, games={}, order=[], sel=[], boardEls={};
+try{const s=JSON.parse(localStorage.getItem('cm_monitor')||'{}');if(Array.isArray(s.sel))sel=s.sel;}catch(e){}
+function saveSel(){try{localStorage.setItem('cm_monitor',JSON.stringify({sel}))}catch(e){}}
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function reportWatch(){send({type:'watch_set',tables:sel});}   // tell the server which games this monitor is showing
-function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'});reportWatch();};
@@ -70,71 +53,44 @@ function connect(){
     if(m.type==='tables'){ingest(m.tables||[]);}
     else if(m.type==='broadcast_off'){order=[];games={};renderChips();renderStage();setTimeout(()=>send({type:'viewer.join'}),5000);}
     else if(m.type==='clock.tick'){const g=games[m.table];if(g){g.w=m.white_ms;g.b=m.black_ms;g.turn=(m.active==='black')?'b':'w';g.running=!!m.running;g.syncAt=performance.now();}}
-    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};renderStage();}}
-    else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);renderStage();}};
+    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};if(boardEls[m.table])cmUpdateSug(boardEls[m.table],g);}}
+    else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);Object.keys(boardEls).forEach(tok=>{if(games[tok])cmUpdateSug(boardEls[tok],games[tok]);});}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
-function baseMs(t){return t.match&&t.match.format?t.match.format.base_ms:null}
-function names(t){const w=t.match&&t.match.white?t.match.white.name:'White',b=t.match&&t.match.black?t.match.black.name:'Black';return [w,b];}
 function ingest(tabs){
   const run=tabs.filter(t=>(t.started_at||t.moves>0)&&!t.result);
   order=run.map(t=>t.token);
   run.forEach(t=>{const g=games[t.token]||(games[t.token]={moves:-1});g.t=t;
-    const base=baseMs(t),cw=(t.clock_white!=null)?t.clock_white:base,cb=(t.clock_black!=null)?t.clock_black:base;
+    const base=cmBaseMs(t),cw=(t.clock_white!=null)?t.clock_white:base,cb=(t.clock_black!=null)?t.clock_black:base;
     if(t.moves!==g.moves){g.w=cw;g.b=cb;g.syncAt=performance.now();g.moves=t.moves;}
     g.turn=(t.fen.split(' ')[1]==='b')?'b':'w';g.running=(t.status!=='paused');});
   Object.keys(games).forEach(k=>{if(!order.includes(k))delete games[k];});
   sel=sel.filter(tok=>order.includes(tok));                          // drop finished games from the selection
-  if(!sel.length&&order.length)sel=order.slice(0,layout==='single'?1:4);   // default selection
+  if(!sel.length&&order.length)sel=order.slice(0,4);                 // default: up to 4
   reportWatch();renderChips();renderStage();
 }
-function live(g,side){let ms=side==='w'?g.w:g.b;if(ms==null)return null;
-  if(g.running&&g.turn===side)ms-=(performance.now()-g.syncAt);return Math.max(0,ms);}
-function fmtClk(ms){if(ms==null)return '–';const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60,p=n=>String(n).padStart(2,'0');
-  return h>0?h+':'+p(m)+':'+p(ss):m+':'+p(ss);}
 function renderChips(){const C=$('chips');C.innerHTML='';
   if(!order.length){C.innerHTML='<span style="color:var(--mut);font-size:12.5px">No games in progress</span>';return;}
-  order.forEach(tok=>{const g=games[tok],t=g.t,nm=names(t);
+  order.forEach(tok=>{const g=games[tok],nm=cmNames(g.t);
     const chip=document.createElement('div');chip.className='chip'+(sel.includes(tok)?' on':'');
-    chip.innerHTML='<span class="n">'+esc(nm[0])+'</span> – '+esc(nm[1]);
+    chip.innerHTML='<span class="n">'+cmEsc(nm[0])+'</span> – '+cmEsc(nm[1]);
     chip.onclick=()=>toggle(tok);C.append(chip);});}
 function toggle(tok){const i=sel.indexOf(tok);
   if(i>=0)sel.splice(i,1);
-  else{sel.push(tok);const cap=layout==='single'?1:4;while(sel.length>cap)sel.shift();}
+  else{sel.push(tok);while(sel.length>4)sel.shift();}                // up to 4 boards; the count picks the layout
   saveSel();reportWatch();renderChips();renderStage();}
-function renderStage(){const S=$('stage');S.className='stage '+layout;S.innerHTML='';
-  const show=(layout==='single'?sel.slice(0,1):sel.slice(0,4));
-  if(!show.length){const e=document.createElement('div');e.className='empty';e.textContent=order.length?'Pick a game from the bar above':'Waiting for a live game…';S.append(e);return;}
-  show.forEach(tok=>{const g=games[tok];if(g)S.append(tile(g));});}
-function tile(g){const t=g.t,nm=names(t);
-  const el=document.createElement('div');el.className='tile';
-  const top=document.createElement('div');top.className='pl black'+(g.turn==='b'?' act':'');
-  top.innerHTML='<span class="nm">'+esc(nm[1])+'</span><span class="ck" data-tok="'+esc(t.token)+'" data-side="b">'+fmtClk(live(g,'b'))+'</span>';
-  const bw=document.createElement('div');bw.className='bwrap';const bd=document.createElement('div');bd.className='board';renderBoard(bd,t.fen);bw.append(bd);
-  const bot=document.createElement('div');bot.className='pl white'+(g.turn==='w'?' act':'');
-  bot.innerHTML='<span class="nm">'+esc(nm[0])+'</span><span class="ck" data-tok="'+esc(t.token)+'" data-side="w">'+fmtClk(live(g,'w'))+'</span>';
-  el.append(top);if(g.sug&&g.sug.fen===t.fen)el.append(sugStrip(g.sug));el.append(bw,bot);return el;}
-function sugStrip(s){const d=document.createElement('div');d.className='sgs';
-  const w=s.wdl_white,best=(s.moves&&s.moves[0])?s.moves[0].san:'–';let bar='';
-  if(w){const t=(w[0]+w[1]+w[2])||1;
-    bar='<span class="ww" style="width:'+(w[0]/t*100)+'%"></span><span class="wd" style="width:'+(w[1]/t*100)+'%"></span><span class="wb" style="width:'+(w[2]/t*100)+'%"></span>';}
-  d.innerHTML='<span class="sgmv">'+esc(best)+'</span><span class="wdl">'+bar+'</span>';return d;}
-function renderBoard(grid,fen){grid.innerHTML='';const place=(fen||'8/8/8/8/8/8/8/8').split(' ')[0];
-  place.split('/').forEach((row,r)=>{let f=0;for(const ch of row){
-    if(ch>='1'&&ch<='8'){for(let k=0;k<+ch;k++){sq(grid,r,f);f++;}}else{sq(grid,r,f,ch);f++;}}});}
-function sq(grid,r,f,piece){const d=document.createElement('div');d.className='sq '+((r+f)%2?'d':'l');
-  if(piece){const i=document.createElement('img');i.alt=piece;
-    i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
-    i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
-$('layout').onclick=()=>{layout=(layout==='quad')?'single':'quad';$('layout').textContent=(layout==='quad')?'2×2':'Single';
-  const cap=layout==='single'?1:4;if(sel.length>cap)sel=sel.slice(0,cap);saveSel();reportWatch();renderStage();};
+function renderStage(){const S=$('stage');boardEls={};
+  const show=sel.slice(0,4),n=show.length;
+  S.className='stage n'+n;S.innerHTML='';
+  if(!n){const e=document.createElement('div');e.className='empty';e.textContent=order.length?'Pick a game from the bar above':'Waiting for a live game…';S.append(e);return;}
+  const orient=(n===2||n===3)?'port':'land';                        // 1 & 4 -> landscape; 2 & 3 -> portrait
+  show.forEach(tok=>{const g=games[tok];if(!g)return;const el=cmWatchBoard(g,orient);boardEls[tok]=el;S.append(el);});}
 $('full').onclick=()=>{const e=document.documentElement;
   if(!document.fullscreenElement){(e.requestFullscreen||e.webkitRequestFullscreen||function(){}).call(e);}
   else{(document.exitFullscreen||function(){}).call(document);}};
 $('hide').onclick=()=>$('bar').classList.add('hidden');
 document.addEventListener('mousemove',e=>{if(e.clientY<6)$('bar').classList.remove('hidden');});   // mouse to the top edge brings the bar back
-$('layout').textContent=(layout==='quad')?'2×2':'Single';
-setInterval(()=>{document.querySelectorAll('.ck[data-tok]').forEach(el=>{const g=games[el.dataset.tok];if(g)el.textContent=fmtClk(live(g,el.dataset.side));});},500);
+setInterval(()=>{Object.keys(boardEls).forEach(tok=>{const g=games[tok];if(g)cmTickBoard(boardEls[tok],g);});},500);
 connect();
 </script>
 </body>

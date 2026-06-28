@@ -1,0 +1,58 @@
+/* Shared chessmon watch-board styles -- consumed by viewers.html and monitor.html.
+   Uses the page's CSS vars (--bg/--panel/--line/--ink/--mut/--good/--lt/--dk). The board fills its
+   container, so the host sets the size (the viewers' watch area, or a monitor stage cell). */
+.wb{display:flex;min-width:0;min-height:0;color:var(--ink);height:100%}
+.wb.land{flex-direction:row;gap:14px;align-items:stretch}
+.wb.port{flex-direction:column;gap:10px}
+
+.wb-bcol{display:flex;flex-direction:column;min-width:0;min-height:0;gap:6px}
+.wb.land .wb-bcol{flex:1}
+.wb.port .wb-bcol{flex:none}
+.wb-bwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.wb.port .wb-bwrap{display:block}
+.wb-board{height:100%;width:auto;aspect-ratio:1;max-width:100%;max-height:100%;display:grid;
+  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.wb.port .wb-board{width:100%;max-width:560px;height:auto;margin:0 auto}
+.wb-sq{display:flex;align-items:center;justify-content:center}
+.wb-sq.l{background:var(--lt)}.wb-sq.d{background:var(--dk)}
+.wb-sq img{width:84%;height:84%;display:block}
+.wb-sq span{font-size:6vmin;line-height:1}
+
+/* eval bar / result banner (above the board) */
+.wb-bar{flex:none}
+.wb-bar:empty{display:none}
+.wb-wdl{display:flex;height:clamp(8px,1.4vh,11px);border-radius:5px;overflow:hidden;border:1px solid var(--line)}
+.wb-wdl .ww{background:#e9edf2}.wb-wdl .wd{background:#6b7280}.wb-wdl .wb2{background:#0c0d11}
+.wb-wdlk{display:flex;justify-content:space-between;font-size:clamp(9px,1.2vh,11px);color:var(--mut);margin-top:2px}
+.wb-banner{text-align:center;font-weight:800;font-size:clamp(13px,1.9vh,15px);padding:7px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+
+/* side: clock-style panels + moves + suggestions */
+.wb-side{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;justify-content:space-between}
+.wb.land .wb-side{flex:0 0 var(--wb-side-w,240px)}
+.wb.port .wb-side{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"black white" "mid mid";grid-template-rows:auto minmax(0,1fr);gap:8px;justify-content:initial;flex:1}
+.wb-pl{border:1px solid var(--line);border-radius:10px;padding:6px 11px;display:flex;justify-content:space-between;align-items:center;flex:none;min-width:0;gap:8px}
+.wb-pl.black{background:#0c0d11;color:#eef1f5;border-color:#000}
+.wb-pl.white{background:#eceef2;color:#1a1d24;border-color:#cfd4dc}
+.wb.port .wb-pl.black{grid-area:black}.wb.port .wb-pl.white{grid-area:white}
+.wb-pl .nm{font-weight:700;font-size:clamp(12px,1.9vh,15px);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-pl .ck{font-size:clamp(16px,3vh,24px);font-weight:800;font-variant-numeric:tabular-nums}
+.wb-pl.act{border-color:var(--good);border-width:2px}.wb-pl.act .ck{color:var(--good)}
+.wb-pl.white.act{border-color:#15803d}.wb-pl.white.act .ck{color:#178a52}
+.wb-pl.win{box-shadow:0 0 0 2px var(--good) inset}
+
+.wb-mid{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
+.wb.port .wb-mid{grid-area:mid;flex-direction:row;align-items:stretch;min-height:0}
+.wb-moves{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px;overflow:auto;
+  font-size:clamp(11px,1.5vh,13px);line-height:1.6;flex:1;min-height:0}
+.wb.port .wb-moves{flex:1;min-width:0;max-height:none}
+.wb-moves .mvn{color:var(--mut);margin-right:5px}
+.wb-sug{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 11px}
+.wb.port .wb-sug{flex:1;min-width:0}
+.wb-sgh{font-size:clamp(9px,1.2vh,11px);font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;text-align:center}
+.wb-sgt{width:100%;border-collapse:collapse;font-size:clamp(11px,1.5vh,13px)}
+.wb-sgt th{color:var(--mut);font-weight:600;font-size:clamp(9px,1.2vh,11px);text-align:right;padding:2px 5px;border-bottom:1px solid var(--line)}
+.wb-sgt th:first-child{text-align:left}
+.wb-sgt td{padding:3px 5px;text-align:right;font-variant-numeric:tabular-nums}
+.wb-sgt td.mc{text-align:left;font-weight:700;white-space:nowrap}
+.wb-sgt .pcg{margin-right:5px;font-size:1.15em;color:inherit}
+.wb-sgt tbody tr:first-child{background:rgba(255,255,255,.05)}
