@@ -21,7 +21,8 @@
   .chip.on{border-color:var(--accent);color:var(--ink);background:#21252e}
   .chip .n{font-weight:700}
   .bbtn{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
-  .stage{flex:1;display:grid;gap:10px;padding:10px;min-height:0}
+  .stage{flex:1;display:grid;gap:16px;padding:16px;min-height:0}
+  .stage>.wb{border:1px solid var(--line);border-radius:12px;padding:10px;background:#20242c}   /* air + a line between tiles */
   .stage.n1{grid-template-columns:1fr}
   .stage.n2{grid-template-columns:1fr 1fr}
   .stage.n3{grid-template-columns:1fr 1fr 1fr}
@@ -87,13 +88,15 @@ function renderStage(){const S=$('stage');boardEls=[];
   S.className='stage n'+n;S.innerHTML='';
   if(!n){const e=document.createElement('div');e.className='empty';e.textContent=order.length?'Pick a game from the bar above':'Waiting for a live game…';S.append(e);return;}
   const orient=(n===2||n===3)?'port':'land';                        // 1 & 4 -> landscape; 2 & 3 -> portrait
-  show.forEach(tok=>{const g=games[tok];if(!g)return;const el=cmWatchBoard(g,orient);boardEls.push({tok,el});S.append(el);});}
+  show.forEach(tok=>{const g=games[tok];if(!g)return;const el=cmWatchBoard(g,orient);boardEls.push({tok,el});S.append(el);});
+  boardEls.forEach(b=>cmFit(b.el));}                                 // size each landscape board to fit its tile
 $('full').onclick=()=>{const e=document.documentElement;
   if(!document.fullscreenElement){(e.requestFullscreen||e.webkitRequestFullscreen||function(){}).call(e);}
   else{(document.exitFullscreen||function(){}).call(document);}};
 $('hide').onclick=()=>$('bar').classList.add('hidden');
 document.addEventListener('mousemove',e=>{if(e.clientY<6)$('bar').classList.remove('hidden');});   // mouse to the top edge brings the bar back
 setInterval(()=>{boardEls.forEach(b=>{const g=games[b.tok];if(g)cmTickBoard(b.el,g);});},500);
+window.addEventListener('resize',()=>boardEls.forEach(b=>cmFit(b.el)));
 connect();
 </script>
 </body>

@@ -34,13 +34,11 @@
     const t=g.t,nm=names(t),fin=!!t.result;
     const sug=(g.sug&&g.sug.fen===t.fen)?g.sug:null;
     const wb=document.createElement('div');wb.className='wb '+(orient==='port'?'port':'land');
-    const bcol=document.createElement('div');bcol.className='wb-bcol';
     const bar=document.createElement('div');bar.className='wb-bar';
     if(fin)bar.innerHTML='<div class="wb-banner">'+esc(settled(t))+'</div>';
     else if(sug&&sug.wdl_white)bar.innerHTML=posBar(sug.wdl_white);
-    bcol.append(bar);
     const bwrap=document.createElement('div');bwrap.className='wb-bwrap';
-    const bd=document.createElement('div');bd.className='wb-board';renderBoard(bd,t.fen);bwrap.append(bd);bcol.append(bwrap);
+    const bd=document.createElement('div');bd.className='wb-board';renderBoard(bd,t.fen);bwrap.append(bd);
     const side=document.createElement('div');side.className='wb-side';
     side.append(panel(g,'b',nm[1],fin,t));
     const mid=document.createElement('div');mid.className='wb-mid';
@@ -48,8 +46,17 @@
     if(!fin&&sug&&sug.moves&&sug.moves.length){const sg=document.createElement('div');sg.className='wb-sug';sg.innerHTML=moveTable(sug.moves);mid.append(sg);}
     side.append(mid);
     side.append(panel(g,'w',nm[0],fin,t));
-    wb.append(bcol,side);
+    wb.append(bar,bwrap,side);
     return wb;
+  };
+  window.cmFit = function (wb) {   // landscape: size the board to the largest square that fits, match the eval bar to it
+    if (!wb || !wb.classList.contains('land')) return;   // portrait is sized by CSS
+    const bwrap = wb.querySelector('.wb-bwrap'), board = wb.querySelector('.wb-board'), bar = wb.querySelector('.wb-bar');
+    if (!bwrap || !board) return;
+    const s = Math.min(bwrap.clientWidth, bwrap.clientHeight) | 0;
+    if (s <= 0) return;
+    board.style.width = board.style.height = s + 'px';
+    if (bar) { bar.style.width = s + 'px'; bar.style.marginLeft = 'auto'; bar.style.marginRight = 'auto'; }
   };
   window.cmTickBoard = function (el, g) {
     el.querySelectorAll('.wb-pl .ck').forEach(c => { c.textContent = fmtClk(live(g, c.dataset.side)); });

@@ -1,25 +1,30 @@
 /* Shared chessmon watch-board styles -- consumed by viewers.html and monitor.html.
-   Uses the page's CSS vars (--bg/--panel/--line/--ink/--mut/--good/--lt/--dk). The board fills its
-   container, so the host sets the size (the viewers' watch area, or a monitor stage cell). */
+   Uses the page's CSS vars (--bg/--panel/--line/--ink/--mut/--good/--lt/--dk). cmFit() (watchboard.js)
+   sizes the LANDSCAPE board to the largest square that fits and matches the eval bar to that width. */
 .wb{display:flex;min-width:0;min-height:0;color:var(--ink);height:100%}
-.wb.land{flex-direction:row;gap:14px;align-items:stretch}
-.wb.port{flex-direction:column;gap:10px}
+/* landscape: a grid so the eval bar sits above the board (board-width, via cmFit) and the info column
+   aligns to the BOARD -- black to the board's top, not above it */
+.wb.land{display:grid;grid-template-columns:minmax(0,1fr) var(--wb-side-w,240px);
+  grid-template-rows:auto minmax(0,1fr);grid-template-areas:"bar ." "board side";column-gap:14px;row-gap:6px}
+.wb.port{flex-direction:column;gap:10px;align-items:center}
+/* portrait: eval bar, board and info all the same width, centered */
+.wb.port>.wb-bar,.wb.port>.wb-bwrap,.wb.port>.wb-side{width:100%;max-width:560px}
 
-.wb-bcol{display:flex;flex-direction:column;min-width:0;min-height:0;gap:6px}
-.wb.land .wb-bcol{flex:1}
-.wb.port .wb-bcol{flex:none}
-.wb-bwrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.wb-bwrap{min-width:0;min-height:0}
+.wb.land .wb-bar{grid-area:bar}
+.wb.land .wb-bwrap{grid-area:board;display:flex;align-items:flex-start;justify-content:center}
 .wb.port .wb-bwrap{display:block}
-.wb-board{height:100%;width:auto;aspect-ratio:1;max-width:100%;max-height:100%;display:grid;
-  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.wb.port .wb-board{width:100%;max-width:560px;height:auto;margin:0 auto}
+.wb-board{aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.wb.land .wb-board{height:100%;width:auto;max-width:100%;max-height:100%}   /* fallback; cmFit sets an exact px square */
+.wb.port .wb-board{width:100%;height:auto}
 .wb-sq{display:flex;align-items:center;justify-content:center}
 .wb-sq.l{background:var(--lt)}.wb-sq.d{background:var(--dk)}
 .wb-sq img{width:84%;height:84%;display:block}
 .wb-sq span{font-size:6vmin;line-height:1}
 
 /* eval bar / result banner (above the board) */
-.wb-bar{flex:none}
+.wb-bar{flex:none;min-width:0}
 .wb-bar:empty{display:none}
 .wb-wdl{display:flex;height:clamp(8px,1.4vh,11px);border-radius:5px;overflow:hidden;border:1px solid var(--line)}
 .wb-wdl .ww{background:#e9edf2}.wb-wdl .wd{background:#6b7280}.wb-wdl .wb2{background:#0c0d11}
@@ -28,7 +33,7 @@
 
 /* side: clock-style panels + moves + suggestions */
 .wb-side{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;justify-content:space-between}
-.wb.land .wb-side{flex:0 0 var(--wb-side-w,240px)}
+.wb.land .wb-side{grid-area:side}
 .wb.port .wb-side{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"white black" "mid mid";grid-template-rows:auto minmax(0,1fr);gap:8px;justify-content:initial;flex:1}
 .wb-pl{border:1px solid var(--line);border-radius:10px;padding:6px 11px;display:flex;justify-content:space-between;align-items:center;flex:none;min-width:0;gap:8px}
 .wb-pl.black{background:#0c0d11;color:#eef1f5;border-color:#000}

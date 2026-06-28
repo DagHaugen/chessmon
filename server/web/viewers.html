@@ -159,6 +159,7 @@ function render(){
 function renderWatch(){const g=games[watchTok];if(!g)return;
   wbEl=cmWatchBoard(g, window.innerWidth>720?'land':'port');   // the shared live board (identical to the monitor)
   $('wbhost').replaceChildren(wbEl);
+  cmFit(wbEl);
 }
 function syncSideHeight(){const board=document.querySelector('.board'),s=document.querySelector('.side');if(!s)return;
   if(window.innerWidth<=720||!board||!board.offsetHeight){s.style.height='';s.style.marginTop='';return;}   // stacked -> natural
@@ -193,7 +194,7 @@ setInterval(()=>{
     const ew=document.querySelector('[data-c="'+tok+'-w"]'),eb=document.querySelector('[data-c="'+tok+'-b"]');
     if(ew)ew.textContent=fmtClk(live(g,'w'));if(eb)eb.textContent=fmtClk(live(g,'b'));});}
 },500);
-let _land=window.innerWidth>720;window.addEventListener('resize',()=>{const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}});   // re-orient on a land<->port crossing
+let _land=window.innerWidth>720;window.addEventListener('resize',()=>{const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);});   // re-orient on a land<->port crossing; else re-fit the board
 connect();
 </script>
 </body>
