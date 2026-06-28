@@ -20,6 +20,8 @@
   .chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12.5px;cursor:pointer;white-space:nowrap;color:var(--mut)}
   .chip.on{border-color:var(--accent);color:var(--ink);background:#21252e}
   .chip .n{font-weight:700}
+  .chip.fin{opacity:.75}
+  .chip .rs{margin-left:6px;color:var(--mut);font-weight:700}
   .bbtn{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
   .stage{flex:1;display:grid;gap:16px;padding:16px;min-height:0}
   .stage>.wb{border:1px solid var(--line);border-radius:12px;padding:10px;background:#20242c}   /* air + a line between tiles */
@@ -60,22 +62,23 @@ function connect(){
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function ingest(tabs){
-  const run=tabs.filter(t=>(t.started_at||t.moves>0)&&!t.result);
+  const run=tabs.filter(t=>(t.started_at||t.moves>0));                 // keep finished games on view, like Live
+  run.sort((a,b)=>((a.result?1:0)-(b.result?1:0))||String(a.name||'').localeCompare(String(b.name||'')));   // live first, then finished
   order=run.map(t=>t.token);
   run.forEach(t=>{const g=games[t.token]||(games[t.token]={moves:-1});g.t=t;
     const base=cmBaseMs(t),cw=(t.clock_white!=null)?t.clock_white:base,cb=(t.clock_black!=null)?t.clock_black:base;
     if(t.moves!==g.moves){g.w=cw;g.b=cb;g.syncAt=performance.now();g.moves=t.moves;}
-    g.turn=(t.fen.split(' ')[1]==='b')?'b':'w';g.running=(t.status!=='paused');});
+    g.turn=(t.fen.split(' ')[1]==='b')?'b':'w';g.running=(t.status!=='paused')&&!t.result;});   // finished -> clocks frozen
   Object.keys(games).forEach(k=>{if(!order.includes(k))delete games[k];});
   sel=sel.filter(tok=>order.includes(tok));                          // drop finished games from the selection
   if(!sel.length&&order.length)sel=order.slice(0,4);                 // default: up to 4
   reportWatch();renderChips();renderStage();
 }
 function renderChips(){const C=$('chips');C.innerHTML='';
-  if(!order.length){C.innerHTML='<span style="color:var(--mut);font-size:12.5px">No games in progress</span>';return;}
-  order.forEach(tok=>{const g=games[tok],nm=cmNames(g.t);
-    const chip=document.createElement('div');chip.className='chip'+(sel.includes(tok)?' on':'');
-    chip.innerHTML='<span class="n">'+cmEsc(nm[0])+'</span> – '+cmEsc(nm[1]);
+  if(!order.length){C.innerHTML='<span style="color:var(--mut);font-size:12.5px">No games yet</span>';return;}
+  order.forEach(tok=>{const g=games[tok],nm=cmNames(g.t),fin=!!g.t.result;
+    const chip=document.createElement('div');chip.className='chip'+(sel.includes(tok)?' on':'')+(fin?' fin':'');
+    chip.innerHTML='<span class="n">'+cmEsc(nm[0])+'</span> – '+cmEsc(nm[1])+(fin?'<span class="rs">'+g.t.result.replace(/1\/2/g,'½')+'</span>':'');
     chip.onclick=()=>toggle(tok);C.append(chip);});}
 function toggle(tok){const i=sel.indexOf(tok);
   if(i>=0)sel.splice(i,1);
