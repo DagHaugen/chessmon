@@ -74,6 +74,7 @@
   .dimbtn{top:54px;background:none;border:none}                          /* dim/icon toggle, above the QR; shares .qrjoinbtn's box + left */
   .dimbtn img{width:100%;height:100%;display:block;opacity:.4;transition:opacity .15s;-webkit-user-drag:none;-webkit-touch-callout:none}
   .dimbtn.lit img{opacity:1}                                             /* full colour when toggled on */
+  .fsbtn{top:10px}                                                       /* re-enter fullscreen, above the dim button (shown only off-fullscreen, on devices where the API exists) */
   .qrjoin{position:fixed;left:0;top:0;right:0;bottom:0;z-index:60;background:rgba(8,10,14,.92);display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:14px;padding:24px}
   .qrjoin .qrlbl{color:var(--ink);font-size:16px;font-weight:700}
@@ -236,6 +237,7 @@
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
         <button class="qrjoinbtn dimbtn" id="dimbtn" title="Toggle"><img src="icon.svg" alt="" draggable="false"></button>
         <button class="qrjoinbtn hidden" id="qrjoinbtn" title="Show the join QR — add another device"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M17 21h.01M21 17v4"/></svg></button>
+        <button class="qrjoinbtn fsbtn hidden" id="fsbtn" title="Fullscreen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
       </div>
       <div class="zone white" id="z-white">
         <div class="side" id="s-white"><span class="nm">White</span><span class="tm" id="t-white">5:00</span></div>
@@ -445,6 +447,13 @@ function reportStatus(){                                // tell the server runni
 function startGame(){phase='run';needsResume=false;clk.active='white';clk.running=true;clk.last=Date.now();reading=false;warnMsg=null;gameResult=null;
   show('startov',false);show('rotbtn',false);showCtrls(true);showUndo(false);$('pausebtn').querySelector('.lbl').textContent='Pause';clearCands();paint();send({type:'game.start'});reportStatus();goFullscreen()}
 function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen||e.webkitRequestFullscreen||e.webkitRequestFullScreen||e.mozRequestFullScreen||e.msRequestFullscreen;if(!fn)return;try{const r=fn.call(e);if(r&&r.catch)r.catch(()=>{});}catch(_){}}  // webkit-prefixed too: old WebKit (Android 8) lacks unprefixed requestFullscreen
+(function(){const e=document.documentElement;
+  const fsSupported=!!(e.requestFullscreen||e.webkitRequestFullscreen||e.webkitRequestFullScreen||e.mozRequestFullScreen||e.msRequestFullscreen);   // iPad/Android/desktop yes; iPhone no
+  function updateFsBtn(){show('fsbtn', fsSupported && !(document.fullscreenElement||document.webkitFullscreenElement));}   // re-enter button: only where supported AND only when NOT already fullscreen (native X handles exit)
+  $('fsbtn').onclick=goFullscreen;
+  document.addEventListener('fullscreenchange',updateFsBtn);document.addEventListener('webkitfullscreenchange',updateFsBtn);   // iPad fires the webkit-prefixed one
+  updateFsBtn();
+})();
 function togglePause(){
   if(phase==='run'){phase='paused';clk.running=false;$('pausebtn').querySelector('.lbl').textContent='Resume';paint();updateWait()}
   else if(phase==='paused'){phase='run';clk.running=true;clk.last=Date.now();$('pausebtn').querySelector('.lbl').textContent='Pause';paint();updateWait()}}
