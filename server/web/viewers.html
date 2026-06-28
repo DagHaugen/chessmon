@@ -104,15 +104,16 @@ window.name='cm_viewers';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 let ws, broadcastOff=false, games={}, order=[], watchTok=null;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function reportWatch(){send({type:'watch',table:watchTok});}   // tell the server which game (if any) this page is showing
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'})};
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'});reportWatch();};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
     if(m.type==='tables'){broadcastOff=false;ingest(m.tables||[]);}
     else if(m.type==='broadcast_off'){broadcastOff=true;render();setTimeout(()=>send({type:'viewer.join'}),5000);}
     else if(m.type==='clock.tick'){const g=games[m.table];if(g){g.w=m.white_ms;g.b=m.black_ms;g.turn=(m.active==='black')?'b':'w';g.running=!!m.running;g.syncAt=performance.now();}}
-    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white};if(watchTok===m.table)renderSug();}}
+    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};if(watchTok===m.table)renderSug();}}
     else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);if(watchTok)renderSug();}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
@@ -127,7 +128,7 @@ function ingest(tabs){
     if(t.moves!==g.moves){g.w=cw;g.b=cb;g.syncAt=performance.now();g.moves=t.moves;}   // new move -> re-sync clocks
     g.turn=(t.fen.split(' ')[1]==='b')?'b':'w';g.running=(t.status!=='paused')&&!t.result;});   // finished -> clocks frozen
   Object.keys(games).forEach(k=>{if(!order.includes(k))delete games[k];});
-  if(watchTok&&!games[watchTok])watchTok=null;   // table cleared/removed -> back to lobby
+  if(watchTok&&!games[watchTok]){watchTok=null;reportWatch();}   // table cleared/removed -> back to lobby
   render();
 }
 function live(g,side){let ms=side==='w'?g.w:g.b;if(ms==null)return null;
@@ -150,7 +151,7 @@ function render(){
   if(!order.length){L.innerHTML='';E.style.display='';E.textContent='No games in progress right now.';return;}
   E.style.display='none';L.innerHTML='';
   order.forEach(tok=>{const g=games[tok],t=g.t,nm=names(t),fin=!!t.result;
-    const card=document.createElement('div');card.className='card'+(fin?' fin':'');card.onclick=()=>{watchTok=tok;render();};
+    const card=document.createElement('div');card.className='card'+(fin?' fin':'');card.onclick=()=>{watchTok=tok;reportWatch();render();};
     card.innerHTML='<div class="cnames">'+esc(nm[0])+' – '+esc(nm[1])+'</div>'+
       '<div class="cmeta">'+esc(t.name||'table')+' · '+t.moves+' move'+(t.moves===1?'':'s')+
         (fin?'<span class="gstat done">FINISHED</span>':(t.status==='paused'?'<span class="gstat">⏸ PAUSED</span>':''))+'</div>'+
@@ -173,7 +174,7 @@ function syncSideHeight(){const board=document.querySelector('.board'),s=documen
   s.style.marginTop='0px';
   const off=board.getBoundingClientRect().top-s.getBoundingClientRect().top;   // align side to the board's top edge
   s.style.marginTop=Math.max(0,off)+'px';s.style.height=board.offsetHeight+'px';}
-function renderSug(){const g=watchTok&&games[watchTok],t=g&&g.t,s=g&&g.sug;
+function renderSug(){const g=watchTok&&games[watchTok],t=g&&g.t,s=(g&&g.sug&&g.sug.fen===(t&&t.fen))?g.sug:null;
   if(t&&t.result){$('sugbar').innerHTML='<div class="rbanner">'+esc(settled(t))+'</div>';$('sug').innerHTML='';return;}
   $('sugbar').innerHTML=(s&&s.wdl_white)?posBar(s.wdl_white):'';
   $('sug').innerHTML=(s&&s.moves&&s.moves.length)?moveTable(s.moves):'';}
@@ -197,7 +198,7 @@ function sq(grid,r,f,piece){const d=document.createElement('div');d.className='s
   if(piece){const i=document.createElement('img');i.alt=piece;
     i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
     i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
-$('back').onclick=()=>{watchTok=null;render();};
+$('back').onclick=()=>{watchTok=null;reportWatch();render();};
 setInterval(()=>{
   if(watchTok&&games[watchTok]){tickWatch(games[watchTok]);}
   else{order.forEach(tok=>{const g=games[tok];if(!g)return;

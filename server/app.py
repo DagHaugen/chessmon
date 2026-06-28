@@ -71,6 +71,8 @@ suggest_state: dict = {}           # table_token -> last Stockfish suggestion (m
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
 viewers: set = set()               # local-network viewers.html pages; fed the live tables while broadcast_local is on
+watched: set = set()               # union of table tokens on a watch page / monitor tile -> the only games the engine analyses
+watch_by_ws: dict = {}             # viewer ws -> set of tokens it is showing (watch page = 1, monitor = up to 4)
 formats: dict = {}                 # format id -> {id, name, base_ms, increment_ms, inc_type, category, variant}
 players: dict = {}                 # player id -> {id, name}
 tournaments: dict = {}             # tournament id -> {id, name, format, players[], rounds[]}
@@ -119,6 +121,7 @@ def _quiet_conn_reset(loop, context):
 async def _install_loop_handler():
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(_quiet_conn_reset)
+    asyncio.create_task(suggestion_scheduler())   # owns the engine: analyses watched games, deepening + preempting
 
 
 def hub(token):
@@ -147,31 +150,104 @@ async def broadcast_state(s):
             await send(a, {"type": "games_changed"})
     if flow_result_to_tournament(s):   # a finished tournament game -> write the result back onto its pairing
         await broadcast_admin()
-    if settings.get("show_suggested_moves") and settings.get("broadcast_local") and is_stockfish_installed():
-        asyncio.create_task(analyze_and_push(s))   # Stockfish suggestion (best move + WDL) for viewers, off the hot path
+    wake_suggest()                  # a move landed -> the suggestion scheduler re-reads this board (if it is watched)
 
 
-async def analyze_and_push(s):
-    """Stockfish suggestion for the current position -> the viewer/monitor overlay. Gated by
-    show_suggested_moves; runs the engine in a thread so it never blocks the move flow. Deepens
-    in a few passes on the same position, pushing each refinement, and bails the moment the
-    position moves on (Stockfish reuses its hash between passes, so the deep one is cheap)."""
-    board = s.game.board.copy()
-    fen = board.fen()
-    for movetime in (0.5, 1.5, 4.0):
-        if s.result or s.game.board.fen() != fen:
-            return                                        # game ended / a move landed -> stop deepening
+# --- suggested-moves scheduler -------------------------------------------------------------
+# One loop owns the engine. It analyses only WATCHED games (a watch page / monitor tile), one at
+# a time, running a CONTINUOUS deepening search and pushing each refinement. A freshly-moved (or
+# newly-watched) board jumps the queue for a quick first read; otherwise it keeps deepening the
+# board it is on until something, anywhere, moves -- so one game deepens "forever", several share.
+SUGGEST_CAP_DEPTH = 28             # deep enough; stop hogging the engine so other watched boards get a turn
+sched_wake = asyncio.Event()
+_analyzed: dict = {}               # token -> {"fen", "depth", "key"} of what we last looked at / pushed
+
+
+def wake_suggest():
+    sched_wake.set()
+
+
+def recompute_watched():
+    new = set()
+    for toks in watch_by_ws.values():
+        new |= toks
+    if new != watched:
+        watched.clear()
+        watched.update(new)
+        wake_suggest()
+
+
+def _watched_sessions():
+    out = []
+    for t in list(watched):
+        s = mgr.by_table(t)
+        if s is not None and not s.result and (s.started_at or s.moves) and not s.game.board.is_game_over():
+            out.append((t, s))
+    return out
+
+
+def _is_fresh(t, s):
+    return _analyzed.get(t, {}).get("fen") != s.game.board.fen()
+
+
+async def suggestion_scheduler():
+    """Pick a watched board (fresh first, else the shallowest) and deepen it until it moves on, is
+    unwatched, another board needs a first read, or it is deep enough -- then move to the next."""
+    while True:
         try:
-            sug = await asyncio.to_thread(engine.analyse, STOCKFISH_EXE, board, movetime)
+            on = settings.get("show_suggested_moves") and settings.get("broadcast_local") and is_stockfish_installed()
+            sessions = _watched_sessions() if on else []
+            target = None
+            if sessions:
+                fresh = [ts for ts in sessions if _is_fresh(*ts)]
+                if fresh:
+                    target = fresh[0]
+                else:
+                    deep = [ts for ts in sessions if _analyzed.get(ts[0], {}).get("depth", 0) < SUGGEST_CAP_DEPTH]
+                    deep.sort(key=lambda ts: _analyzed.get(ts[0], {}).get("depth", 0))
+                    target = deep[0] if deep else None
+            if target is None:
+                sched_wake.clear()
+                await sched_wake.wait()
+                continue
+            await _deepen(*target)
         except Exception as e:
-            print("[engine] analyse failed:", e)
-            return
-        if sug is None or s.game.board.fen() != fen:      # moved during the analysis -> drop the stale result
-            return
-        msg = {"type": "suggest", "table": s.table_token, **sug}
-        suggest_state[s.table_token] = msg
-        for v in list(viewers):
-            await send(v, msg)
+            print("[engine] scheduler:", e)
+            await asyncio.sleep(0.5)
+
+
+async def _deepen(token, sess):
+    board = sess.game.board.copy()
+    fen = board.fen()
+    try:
+        analysis = await asyncio.to_thread(engine.start, STOCKFISH_EXE, board)
+    except Exception as e:
+        print("[engine] start failed:", e)
+        _analyzed[token] = {"fen": fen, "depth": SUGGEST_CAP_DEPTH, "key": None}   # mark settled so we don't spin on it
+        return
+    try:
+        while True:
+            await asyncio.sleep(0.4)
+            if token not in watched or sess.result or sess.game.board.fen() != fen:
+                break                                                  # unwatched / ended / a move landed
+            if any(_is_fresh(t, s) for (t, s) in _watched_sessions() if t != token):
+                break                                                  # a freshly-moved board elsewhere wants a first read
+            sug = engine.read(analysis, board)
+            if not sug or not sug.get("moves"):
+                continue
+            depth = sug.get("depth") or 0
+            key = (tuple(m["san"] for m in sug["moves"]), tuple(sug.get("wdl_white") or ()))
+            prev = _analyzed.get(token)
+            _analyzed[token] = {"fen": fen, "depth": depth, "key": key}
+            if not prev or prev.get("fen") != fen or prev.get("key") != key:
+                msg = {"type": "suggest", "table": token, **sug}
+                suggest_state[token] = msg
+                for v in list(viewers):
+                    await send(v, msg)
+            if depth >= SUGGEST_CAP_DEPTH:
+                break                                                  # deep enough -> release the engine for another board
+    finally:
+        await asyncio.to_thread(engine.stop, analysis)
 
 
 def dev_public(d):
@@ -697,6 +773,19 @@ async def ws_endpoint(ws: WebSocket):
                             await send(ws, sg)
                 else:
                     await send(ws, {"type": "broadcast_off"})
+            elif t == "watch":                                    # a viewers.html watch page -> the one game it is showing (null on the lobby)
+                tok = data.get("table")
+                watch_by_ws[ws] = {tok} if tok else set()
+                recompute_watched()
+                if tok and settings.get("show_suggested_moves") and tok in suggest_state:
+                    await send(ws, suggest_state[tok])            # hand over the current suggestion right away
+            elif t == "watch_set":                                # a monitor page -> the set of games on its tiles
+                watch_by_ws[ws] = set(x for x in (data.get("tables") or []) if x)
+                recompute_watched()
+                if settings.get("show_suggested_moves"):
+                    for x in watch_by_ws[ws]:
+                        if x in suggest_state:
+                            await send(ws, suggest_state[x])
             elif t == "device.rename":                            # console (or the device itself) set a user-defined name
                 d = devices.get(data.get("devId"))
                 if d is not None:
@@ -718,12 +807,11 @@ async def ws_endpoint(ws: WebSocket):
                     for v in list(viewers):
                         await send(v, push)
                 if "show_suggested_moves" in data:                # toggled -> push fresh suggestions, or tell viewers to drop the overlay
-                    if settings.get("show_suggested_moves") and settings.get("broadcast_local") and is_stockfish_installed():
-                        for sess in mgr._by_table.values():
-                            if (sess.started_at or sess.moves) and not sess.result:
-                                asyncio.create_task(analyze_and_push(sess))
-                    elif not settings.get("show_suggested_moves"):
+                    if settings.get("show_suggested_moves"):
+                        wake_suggest()                            # the scheduler picks up the watched games
+                    else:
                         suggest_state.clear()
+                        _analyzed.clear()
                         for v in list(viewers):
                             await send(v, {"type": "suggest_off"})
             elif t == "stockfish.install":                        # console "Get Stockfish" -> the server fetches the engine
@@ -1106,6 +1194,8 @@ async def ws_endpoint(ws: WebSocket):
                     await send(h["clock"], {"type": "camera.offline", "cameraAssigned": s.camera_dev is not None})
         admins.discard(ws)
         viewers.discard(ws)
+        if watch_by_ws.pop(ws, None):
+            recompute_watched()
         for hb in conns.values():
             hb["spectators"].discard(ws)                # an admin that was watching a board
         if dev_id in devices and devices[dev_id].get("ws") is ws:

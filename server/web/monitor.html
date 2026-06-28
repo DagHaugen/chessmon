@@ -61,15 +61,16 @@ let ws, games={}, order=[], sel=[], layout='quad';
 try{const s=JSON.parse(localStorage.getItem('cm_monitor')||'{}');if(Array.isArray(s.sel))sel=s.sel;if(s.layout)layout=s.layout;}catch(e){}
 function saveSel(){try{localStorage.setItem('cm_monitor',JSON.stringify({sel,layout}))}catch(e){}}
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function reportWatch(){send({type:'watch_set',tables:sel});}   // tell the server which games this monitor is showing
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
-  ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'})};
+  ws.onopen=()=>{$('dot').classList.add('on');send({type:'viewer.join'});reportWatch();};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
     if(m.type==='tables'){ingest(m.tables||[]);}
     else if(m.type==='broadcast_off'){order=[];games={};renderChips();renderStage();setTimeout(()=>send({type:'viewer.join'}),5000);}
     else if(m.type==='clock.tick'){const g=games[m.table];if(g){g.w=m.white_ms;g.b=m.black_ms;g.turn=(m.active==='black')?'b':'w';g.running=!!m.running;g.syncAt=performance.now();}}
-    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white};renderStage();}}
+    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};renderStage();}}
     else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);renderStage();}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
@@ -85,7 +86,7 @@ function ingest(tabs){
   Object.keys(games).forEach(k=>{if(!order.includes(k))delete games[k];});
   sel=sel.filter(tok=>order.includes(tok));                          // drop finished games from the selection
   if(!sel.length&&order.length)sel=order.slice(0,layout==='single'?1:4);   // default selection
-  renderChips();renderStage();
+  reportWatch();renderChips();renderStage();
 }
 function live(g,side){let ms=side==='w'?g.w:g.b;if(ms==null)return null;
   if(g.running&&g.turn===side)ms-=(performance.now()-g.syncAt);return Math.max(0,ms);}
@@ -100,7 +101,7 @@ function renderChips(){const C=$('chips');C.innerHTML='';
 function toggle(tok){const i=sel.indexOf(tok);
   if(i>=0)sel.splice(i,1);
   else{sel.push(tok);const cap=layout==='single'?1:4;while(sel.length>cap)sel.shift();}
-  saveSel();renderChips();renderStage();}
+  saveSel();reportWatch();renderChips();renderStage();}
 function renderStage(){const S=$('stage');S.className='stage '+layout;S.innerHTML='';
   const show=(layout==='single'?sel.slice(0,1):sel.slice(0,4));
   if(!show.length){const e=document.createElement('div');e.className='empty';e.textContent=order.length?'Pick a game from the bar above':'Waiting for a live game…';S.append(e);return;}
@@ -112,7 +113,7 @@ function tile(g){const t=g.t,nm=names(t);
   const bw=document.createElement('div');bw.className='bwrap';const bd=document.createElement('div');bd.className='board';renderBoard(bd,t.fen);bw.append(bd);
   const bot=document.createElement('div');bot.className='pl white'+(g.turn==='w'?' act':'');
   bot.innerHTML='<span class="nm">'+esc(nm[0])+'</span><span class="ck" data-tok="'+esc(t.token)+'" data-side="w">'+fmtClk(live(g,'w'))+'</span>';
-  el.append(top);if(g.sug)el.append(sugStrip(g.sug));el.append(bw,bot);return el;}
+  el.append(top);if(g.sug&&g.sug.fen===t.fen)el.append(sugStrip(g.sug));el.append(bw,bot);return el;}
 function sugStrip(s){const d=document.createElement('div');d.className='sgs';
   const w=s.wdl_white,best=(s.moves&&s.moves[0])?s.moves[0].san:'–';let bar='';
   if(w){const t=(w[0]+w[1]+w[2])||1;
@@ -126,7 +127,7 @@ function sq(grid,r,f,piece){const d=document.createElement('div');d.className='s
     i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
     i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
 $('layout').onclick=()=>{layout=(layout==='quad')?'single':'quad';$('layout').textContent=(layout==='quad')?'2×2':'Single';
-  const cap=layout==='single'?1:4;if(sel.length>cap)sel=sel.slice(0,cap);saveSel();renderStage();};
+  const cap=layout==='single'?1:4;if(sel.length>cap)sel=sel.slice(0,cap);saveSel();reportWatch();renderStage();};
 $('full').onclick=()=>{const e=document.documentElement;
   if(!document.fullscreenElement){(e.requestFullscreen||e.webkitRequestFullscreen||function(){}).call(e);}
   else{(document.exitFullscreen||function(){}).call(document);}};
