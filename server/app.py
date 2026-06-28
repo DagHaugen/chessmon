@@ -36,6 +36,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .manager import SessionManager
+from . import engine
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out")
@@ -66,6 +67,7 @@ mgr.load(SESSIONS_FILE)            # resume calibrated sessions + games across a
 conns: dict[str, dict] = {}        # table_token -> {clock, camera, spectators}
 cam_status: dict = {}              # table_token -> last camera.status payload (flash/screen/zoom) so a console (re)join restores it
 clock_state: dict = {}             # table_token -> last clock.tick (live white/black/active/running) so viewers mirror the device clock
+suggest_state: dict = {}           # table_token -> last Stockfish suggestion (move + WDL) for the viewer overlay / late joiners
 devices: dict[str, dict] = {}      # devId -> {id, name, userName, role, table, online, ws}
 admins: set = set()                # server-console websockets
 viewers: set = set()               # local-network viewers.html pages; fed the live tables while broadcast_local is on
@@ -145,6 +147,24 @@ async def broadcast_state(s):
             await send(a, {"type": "games_changed"})
     if flow_result_to_tournament(s):   # a finished tournament game -> write the result back onto its pairing
         await broadcast_admin()
+    if settings.get("show_suggested_moves") and settings.get("broadcast_local") and is_stockfish_installed():
+        asyncio.create_task(analyze_and_push(s))   # Stockfish suggestion (best move + WDL) for viewers, off the hot path
+
+
+async def analyze_and_push(s):
+    """Stockfish suggestion for the current position -> the viewer/monitor overlay. Gated by
+    show_suggested_moves; runs the engine in a thread so it never blocks the move flow."""
+    try:
+        sug = await asyncio.to_thread(engine.analyse, STOCKFISH_EXE, s.game.board.copy())
+    except Exception as e:
+        print("[engine] analyse failed:", e)
+        return
+    if sug is None:
+        return
+    msg = {"type": "suggest", "table": s.table_token, **sug}
+    suggest_state[s.table_token] = msg
+    for v in list(viewers):
+        await send(v, msg)
 
 
 def dev_public(d):
@@ -158,7 +178,8 @@ def tables_public():
              "san": [m.get("san", "") for m in s.moves], "fen": s.game.board.fen(), "match": getattr(s, "match", None),   # live board + match for the console
              "clock_white": (s.moves[-1].get("clock_white") if s.moves else None),   # last reported clocks -> viewers tick locally
              "clock_black": (s.moves[-1].get("clock_black") if s.moves else None),
-             "started_at": s.started_at, "result": s.result, "status": getattr(s, "status", "")}
+             "started_at": s.started_at, "result": s.result, "termination": getattr(s, "termination", None),
+             "status": getattr(s, "status", "")}
             for s in mgr._by_table.values()]
 
 
@@ -629,6 +650,9 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "tables", "tables": tables_public()})
                     for cs in clock_state.values():               # mirror the live device clocks right away
                         await send(ws, cs)
+                    if settings.get("show_suggested_moves"):
+                        for sg in suggest_state.values():         # restore the current engine suggestions
+                            await send(ws, sg)
                 else:
                     await send(ws, {"type": "broadcast_off"})
             elif t == "device.rename":                            # console (or the device itself) set a user-defined name
@@ -650,6 +674,15 @@ async def ws_endpoint(ws: WebSocket):
                     push = {"type": "tables", "tables": tables_public()} if settings.get("broadcast_local") else {"type": "broadcast_off"}
                     for v in list(viewers):
                         await send(v, push)
+                if "show_suggested_moves" in data:                # toggled -> push fresh suggestions, or tell viewers to drop the overlay
+                    if settings.get("show_suggested_moves") and settings.get("broadcast_local") and is_stockfish_installed():
+                        for sess in mgr._by_table.values():
+                            if (sess.started_at or sess.moves) and not sess.result:
+                                asyncio.create_task(analyze_and_push(sess))
+                    elif not settings.get("show_suggested_moves"):
+                        suggest_state.clear()
+                        for v in list(viewers):
+                            await send(v, {"type": "suggest_off"})
             elif t == "table.create":                             # console makes a new, empty table
                 mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)
@@ -953,7 +986,7 @@ async def ws_endpoint(ws: WebSocket):
                     await broadcast_tables()                      # console-only refresh; a full state re-push would restore the clock from the last move and roll the player's time back
             elif t == "flag":                                     # a clock hit 0 -> loss on time
                 result = "1-0" if data.get("side") == "black" else "0-1"
-                await send(hub(s.table_token)["clock"], s.end(result))
+                await send(hub(s.table_token)["clock"], s.end(result, "timeout"))
                 await broadcast_state(s)
             elif t == "refresh":                                  # clock wants a fresh read (board moved?)
                 s.set_calib_step("refresh")

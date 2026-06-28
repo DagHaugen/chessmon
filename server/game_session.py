@@ -57,6 +57,7 @@ class Session:
         self.board_reader: RealBoard | None = None
         self.moves: list[dict] = []        # [{ply, san, fen, clock_white, clock_black}]
         self.result: str | None = None
+        self.termination: str | None = None   # how it ended: checkmate/stalemate/.../timeout/resignation (None = outcome only)
         self._pending = None               # clocks from move.confirm, applied on next accept
         self._last_grid = None             # grid that produced the last verdict (for resolve)
         self._calib_step = None            # next binary frame is this calibration step
@@ -420,6 +421,7 @@ class Session:
             return res
         if kind == "gesture":
             self.result = san
+            self.termination = "agreement" if san == "1/2-1/2" else "resignation"
             return {"type": "game.end", "result": san, "pgn": self.pgn()}
         if kind == "ambiguous":
             return {"type": "move.ambiguous", "candidates": self._cands(extra)}
@@ -525,8 +527,9 @@ class Session:
         if self.game.prev is not None:
             self._last_grid = self.game.prev
 
-    def end(self, result):
+    def end(self, result, reason=None):
         self.result = result
+        self.termination = reason
         return {"type": "game.end", "result": result, "pgn": self.pgn()}
 
     def _record(self, san):
@@ -540,6 +543,8 @@ class Session:
         self.moves.append(rec)
         if self.game.board.is_game_over():
             self.result = self.game.board.result()
+            oc = self.game.board.outcome()
+            self.termination = oc.termination.name.lower() if oc and oc.termination else None
         turn = "White" if self.game.board.turn else "Black"
         return {"type": "move.result", "turn": turn, **rec}
 
