@@ -85,6 +85,7 @@
   body.kiosk.chrome .whead{display:flex;position:fixed;top:8px;left:8px;z-index:20;margin:0}
   body.kiosk.chrome .back{background:rgba(20,22,28,.62);color:#fff;border-color:rgba(255,255,255,.25)}
   body.kiosk #qrwatch{display:none}                 /* already on this device */
+  body.kiosk.watching{overflow:hidden}              /* immersive watch fills the viewport -> nothing to scroll (iPhone left it scrolled a bit after a rotation) */
   /* QR -- "watch on a phone" */
   .qrbtn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:6px;cursor:pointer;line-height:0}
   .qrbtn:hover{border-color:var(--accent);color:var(--ink)}
@@ -266,7 +267,9 @@ setInterval(()=>{
 },500);
 function updateKiosk(){document.body.classList.toggle('kiosk', kioskFlag||window.innerWidth<=720||window.innerHeight<=520);}   // immersive view: forced by the QR's ?kiosk=1, else by a phone-sized viewport
 function goFullscreen(){const e=document.documentElement,fn=e.requestFullscreen||e.webkitRequestFullscreen;if(!fn)return;try{const r=fn.call(e);if(r&&r.catch)r.catch(()=>{});}catch(_){}}   // iPad/Android/desktop support it; no-op on iPhone (Apple blocks page fullscreen there)
-let _land=window.innerWidth>720;window.addEventListener('resize',()=>{updateKiosk();const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);});   // re-orient on a land<->port crossing; else re-fit the board
+function pinTop(){if(document.body.classList.contains('kiosk')&&watchTok)window.scrollTo(0,0);}   // iPhone leaves the immersive page scrolled a bit after a rotation -> snap back to the top
+let _land=window.innerWidth>720;window.addEventListener('resize',()=>{updateKiosk();const l=window.innerWidth>720;if(l!==_land){_land=l;if(watchTok&&games[watchTok])renderWatch();}else if(wbEl)cmFit(wbEl);pinTop();});   // re-orient on a land<->port crossing; else re-fit the board
+window.addEventListener('orientationchange',()=>{pinTop();setTimeout(pinTop,300);});   // and again once iOS has finished settling the rotation
 if(window.ResizeObserver)new ResizeObserver(()=>{if(wbEl)cmFit(wbEl);}).observe($('wbhost'));   // re-fit once the area SETTLES (phone rotation / URL bar) -- fires after layout, so the board can't keep a transient over-size
 updateKiosk();connect();
 </script>
