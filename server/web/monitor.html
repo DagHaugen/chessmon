@@ -41,7 +41,8 @@
 <script>
 function $(id){return document.getElementById(id)}
 window.name='cm_monitor';
-let ws, games={}, order=[], sel=[], boardEls={};
+let ws, games={}, order=[], sel=[], boardEls=[];
+const HACK=Math.min(4,Math.max(0,parseInt(location.search.slice(1))||0));   // monitor.html?2 / ?3 / ?4 -> duplicate the one live board into N tiles (testing layouts with a single game)
 try{const s=JSON.parse(localStorage.getItem('cm_monitor')||'{}');if(Array.isArray(s.sel))sel=s.sel;}catch(e){}
 function saveSel(){try{localStorage.setItem('cm_monitor',JSON.stringify({sel}))}catch(e){}}
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
@@ -53,8 +54,8 @@ function connect(){
     if(m.type==='tables'){ingest(m.tables||[]);}
     else if(m.type==='broadcast_off'){order=[];games={};renderChips();renderStage();setTimeout(()=>send({type:'viewer.join'}),5000);}
     else if(m.type==='clock.tick'){const g=games[m.table];if(g){g.w=m.white_ms;g.b=m.black_ms;g.turn=(m.active==='black')?'b':'w';g.running=!!m.running;g.syncAt=performance.now();}}
-    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};if(boardEls[m.table])cmUpdateSug(boardEls[m.table],g);}}
-    else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);Object.keys(boardEls).forEach(tok=>{if(games[tok])cmUpdateSug(boardEls[tok],games[tok]);});}};
+    else if(m.type==='suggest'){const g=games[m.table];if(g){g.sug={moves:m.moves,wdl_white:m.wdl_white,fen:m.fen};boardEls.forEach(b=>{if(b.tok===m.table)cmUpdateSug(b.el,g);});}}
+    else if(m.type==='suggest_off'){Object.values(games).forEach(g=>g.sug=null);boardEls.forEach(b=>{if(games[b.tok])cmUpdateSug(b.el,games[b.tok]);});}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function ingest(tabs){
@@ -79,18 +80,20 @@ function toggle(tok){const i=sel.indexOf(tok);
   if(i>=0)sel.splice(i,1);
   else{sel.push(tok);while(sel.length>4)sel.shift();}                // up to 4 boards; the count picks the layout
   saveSel();reportWatch();renderChips();renderStage();}
-function renderStage(){const S=$('stage');boardEls={};
-  const show=sel.slice(0,4),n=show.length;
+function renderStage(){const S=$('stage');boardEls=[];
+  let show=sel.slice(0,4);
+  if(HACK&&show.length)show=Array.from({length:HACK},(_,i)=>show[i%show.length]);   // ?N -> repeat the selection to N tiles
+  const n=show.length;
   S.className='stage n'+n;S.innerHTML='';
   if(!n){const e=document.createElement('div');e.className='empty';e.textContent=order.length?'Pick a game from the bar above':'Waiting for a live game…';S.append(e);return;}
   const orient=(n===2||n===3)?'port':'land';                        // 1 & 4 -> landscape; 2 & 3 -> portrait
-  show.forEach(tok=>{const g=games[tok];if(!g)return;const el=cmWatchBoard(g,orient);boardEls[tok]=el;S.append(el);});}
+  show.forEach(tok=>{const g=games[tok];if(!g)return;const el=cmWatchBoard(g,orient);boardEls.push({tok,el});S.append(el);});}
 $('full').onclick=()=>{const e=document.documentElement;
   if(!document.fullscreenElement){(e.requestFullscreen||e.webkitRequestFullscreen||function(){}).call(e);}
   else{(document.exitFullscreen||function(){}).call(document);}};
 $('hide').onclick=()=>$('bar').classList.add('hidden');
 document.addEventListener('mousemove',e=>{if(e.clientY<6)$('bar').classList.remove('hidden');});   // mouse to the top edge brings the bar back
-setInterval(()=>{Object.keys(boardEls).forEach(tok=>{const g=games[tok];if(g)cmTickBoard(boardEls[tok],g);});},500);
+setInterval(()=>{boardEls.forEach(b=>{const g=games[b.tok];if(g)cmTickBoard(b.el,g);});},500);
 connect();
 </script>
 </body>
