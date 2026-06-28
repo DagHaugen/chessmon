@@ -397,12 +397,47 @@ def save_games():
 
 DEFAULT_SETTINGS = {"time_format": "24h",   # "12h" -> "04:54 PM"          | "24h" -> "16:54"
                     "date_format": "iso",   # "iso" -> "2026-06-27 13:11"  | "long" -> "Jun 27 01:11 PM"
+                    "room_name": "",         # friendly club/room name -> shown in admin instead of the cm- room id
                     "show_suggested_moves": False,
                     "broadcast_local": False, "broadcast_web": False}
 
 
 def is_stockfish_installed():
     return os.path.exists(STOCKFISH_EXE)
+
+
+def download_stockfish():
+    """Fetch the latest Stockfish Windows build into STOCKFISH_EXE (mirrors setup.ps1's step 3).
+    Blocking -> call via asyncio.to_thread. Returns (ok: bool, message: str)."""
+    import urllib.request, zipfile, tempfile, shutil
+    try:
+        os.makedirs(ENGINES_DIR, exist_ok=True)
+        req = urllib.request.Request("https://api.github.com/repos/official-stockfish/Stockfish/releases/latest",
+                                     headers={"User-Agent": "chessmon", "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            rel = json.load(r)
+        asset = None
+        for p in ("windows-x86-64-avx2", "windows-x86-64-sse41-popcnt", "windows-x86-64-modern", "windows-x86-64"):
+            asset = next((a for a in rel.get("assets", []) if p in a.get("name", "") and a.get("name", "").endswith(".zip")), None)
+            if asset:
+                break
+        if not asset:
+            return False, "no Windows .zip in the latest release"
+        tmp = tempfile.mkdtemp(prefix="cm_sf_")
+        try:
+            zpath = os.path.join(tmp, asset["name"])
+            urllib.request.urlretrieve(asset["browser_download_url"], zpath)
+            with zipfile.ZipFile(zpath) as z:
+                name = next((n for n in z.namelist() if n.lower().endswith(".exe")), None)
+                if not name:
+                    return False, "no .exe inside the download"
+                with z.open(name) as src, open(STOCKFISH_EXE, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            return True, ("Stockfish " + str(rel.get("tag_name") or "").lstrip("v") + " installed").strip()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception as e:
+        return False, str(e)
 
 
 def is_cloud_configured():
@@ -665,9 +700,10 @@ async def ws_endpoint(ws: WebSocket):
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
             elif t == "settings.update":                          # console changed a global pref (time/date format, suggested-moves, broadcast)
-                for k in ("time_format", "date_format", "show_suggested_moves", "broadcast_local", "broadcast_web"):
+                for k in ("time_format", "date_format", "room_name", "show_suggested_moves", "broadcast_local", "broadcast_web"):
                     if k in data:
                         settings[k] = data[k]
+                settings["room_name"] = str(settings.get("room_name") or "").strip()[:60]   # keep the club name tidy
                 save_settings()
                 await broadcast_devices()                          # push the new settings to every console
                 if "broadcast_local" in data:                     # toggled -> show or hide the live games on the viewer pages
@@ -683,6 +719,12 @@ async def ws_endpoint(ws: WebSocket):
                         suggest_state.clear()
                         for v in list(viewers):
                             await send(v, {"type": "suggest_off"})
+            elif t == "stockfish.install":                        # console "Get Stockfish" -> the server fetches the engine
+                await send(ws, {"type": "stockfish.status", "state": "downloading"})
+                ok, msg = await asyncio.to_thread(download_stockfish)
+                settings["stockfish_installed"] = is_stockfish_installed()
+                await send(ws, {"type": "stockfish.status", "state": ("done" if ok else "error"), "message": msg})
+                await broadcast_devices()                          # push the refreshed stockfish_installed flag to every console
             elif t == "table.create":                             # console makes a new, empty table
                 mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)

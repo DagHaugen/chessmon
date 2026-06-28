@@ -27,7 +27,7 @@
   .msum.none{color:var(--mut)}
   .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
   .field label{display:block;font-size:11px;color:var(--mut);margin-bottom:4px}
-  .field select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:14px;font-family:inherit}
+  .field select,.field input{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:14px;font-family:inherit}
   .startlabel{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:14px;color:var(--mut)}
   .sacts{display:flex;gap:8px;margin-top:12px}
   .add{background:var(--accent);color:#0b1020;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer}
@@ -65,6 +65,9 @@
   <h1>Setup</h1>
   <div class="tcard" id="prefs">
     <div class="tname" style="margin-bottom:12px">Display &amp; engine</div>
+    <div class="field" style="margin-bottom:14px"><label>Club / room name</label>
+      <input id="set_room" maxlength="60" placeholder="e.g. Oslo Chess Club" autocomplete="off">
+      <div style="font-size:11.5px;color:var(--mut);margin-top:4px">Shown in the console (and the share link) instead of the room id.</div></div>
     <div class="sgrid">
       <div class="field"><label>Time format</label>
         <select id="set_time"><option value="24h">24-hour · 16:54</option><option value="12h">12-hour · 4:54 PM</option></select></div>
@@ -95,7 +98,8 @@ function connect(){
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
     if(m.type==='devices'){tables=m.tables||[];players=m.players||[];formats=m.formats||[];applySettings(m.settings);maybeRender();}
-    else if(m.type==='tables'){tables=m.tables||[];maybeRender();}};   // match.set broadcasts 'tables' -> refresh the summary (sig guard ignores move-only changes)
+    else if(m.type==='tables'){tables=m.tables||[];maybeRender();}
+    else if(m.type==='stockfish.status'){onSfStatus(m);}};   // match.set broadcasts 'tables' -> refresh the summary (sig guard ignores move-only changes)
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -181,6 +185,7 @@ function render(){
 }
 function show(id,on){$(id).style.display=on?'':'none'}
 function applySettings(s){if(!s)return;
+  if(document.activeElement!==$('set_room'))$('set_room').value=s.room_name||'';   // don't clobber while the operator is typing
   $('set_time').value=s.time_format||'24h'; $('set_date').value=s.date_format||'iso';
   $('set_suggest').checked=!!s.show_suggested_moves;
   $('set_bc_local').checked=!!s.broadcast_local; $('set_bc_web').checked=!!s.broadcast_web;
@@ -195,7 +200,13 @@ $('set_date').onchange=()=>send({type:'settings.update',date_format:$('set_date'
 $('set_suggest').onchange=()=>send({type:'settings.update',show_suggested_moves:$('set_suggest').checked});
 $('set_bc_local').onchange=()=>send({type:'settings.update',broadcast_local:$('set_bc_local').checked});
 $('set_bc_web').onchange=()=>send({type:'settings.update',broadcast_web:$('set_bc_web').checked});
-$('sf_dl').onclick=()=>window.open('https://stockfishchess.org/download/','_blank');
+$('set_room').onchange=()=>send({type:'settings.update',room_name:$('set_room').value.trim()});
+$('sf_dl').onclick=()=>{send({type:'stockfish.install'});$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';$('sf_stat').textContent='fetching the latest Windows build…';$('sf_stat').className='sfstat';};
+function onSfStatus(m){
+  if(m.state==='downloading'){$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';return;}
+  if(m.state==='done'){$('sf_stat').textContent='✓ '+(m.message||'Stockfish installed');$('sf_stat').className='sfstat ok';}   // the devices push then hides the button + enables the checkbox
+  else{$('sf_dl').disabled=false;$('sf_dl').textContent='Get Stockfish';$('sf_stat').textContent='download failed — '+(m.message||'unknown error');$('sf_stat').className='sfstat';}
+}
 connect();
 </script>
 </body>
