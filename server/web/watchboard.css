@@ -67,4 +67,3 @@
 .wb-sgt td.mc{text-align:left;font-weight:700;white-space:nowrap}
 .wb-sgt .pcg{display:inline-block;width:1.4em;height:1.4em;margin-right:4px;vertical-align:-0.32em}   /* SVG piece icon */
 .wb-sgt img.pcg.chip{width:1.22em;height:1.22em;vertical-align:-0.22em;background:#c7ccd4;border-radius:3px}   /* small light-grey chip behind black pieces (solid #000) so they read on the dark panel */
-.wb-sgt tbody tr:first-child{background:rgba(255,255,255,.05)}
