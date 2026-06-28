@@ -13,7 +13,7 @@
     return '<div class="wb-wdl"><span class="ww" style="width:'+(w[0]/t*100)+'%"></span><span class="wd" style="width:'+(w[1]/t*100)+'%"></span><span class="wb2" style="width:'+(w[2]/t*100)+'%"></span></div>'
          +'<div class="wb-wdlk"><span>White '+pctOf(w,0)+'%</span><span>Draw '+pctOf(w,1)+'%</span><span>Black '+pctOf(w,2)+'%</span></div>';}
   function pieceGlyph(san){const c=(san[0]==='O')?'k':(('KQRBN'.includes(san[0])?san[0]:'P').toLowerCase());return G[c]||'';}
-  function pieceImg(san,turn){const p=(san[0]==='O')?'K':('KQRBN'.includes(san[0])?san[0]:'P'),c=(turn==='b')?'b':'w';return '<img class="pcg'+(c==='b'?' chip':'')+'" src="pieces/'+c+p+'.svg" alt="">';}   // SVG piece in the side-to-move colour (the Unicode glyph was unreadable on iOS); black pieces get a light chip so they don't vanish into the dark panel
+  function pieceImg(san,turn){const p=(san[0]==='O')?'K':('KQRBN'.includes(san[0])?san[0]:'P'),c=(turn==='b')?'b':'w';return '<img class="pcg'+(c==='b'?' pcgbg':'')+'" src="pieces/'+c+p+'.svg" alt="">';}   // SVG piece in the side-to-move colour (the Unicode glyph was unreadable on iOS); black pieces get a light chip so they don't vanish into the dark panel (class is pcgbg, NOT chip -- the monitor has its own .chip)
   function moveColor(m){if(m.mate!=null)return m.mate>0?'#2fe08a':'#ff5a5a';const cp=m.cp;if(cp==null)return 'var(--mut)';if(cp>=150)return '#2fe08a';if(cp>=40)return '#82c4a0';if(cp>-40)return 'var(--mut)';if(cp>-150)return '#d39090';return '#ff5a5a';}
   function moveTable(moves,turn){moves=moves||[];let rows='';
     for(let i=0;i<3;i++){const m=moves[i];
