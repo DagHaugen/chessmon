@@ -191,6 +191,9 @@ function render(){
   });
 }
 function show(id,on){$(id).style.display=on?'':'none'}
+function fmtD(d,fmt){const p=n=>String(n).padStart(2,'0');   // a date in the operator's selected format
+  if(fmt==='iso')return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});}
 function applySettings(s){if(!s)return;
   if(document.activeElement!==$('set_room'))$('set_room').value=s.room_name||'';   // don't clobber while the operator is typing
   $('set_time').value=s.time_format||'24h'; $('set_date').value=s.date_format||'iso';
@@ -205,8 +208,9 @@ function applySettings(s){if(!s)return;
   $('set_suggest').disabled=!inst; show('sf_dl',!inst);
   const fi=!!s.fide_installed,fc=s.fide_count||0;
   let fstat=fi?('✓ FIDE list · '+fc.toLocaleString()+' players'):'FIDE list not downloaded',stale=false;
-  if(fi&&s.fide_date){const vt=new Date(s.fide_date+'T00:00:00');vt.setMonth(vt.getMonth()+1);   // FIDE updates monthly -> good ~1 month from download
-    if(!isNaN(vt)){stale=new Date()>vt;fstat+=' · valid to '+vt.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})+(stale?' (update recommended)':'');}}
+  if(fi&&s.fide_date){const dl=new Date(s.fide_date+'T00:00:00');
+    if(!isNaN(dl)){const vt=new Date(dl.getFullYear(),dl.getMonth()+1,1);   // FIDE publishes monthly (last day) -> the list is current through the download month, i.e. until the 1st of next month
+      stale=new Date()>=vt;fstat+=' · valid to '+fmtD(vt,s.date_format)+(stale?' (update recommended)':'');}}
   $('fide_stat').textContent=fstat;
   $('fide_stat').className='sfstat'+(fi&&!stale?' ok':'');
   $('fide_dl').textContent=fi?'Update FIDE list':'Download FIDE list';}
