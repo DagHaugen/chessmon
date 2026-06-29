@@ -31,6 +31,8 @@
   .gmeta{color:var(--mut);font-size:12px}
   .gtour{color:var(--mut);font-size:12px;margin-left:auto;white-space:nowrap}
   .gdate{color:var(--mut);font-size:12px;min-width:92px;text-align:right;white-space:nowrap}
+  .gdel{flex:0 0 auto;align-self:center;background:none;border:none;color:var(--mut);font-size:14px;line-height:1;cursor:pointer;padding:2px 5px;border-radius:6px}
+  .gdel:hover{color:var(--bad);background:rgba(255,107,107,.13)}
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.85);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
   .modal.hidden{display:none}
   .sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:660px;width:100%;max-height:92vh;overflow:auto}
@@ -40,7 +42,8 @@
   .rboard{display:grid;grid-template-columns:repeat(8,1fr);width:min(360px,82vw);aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:0 0 auto}
   .rsq{display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1}
   .rsq.lt{background:#e8d2a8}.rsq.dk{background:#b07f53}
-  .pc.w{color:#fcfcfc;text-shadow:0 0 1px #2a2a2a,0 1px 1px #2a2a2a}
+  .rsq img.pc{width:84%;height:84%;display:block}                          /* SVG piece */
+  .pc.w{color:#fcfcfc;text-shadow:0 0 1px #2a2a2a,0 1px 1px #2a2a2a}        /* glyph fallback colours */
   .pc.b{color:#161616}
   .rside{flex:1;min-width:170px}
   .rmoves{max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:1px}
@@ -136,8 +139,10 @@ function renderList(){
   rows.forEach(g=>{const row=document.createElement('div');row.className='grow';
     row.innerHTML='<span class="gnames">'+esc(g.white||'White')+' – '+esc(g.black||'Black')+'</span>'
       +'<span class="gres">'+fmtRes(g.result)+'</span><span class="gmeta">'+gmeta(g)+'</span>'
-      +'<span class="gtour">'+gtour(g)+'</span><span class="gdate">'+fmtDate(g.finished_at)+'</span>';
+      +'<span class="gtour">'+gtour(g)+'</span><span class="gdate">'+fmtDate(g.finished_at)+'</span>'
+      +'<button class="gdel" title="Delete game" aria-label="Delete">&times;</button>';
     row.onclick=()=>send({type:'games.get',id:g.id});
+    row.querySelector('.gdel').onclick=e=>{e.stopPropagation();if(confirm('Delete this game from the archive?'))send({type:'games.delete',id:g.id});};
     L.append(row);});
 }
 function positions(){const ps=[cur.start_fen||START];(cur.moves||[]).forEach(mv=>ps.push(mv.fen||ps[ps.length-1]));return ps;}
@@ -147,7 +152,9 @@ function renderBoard(fen){
     if(ch>='1'&&ch<='8'){for(let k=0;k<+ch;k++){sq(grid,r,f);f++;}}else{sq(grid,r,f,ch);f++;}}});
 }
 function sq(grid,r,f,piece){const d=document.createElement('div');d.className='rsq '+((r+f)%2?'dk':'lt');
-  if(piece){const sp=document.createElement('span');sp.className='pc '+(piece===piece.toUpperCase()?'w':'b');sp.textContent=G[piece.toLowerCase()]||'';d.append(sp);}
+  if(piece){const i=document.createElement('img');i.className='pc';i.alt=piece;
+    i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.className='pc '+(piece<'a'?'w':'b');sp.textContent=G[piece.toLowerCase()]||'';d.append(sp);};   // glyph fallback if an SVG is missing
+    i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}
   grid.append(d);}
 function openModal(){
   const g=cur;
