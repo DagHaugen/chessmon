@@ -272,15 +272,17 @@
 <script>/* old-browser guard (ES5 only -- must parse on Safari < 11, where rtc_transport.js's async/await cannot). The ?rtc / comlos.com flow needs WebRTC, which Safari only got in iOS 11; on an older device show a clear message instead of a silent "Connecting..." hang. */
 (function(){
   if(!(/[?&]rtc=/.test(location.search)||window.CM_RTC))return;   // only the comlos/WebRTC flow can be "too old"
-  window.cmTooOld=function(){
+  function cmFull(html){
     if(window._cmOld)return; window._cmOld=1;
     var m=document.createElement('div');
-    m.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:#11141a;color:#e8eaed;padding:18% 26px 0;text-align:center;font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:17px;line-height:1.55;font-weight:600';
-    m.innerHTML='This device is too old for the QR connection &mdash; it needs <b>iOS 11+</b> or Android Chrome.<br><br>But it works great as a <b>standalone chess clock</b>:<br><br><a href="https://comlos.com/clock" style="color:#4f8cff;font-weight:800;text-decoration:none">Open comlos.com/clock &rarr;</a>';
-    (document.body||document.documentElement).appendChild(m);
-  };
-  if(!window.RTCPeerConnection)window.cmTooOld();                 // no WebRTC at all -> say so right away
-  else window.cmConnTimer=setTimeout(window.cmTooOld,15000);      // has the API, but nothing connected in 15s -> too old (or stuck); rtc_transport clears this on open
+    m.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:#11141a;color:#e8eaed;padding:16% 26px 0;text-align:center;font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:17px;line-height:1.55;font-weight:600';
+    m.innerHTML=html; (document.body||document.documentElement).appendChild(m);
+  }
+  var STANDALONE='<br><br>You can still use the <b>standalone chess clock</b>:<br><br><a href="https://comlos.com/clock" style="color:#4f8cff;font-weight:800;text-decoration:none">Open comlos.com/clock &rarr;</a>';
+  window.cmTooOld=function(){ cmFull('This device is too old for the QR connection &mdash; it needs <b>iOS 11+</b> or Android Chrome.'+STANDALONE); };
+  window.cmNoConnect=function(){ cmFull('Couldn\'t reach the club server.<br><br>Check that <b>chessmon is running</b> on the club PC and that this device has internet, then reload.'+STANDALONE); };
+  if(!window.RTCPeerConnection)window.cmTooOld();                 // no WebRTC API at all -> genuinely too old
+  else window.cmConnTimer=setTimeout(window.cmNoConnect,20000);   // has WebRTC but nothing connected in 20s -> a connection problem (server/bridge/network), NOT an old device; rtc_transport clears this on open
 })();</script>
 <script src="rtc_transport.js"></script>
 <script>
@@ -305,7 +307,7 @@ let curFen=null;                                           // last position rend
 function applyRot(){$('board').className='board m'+rotMode;if(curFen!=null)renderBoard(curFen)}   // rotate must RE-RENDER: the mode-2 magnus b/g knight choice depends on rotMode, not just CSS
 
 function $(id){return document.getElementById(id)}
-const CM_VER='1.18';   // BUMP on every clock.html change so the phone shows which build it actually loaded
+const CM_VER='1.19';   // BUMP on every clock.html change so the phone shows which build it actually loaded
 (function(){const v=()=>document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;left:5px;bottom:3px;font:10px monospace;color:#999;opacity:.55;z-index:99999;pointer-events:none">v'+CM_VER+'</div>');document.body?v():addEventListener('DOMContentLoaded',v)})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
