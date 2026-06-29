@@ -33,13 +33,19 @@
   .gdate{color:var(--mut);font-size:12px;min-width:92px;text-align:right;white-space:nowrap}
   .gdel{flex:0 0 auto;align-self:center;background:none;border:none;color:var(--mut);font-size:14px;line-height:1;cursor:pointer;padding:2px 5px;border-radius:6px}
   .gdel:hover{color:var(--bad);background:rgba(255,107,107,.13)}
+  .gck{flex:0 0 auto;align-self:center;width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
+  .grow.sel{border-color:var(--accent);background:#1a2330}
+  .ckl{display:flex;align-items:center;gap:6px;color:var(--mut);font-size:13px;cursor:pointer;user-select:none}
+  .ckl input{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
+  .bar .del{background:none;border:1px solid var(--line);color:var(--bad);border-radius:8px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer}
+  .bar .prim:disabled,.bar .del:disabled{opacity:.45;cursor:default}
   .modal{position:fixed;inset:0;background:rgba(8,10,14,.85);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
   .modal.hidden{display:none}
   .sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:660px;width:100%;max-height:92vh;overflow:auto}
   .ghead{font-size:15px;margin-bottom:12px}
   .ghmeta{display:block;color:var(--mut);font-size:12px;margin-top:3px}
   .replay{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
-  .rboard{display:grid;grid-template-columns:repeat(8,1fr);width:min(360px,82vw);aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:0 0 auto}
+  .rboard{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:min(360px,82vw);aspect-ratio:1;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:0 0 auto}
   .rsq{display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1}
   .rsq.lt{background:#e8d2a8}.rsq.dk{background:#b07f53}
   .rsq img.pc{width:84%;height:84%;display:block}                          /* SVG piece */
@@ -74,10 +80,12 @@
     <span class="dot" id="dot" title="server link"></span>
   </nav>
   <h1>Games</h1>
-  <p class="lead">Every finished game is archived here automatically. Click one to replay it; export PGN per game, per tournament, or all.</p>
+  <p class="lead">Every finished game is archived here automatically. Click one to replay it; tick games to export their PGN or delete in bulk.</p>
   <div class="bar">
     <select id="filt"></select>
-    <button class="prim" id="exp">Export PGN ↓</button>
+    <label class="ckl"><input type="checkbox" id="selall"> Select all</label>
+    <button class="prim" id="exp">Export selected ↓</button>
+    <button class="del" id="delsel">Delete selected</button>
   </div>
   <div id="glist"></div>
 </div>
@@ -104,7 +112,7 @@ function $(id){return document.getElementById(id)}
 window.name='cm_games';
 const START='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
-let ws, list=[], filt='', cur=null, idx=0, pendingPgn='', CMSET={};   // CMSET: global display prefs (time/date format) from the server
+let ws, list=[], filt='', cur=null, idx=0, pendingPgn='', CMSET={}, selIds=new Set();   // CMSET: display prefs; selIds: ticked game ids
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
@@ -131,19 +139,31 @@ function tourMap(){const s={};list.forEach(g=>{if(g.tournament)s[g.tournament]=g
 function renderBar(){const sel=$('filt'),ts=tourMap();
   sel.innerHTML='<option value="">All games</option>'+Object.keys(ts).sort((a,b)=>ts[a].localeCompare(ts[b]))
     .map(id=>'<option value="'+esc(id)+'"'+(id===filt?' selected':'')+'>'+esc(ts[id])+'</option>').join('');}
+function visRows(){return list.filter(g=>!filt||g.tournament===filt).slice().sort((a,b)=>(b.finished_at||0)-(a.finished_at||0));}
 function renderList(){
   renderBar();
+  const ex=new Set(list.map(g=>g.id));selIds=new Set([...selIds].filter(id=>ex.has(id)));   // drop ids that no longer exist (e.g. after a delete)
   const L=$('glist');L.innerHTML='';
-  const rows=list.filter(g=>!filt||g.tournament===filt).slice().sort((a,b)=>(b.finished_at||0)-(a.finished_at||0));
-  if(!rows.length){L.innerHTML='<div class="empty">No games archived yet — finished games land here automatically.</div>';return;}
-  rows.forEach(g=>{const row=document.createElement('div');row.className='grow';
-    row.innerHTML='<span class="gnames">'+esc(g.white||'White')+' – '+esc(g.black||'Black')+'</span>'
+  const rows=visRows();
+  if(!rows.length){L.innerHTML='<div class="empty">No games archived yet — finished games land here automatically.</div>';updateSel();return;}
+  rows.forEach(g=>{const row=document.createElement('div');row.className='grow'+(selIds.has(g.id)?' sel':'');
+    row.innerHTML='<input type="checkbox" class="gck"'+(selIds.has(g.id)?' checked':'')+' aria-label="Select">'
+      +'<span class="gnames">'+esc(g.white||'White')+' – '+esc(g.black||'Black')+'</span>'
       +'<span class="gres">'+fmtRes(g.result)+'</span><span class="gmeta">'+gmeta(g)+'</span>'
       +'<span class="gtour">'+gtour(g)+'</span><span class="gdate">'+fmtDate(g.finished_at)+'</span>'
       +'<button class="gdel" title="Delete game" aria-label="Delete">&times;</button>';
     row.onclick=()=>send({type:'games.get',id:g.id});
+    const ck=row.querySelector('.gck');
+    ck.onclick=e=>e.stopPropagation();                         // ticking must not open the replay
+    ck.onchange=()=>{if(ck.checked)selIds.add(g.id);else selIds.delete(g.id);row.classList.toggle('sel',ck.checked);updateSel();};
     row.querySelector('.gdel').onclick=e=>{e.stopPropagation();if(confirm('Delete this game from the archive?'))send({type:'games.delete',id:g.id});};
     L.append(row);});
+  updateSel();
+}
+function updateSel(){
+  const rows=visRows(),n=rows.length,s=rows.filter(g=>selIds.has(g.id)).length,sa=$('selall');
+  if(sa){sa.checked=n>0&&s===n;sa.indeterminate=s>0&&s<n;}
+  $('exp').disabled=!selIds.size;$('delsel').disabled=!selIds.size;
 }
 function positions(){const ps=[cur.start_fen||START];(cur.moves||[]).forEach(mv=>ps.push(mv.fen||ps[ps.length-1]));return ps;}
 function renderBoard(fen){
@@ -186,10 +206,10 @@ function nav(d){const ps=positions();if(d==='f')idx=0;else if(d==='l')idx=ps.len
 function downloadPgn(pgn,name){const blob=new Blob([pgn],{type:'application/x-chess-pgn'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
-$('filt').onchange=()=>{filt=$('filt').value;renderList();};
-$('exp').onclick=()=>{const tid=$('filt').value;
-  pendingPgn=tid?safe($('filt').selectedOptions[0].textContent)+'.pgn':'chessmon-games.pgn';
-  send({type:'games.pgn',tournament:tid||null});};
+$('filt').onchange=()=>{filt=$('filt').value;selIds.clear();renderList();};   // a new view starts a fresh selection
+$('selall').onchange=()=>{const rows=visRows();if($('selall').checked)rows.forEach(g=>selIds.add(g.id));else rows.forEach(g=>selIds.delete(g.id));renderList();};
+$('exp').onclick=()=>{if(!selIds.size)return;pendingPgn=selIds.size>1?'chessmon-games.pgn':'chessmon-game.pgn';send({type:'games.pgn',ids:[...selIds]});};
+$('delsel').onclick=()=>{if(!selIds.size)return;if(confirm('Delete '+selIds.size+' selected game'+(selIds.size>1?'s':'')+' from the archive?'))send({type:'games.delete',ids:[...selIds]});};
 $('cfirst').onclick=()=>nav('f');$('cprev').onclick=()=>nav(-1);$('cnext').onclick=()=>nav(1);$('clast').onclick=()=>nav('l');
 $('cclose').onclick=closeModal;
 $('cexport').onclick=()=>{if(!cur)return;pendingPgn=safe((cur.white||'w')+'-'+(cur.black||'b'))+'.pgn';send({type:'games.pgn',id:cur.id});};

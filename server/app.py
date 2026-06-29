@@ -1071,17 +1071,20 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "games.get":                                # one game in full (moves + start_fen) for replay
                 g = next((x for x in games if x.get("id") == data.get("id")), None)
                 await send(ws, {"type": "game", "game": g})
-            elif t == "games.pgn":                                # built PGN text for download: one game (id), one tournament, or all
-                gid, tid = data.get("id"), data.get("tournament")
-                if gid:
+            elif t == "games.pgn":                                # built PGN text for download: selected ids, one game (id), one tournament, or all
+                gid, tid, ids = data.get("id"), data.get("tournament"), data.get("ids")
+                if ids:
+                    idset = set(ids); sel = [g for g in games if g.get("id") in idset]
+                elif gid:
                     sel = [g for g in games if g.get("id") == gid]
                 else:
                     sel = [g for g in games if tid is None or g.get("tournament") == tid]
                 await send(ws, {"type": "games_pgn", "pgn": "\n\n".join(game_pgn(g) for g in sel),
                                 "count": len(sel), "id": gid, "tournament": tid})
-            elif t == "games.delete":
+            elif t == "games.delete":                             # one id, or a list of ids (batch delete from the console)
+                ids = set(data.get("ids") or ([data["id"]] if data.get("id") else []))
                 before = len(games)
-                games[:] = [g for g in games if g.get("id") != data.get("id")]
+                games[:] = [g for g in games if g.get("id") not in ids]
                 if len(games) != before:
                     save_games()
                     await send(ws, {"type": "games_changed"})
