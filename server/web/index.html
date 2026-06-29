@@ -90,8 +90,9 @@
   var STANDALONE='<br><br>You can still use the <b>standalone chess clock</b>:<br><br><a href="https://comlos.com/clock" style="color:#4f8cff;font-weight:800;text-decoration:none">Open comlos.com/clock &rarr;</a>';
   window.cmTooOld=function(){ cmFull('This device is too old for the QR connection &mdash; it needs <b>iOS 11+</b> or Android Chrome.'+STANDALONE); };
   window.cmNoConnect=function(){ cmFull('Couldn\'t reach the club server.<br><br>Check that <b>chessmon is running</b> on the club PC and that this device has internet, then reload.'+STANDALONE); };
+  function cmSeen(){ try{ return !!localStorage.getItem('cm_connected'); }catch(e){ return false; } }
   if(!window.RTCPeerConnection)window.cmTooOld();                 // no WebRTC API at all -> genuinely too old
-  else window.cmConnTimer=setTimeout(window.cmNoConnect,20000);   // has WebRTC but nothing connected in 20s -> a connection problem (server/bridge/network), NOT an old device; rtc_transport clears this on open
+  else if(!cmSeen())window.cmConnTimer=setTimeout(window.cmNoConnect,20000);   // ONLY on a device that has never connected: nothing in 20s -> show the help. Once it HAS connected, a reload/drop is handled by the in-app reconnect (no scary full-screen)
 })();</script>
 <script src="rtc_transport.js"></script>
 <script>
@@ -200,7 +201,7 @@ setupBattery();
 function connect(){
   ws=cmConnect('/ws');                                      // plain WS on the LAN, or a WebRTC data channel via comlos.com (?rtc / window.CM_RTC)
   ws.onstatus=(s,ms)=>{$('msg').textContent=s+'… '+(ms/1000).toFixed(1)+'s';};   // live WebRTC connect phase + timing (so we can see where time goes)
-  ws.onopen=()=>{
+  ws.onopen=()=>{try{localStorage.setItem('cm_connected','1')}catch(e){}
     ready();
     ws.send(JSON.stringify({type:'hello',devId,name:devName,plat:navigator.platform,landing:true,
       screen:{w:screen.width,h:screen.height,dpr:Math.round(devicePixelRatio*100)/100}}));
