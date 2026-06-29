@@ -25,10 +25,13 @@ link. Works on **Windows, macOS and Linux**.
 - The operator's machine needs **outbound** internet so those devices can reach it through
   `comlos.com` (real HTTPS — no certificates, no firewall rules, no inbound ports).
 
-> **Old devices are fine — just not ancient.** The clock and camera use WebRTC, so the rough
-> floor is **iOS 11+** (2017) and **Android 7+** (2016), or any reasonably current
-> Chrome / Safari / Edge / Firefox. On older kit (iOS 10 or Android 6 and earlier) the page may
-> still load, but pairing just times out.
+> **Old devices are fine — just not ancient.** Everything uses WebRTC, so the rough floor is
+> **iOS 11+** (2017) and **Android 7+** (2016), or any reasonably current Chrome / Safari /
+> Edge / Firefox; older kit (iOS 10 / Android 6 and earlier) just times out at pairing.
+> The **clock** is the most forgiving — it sends only tiny messages, so old phones and tablets
+> make great clocks. The **camera** sends a photo every move and needs a more recent WebRTC
+> stack, so use a reasonably modern phone for it (an iPhone SE on current iOS is plenty). Very old
+> devices (e.g. an iPad on iOS 12) pair and preview but drop the camera link — use those as clocks.
 
 **Not sure you have Python and git?** Open a terminal — **PowerShell** on Windows, **Terminal**
 on macOS/Linux — and check:
