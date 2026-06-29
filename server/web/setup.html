@@ -50,6 +50,7 @@
   #prefs .dlbtn{background:var(--cam);color:#0b1020;border:none;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
   #prefs .dlbtn.dim{background:transparent;color:var(--mut);border:1px solid var(--line);font-weight:600}   /* installed + still valid -> de-emphasised until it expires */
 </style>
+<script src="nav.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -86,6 +87,8 @@
     <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_bc_web"> Broadcast to the web
       <small id="bc_web_note">Relays games to chessmon‑cloud for public viewing.</small></label>
     <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_magnus"> Magnus mode</label>
+    <label class="ck" style="margin-top:12px"><input type="checkbox" id="set_opentabs"> Open server pages in separate tabs
+      <small>Each console link opens (and reuses) its own browser tab.</small></label>
     <div class="ckrow" style="margin-top:14px">
       <span class="sfstat" id="fide_stat"></span>
       <button class="dlbtn" id="fide_dl">Download FIDE list</button>
@@ -204,6 +207,7 @@ function applySettings(s){if(!s)return;
   $('set_suggest').checked=!!s.show_suggested_moves;
   $('set_bc_local').checked=!!s.broadcast_local; $('set_bc_web').checked=!!s.broadcast_web;
   $('set_magnus').checked=!!s.magnus_mode;
+  $('set_opentabs').checked=s.open_tabs!==false; if(window.cmOpenTabs)cmOpenTabs(s.open_tabs!==false);   // mirror the server pref into this browser + apply to the nav
   const cloud=!!s.cloud_configured; $('set_bc_web').disabled=!cloud;
   $('bc_web_note').textContent=cloud?'Relays games to chessmon‑cloud for public viewing.':'Set up chessmon‑cloud (cloud.json) first to enable web broadcast.';
   const inst=!!s.stockfish_installed;
@@ -226,6 +230,7 @@ $('set_bc_local').onchange=()=>send({type:'settings.update',broadcast_local:$('s
 $('set_bc_web').onchange=()=>send({type:'settings.update',broadcast_web:$('set_bc_web').checked});
 $('set_room').onchange=()=>send({type:'settings.update',room_name:$('set_room').value.trim()});
 $('set_magnus').onchange=()=>send({type:'settings.update',magnus_mode:$('set_magnus').checked});
+$('set_opentabs').onchange=()=>{const on=$('set_opentabs').checked;send({type:'settings.update',open_tabs:on});if(window.cmOpenTabs)cmOpenTabs(on);};
 $('sf_dl').onclick=()=>{send({type:'stockfish.install'});$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';$('sf_stat').textContent='fetching the latest Windows build…';$('sf_stat').className='sfstat';};
 function onSfStatus(m){
   if(m.state==='downloading'){$('sf_dl').disabled=true;$('sf_dl').textContent='Downloading…';return;}

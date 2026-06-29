@@ -550,7 +550,8 @@ DEFAULT_SETTINGS = {"time_format": "24h",   # "12h" -> "04:54 PM"          | "24
                     "room_name": "",         # friendly club/room name -> shown in admin instead of the cm- room id
                     "show_suggested_moves": False,
                     "broadcast_local": False, "broadcast_web": False,
-                    "magnus_mode": False}                # easter egg -- mirror the queenside knights
+                    "magnus_mode": False,                # easter egg -- mirror the queenside knights
+                    "open_tabs": True}                   # console nav: open each page in its own browser tab (vs in place)
 
 
 def is_stockfish_installed():
@@ -1030,7 +1031,7 @@ async def ws_endpoint(ws: WebSocket):
                 if devices.pop(data.get("devId"), None) is not None:
                     await broadcast_devices()
             elif t == "settings.update":                          # console changed a global pref (time/date format, suggested-moves, broadcast)
-                for k in ("time_format", "date_format", "room_name", "show_suggested_moves", "broadcast_local", "broadcast_web", "magnus_mode"):
+                for k in ("time_format", "date_format", "room_name", "show_suggested_moves", "broadcast_local", "broadcast_web", "magnus_mode", "open_tabs"):
                     if k in data:
                         settings[k] = data[k]
                 settings["room_name"] = str(settings.get("room_name") or "").strip()[:60]   # keep the club name tidy
