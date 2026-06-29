@@ -25,9 +25,9 @@
     const how={checkmate:'by checkmate',stalemate:'by stalemate',insufficient_material:'insufficient material',threefold_repetition:'by repetition',fivefold_repetition:'by repetition',fifty_moves:'by the 50-move rule',seventyfive_moves:'by the 75-move rule',timeout:'on time',resignation:'by resignation',agreement:'by agreement'}[t.termination]||'';
     return how?who+' '+how:who;}
   function sq(grid,r,f,piece,flip){const d=document.createElement('div');d.className='wb-sq '+((r+f)%2?'d':'l');
-    if(piece){const i=document.createElement('img');i.alt=piece;if(flip)i.style.transform='scaleX(-1)';   // Magnus mode: the queenside knight stays mirrored
-      i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';if(flip){sp.style.display='inline-block';sp.style.transform='scaleX(-1)';}d.append(sp);};
-      i.src='pieces/'+(piece<'a'?'w':'b')+piece.toUpperCase()+'.svg';d.append(i);}grid.append(d);}
+    if(piece){const i=document.createElement('img');i.alt=piece;   // Magnus mode: the queenside knight uses the mirrored piece (wM/bM)
+      i.onerror=()=>{i.remove();const sp=document.createElement('span');sp.textContent=G[piece.toLowerCase()]||'';sp.style.color=(piece<'a')?'#fff':'#111';d.append(sp);};
+      i.src='pieces/'+(piece<'a'?'w':'b')+(flip?'M':piece.toUpperCase())+'.svg';d.append(i);}grid.append(d);}
   function renderBoard(grid,fen,magnus){grid.innerHTML='';const place=(fen||'8/8/8/8/8/8/8/8').split(' ')[0];
     const flips=(magnus&&magnus.length)?new Set(magnus):null;   // Magnus mode: square names of the queenside knights to mirror
     place.split('/').forEach((row,r)=>{let f=0;for(const ch of row){if(ch>='1'&&ch<='8'){for(let k=0;k<+ch;k++){sq(grid,r,f);f++;}}else{sq(grid,r,f,ch,flips&&(ch==='N'||ch==='n')&&flips.has(String.fromCharCode(97+f)+(8-r)));f++;}}});}

@@ -27,8 +27,6 @@
     aspect-ratio:1;width:100%;height:100%;border-radius:6px;overflow:hidden}   /* height:100% so it fills the (JS-squared) wrap on old browsers */
   .board.m1{transform:rotate(-90deg)}                         /* mode 1: board turned -90 (pieces too) */
   .board.m2 .sq.bp{transform:rotate(180deg)}                  /* mode 2: black pieces face the black side */
-  .board .sq .pc.mflip{transform:scaleX(-1)}                  /* Magnus mode (easter egg): queenside knight mirrored, board frame */
-  .board.m2 .sq.bp .pc.mflip{transform:scaleY(-1)}            /* ...in mode 2 the black piece is already rotate(180), so scaleY keeps the mirror horizontal */
   .sq{display:flex;align-items:center;justify-content:center;font-size:min(8.5vw,36px);line-height:1;color:#1a1a1a}
   .sq.l{background:#ffffff} .sq.d{background:#d9d9d9}
   .sq.l.last{background:#f6edab} .sq.d.last{background:#e3d680}   /* last move from/to */
@@ -319,9 +317,9 @@ function isLast(r,c){if(!lastMove)return false;const f=sqRC(lastMove.from),t=sqR
 function mkSq(r,c,ch,flip){const d=document.createElement('div');d.className='sq '+((r+c)%2?'d':'l');
   if(isLast(r,c))d.classList.add('last');
   if(ch){if(ch>='a')d.classList.add('bp');                              // black piece -> rotatable in mode 2
-    const i=document.createElement('img');i.className='pc'+(flip?' mflip':'');i.alt=ch;   // mflip = Magnus mode mirror
+    const i=document.createElement('img');i.className='pc';i.alt=ch;
     i.onerror=()=>{i.remove();d.textContent=GLYPH[ch]};                  // fall back to the glyph
-    i.src='pieces/'+(ch<'a'?'w':'b')+ch.toUpperCase()+'.svg';d.appendChild(i)}return d}
+    i.src='pieces/'+(ch<'a'?'w':'b')+(flip?'M':ch.toUpperCase())+'.svg';d.appendChild(i)}return d}   // Magnus mode: the queenside knight uses the mirrored piece (wM/bM), so the rotation modes treat it like any piece
 function markBad(squares){$('board').querySelectorAll('.sq.bad').forEach(s=>s.classList.remove('bad'));   // flag illegal squares red
   (squares||[]).forEach(sq=>{const r=8-(+sq[1]),c=sq.charCodeAt(0)-97,cell=$('board').children[r*8+c];if(cell)cell.classList.add('bad')})}
 function showUndo(on){show('undobtn',on)}
