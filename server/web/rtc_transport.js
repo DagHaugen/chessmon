@@ -72,7 +72,12 @@
     _fail(e) { this.onerror && this.onerror({ type: 'error', error: e }); this._closed(); }
     send(data) {                                     // string / ArrayBuffer / Blob, one message — just like WebSocket
       if (this.readyState !== 1) return;
-      if (data instanceof Blob) { data.arrayBuffer().then((ab) => { if (this.readyState === 1) this._dc.send(ab); }); return; }
+      if (data instanceof Blob) {                    // data channels take ArrayBuffer, not Blob. Blob.arrayBuffer() is iOS 14+, so fall back to FileReader on older Safari (e.g. an iPad on iOS 12) -- else the camera frame silently never sends
+        const ship = (buf) => { if (this.readyState === 1) this._dc.send(buf); };
+        if (data.arrayBuffer) data.arrayBuffer().then(ship);
+        else { const fr = new FileReader(); fr.onload = () => ship(fr.result); fr.readAsArrayBuffer(data); }
+        return;
+      }
       if (data && data.byteLength > 60000) console.warn('ChessmonSocket: ' + data.byteLength + 'B exceeds the ~64KB data-channel limit — downscale the frame');
       this._dc.send(data);
     }
