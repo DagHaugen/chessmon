@@ -59,7 +59,7 @@ GAMES_FILE = os.environ.get("CHESSMON_GAMES",
 SETTINGS_FILE = os.environ.get("CHESSMON_SETTINGS",
                                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.json"))
 ENGINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines")
-STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe")   # bundled engine for suggested moves (installed from the console Setup page)
+STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe" if os.name == "nt" else "stockfish")   # bundled engine for suggested moves (installed from the console Setup page); .exe on Windows, no extension on macOS/Linux
 FIDE_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fide.db")   # local FIDE rating-list index (SQLite), built by the console "Download FIDE list" action
 CLOUD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cloud.json")   # chessmon-cloud relay config (gates web broadcast)
 
@@ -550,34 +550,60 @@ def is_stockfish_installed():
     return os.path.exists(STOCKFISH_EXE)
 
 
+def _sf_asset(rel):
+    """Pick the best Stockfish release asset for THIS OS/CPU (best SIMD level first)."""
+    import platform
+    sysname = platform.system()
+    arm = platform.machine().lower() in ("arm64", "aarch64")
+    if sysname == "Windows":
+        prefs = (["windows-armv8-dotprod", "windows-armv8"] if arm
+                 else ["windows-x86-64-avx2", "windows-x86-64-sse41-popcnt", "windows-x86-64"])
+    elif sysname == "Darwin":
+        prefs = ["macos-m1-apple-silicon"] if arm else ["macos-x86-64-avx2", "macos-x86-64-sse41-popcnt", "macos-x86-64"]
+    else:
+        prefs = ["ubuntu-x86-64-avx2", "ubuntu-x86-64-sse41-popcnt", "ubuntu-x86-64"]
+    for p in prefs:
+        a = next((a for a in rel.get("assets", []) if p in a.get("name", "") and a.get("name", "").endswith((".zip", ".tar"))), None)
+        if a:
+            return a
+    return None
+
+
 def download_stockfish():
-    """Fetch the latest Stockfish Windows build into STOCKFISH_EXE (the console "Get Stockfish" action).
-    Blocking -> call via asyncio.to_thread. Returns (ok: bool, message: str)."""
-    import urllib.request, zipfile, tempfile, shutil
+    """Fetch the latest Stockfish build for THIS platform into STOCKFISH_EXE (console "Get Stockfish":
+    Windows .zip/.exe, macOS/Linux .tar). Blocking -> asyncio.to_thread. Returns (ok: bool, message: str)."""
+    import urllib.request, zipfile, tarfile, tempfile, shutil, stat
     try:
         os.makedirs(ENGINES_DIR, exist_ok=True)
         req = urllib.request.Request("https://api.github.com/repos/official-stockfish/Stockfish/releases/latest",
                                      headers={"User-Agent": "chessmon", "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=30) as r:
             rel = json.load(r)
-        asset = None
-        for p in ("windows-x86-64-avx2", "windows-x86-64-sse41-popcnt", "windows-x86-64-modern", "windows-x86-64"):
-            asset = next((a for a in rel.get("assets", []) if p in a.get("name", "") and a.get("name", "").endswith(".zip")), None)
-            if asset:
-                break
+        asset = _sf_asset(rel)
         if not asset:
-            return False, "no Windows .zip in the latest release"
+            return False, "no Stockfish build for this OS/CPU in the latest release"
         tmp = tempfile.mkdtemp(prefix="cm_sf_")
         try:
-            zpath = os.path.join(tmp, asset["name"])
-            urllib.request.urlretrieve(asset["browser_download_url"], zpath)
-            with zipfile.ZipFile(zpath) as z:
-                name = next((n for n in z.namelist() if n.lower().endswith(".exe")), None)
-                if not name:
-                    return False, "no .exe inside the download"
-                with z.open(name) as src, open(STOCKFISH_EXE, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-            return True, ("Stockfish " + str(rel.get("tag_name") or "").lstrip("v") + " installed").strip()
+            apath = os.path.join(tmp, asset["name"])
+            urllib.request.urlretrieve(asset["browser_download_url"], apath)
+            if apath.endswith(".zip"):                                       # Windows: a .exe inside
+                with zipfile.ZipFile(apath) as z:
+                    name = next((n for n in z.namelist() if n.lower().endswith(".exe")), None)
+                    if not name:
+                        return False, "no .exe inside the download"
+                    with z.open(name) as src, open(STOCKFISH_EXE, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+            else:                                                            # macOS/Linux: the largest 'stockfish*' file in the tar
+                with tarfile.open(apath) as t:
+                    cands = [m for m in t.getmembers() if m.isfile() and os.path.basename(m.name).lower().startswith("stockfish")]
+                    member = max(cands, key=lambda m: m.size) if cands else None
+                    if member is None:
+                        return False, "no stockfish binary inside the download"
+                    with t.extractfile(member) as src, open(STOCKFISH_EXE, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+            if os.name != "nt":                                              # Unix: mark it executable
+                os.chmod(STOCKFISH_EXE, os.stat(STOCKFISH_EXE).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            return True, ("Stockfish " + str(rel.get("tag_name") or "").replace("sf_", "").lstrip("v") + " installed").strip()
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     except Exception as e:
