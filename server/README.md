@@ -11,37 +11,27 @@ through the `chessmon` vision engine. This is the option‑1 MVP / the spine of 
 - `app.py` — the thin FastAPI/WebSocket layer that speaks the wire protocol.
 
 ## Run
+From the repo root — one launcher runs the server **and** the WebRTC bridge that connects phones
+through comlos.com (no certificate, no inbound ports):
 ```
-.venv\Scripts\pip install -r server/requirements.txt
-.venv\Scripts\python -m uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
+chessmon setup      # one-time: .venv + dependencies
+chessmon            # server (:8000) + bridge; Ctrl+C stops both
 ```
+Console: `http://localhost:8000/app/admin.html` (plain HTTP on this PC). Also `chessmon stop` /
+`restart` / `status`, and `chessmon --no-bridge` for the server alone. See [`run.py`](../run.py).
 
 ## Devices (the two PWAs)
-Served at `/app/` by the server.
-- **Clock** — `http://<server-ip>:8000/` → "New table" → shows a pairing **QR** (encodes a deep
-  link to the camera page) + the raw token. Confirm button, board, and the ambiguity prompt.
-- **Camera** — `tools/camera_client.py --pair <token>` on a laptop+BRIO, **or** the camera PWA
-  at `/app/camera.html?pair=<token>`: scan the clock's QR with phone #2's camera → it opens the
-  page, asks for the camera, you capture the empty board + start position, then it streams a
-  frame on every `capture.req`.
+Phones connect over WebRTC through **comlos.com/relay/app** (real cert, nothing to install) — the
+console shows a pairing **QR** that encodes this club's room (`rtc_room.txt`). The same pages are
+served locally under `/app/` for same-PC testing.
+- **Clock** — open the console QR on phone #1 (or `…/app/clock.html` on localhost).
+- **Camera** — scan the clock's QR with phone #2 (or `tools/camera_client.py --pair <token>` on a
+  laptop+BRIO): it opens the camera page, you capture the empty board + start position, then it
+  streams a frame on every `capture.req`.
 
-**HTTPS is required for the camera PWA** — browsers only allow `getUserMedia` on a secure origin
-(https or localhost), so over plain `http://<LAN-ip>` the camera is blocked. One command serves
-TLS with an auto-generated self-signed cert (no openssl needed; phones accept the warning once):
-```
-.venv\Scripts\python server\serve_https.py          # prints the https://<lan-ip>:8000 URL
-```
-It writes `cert.pem`/`key.pem` (covering localhost + this machine's LAN IPs) on first run — pass
-`new` to regenerate. The clock auto-uses `wss` over https. (The CLI `camera_client.py` needs no HTTPS.)
-
-**Phone times out connecting?** Two usual causes:
-- **Wrong IP** — use the **Wi-Fi** address the helper prints first (usually `192.168.*` / `10.*`),
-  not a virtual adapter (`172.*` Hyper-V/WSL) that the phone can't route to.
-- **Firewall** — Windows blocks inbound by default. Allow the port once, from an **admin** PowerShell:
-  ```
-  New-NetFirewallRule -DisplayName "chessmon 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
-  ```
-  (Both phones must be on the **same Wi-Fi** as this machine.)
+The bridge needs only **outbound** access to comlos.com — no inbound firewall rule, and no local
+certificate (the device pages come from comlos.com over real HTTPS, so `getUserMedia` is allowed).
+The operator's own console is fine on plain `http://localhost:8000` (a secure origin too).
 
 ## Wire protocol
 HTTP:

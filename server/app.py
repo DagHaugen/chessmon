@@ -59,7 +59,7 @@ GAMES_FILE = os.environ.get("CHESSMON_GAMES",
 SETTINGS_FILE = os.environ.get("CHESSMON_SETTINGS",
                                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.json"))
 ENGINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines")
-STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe")   # bundled engine for suggested moves (installed by setup.ps1)
+STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe")   # bundled engine for suggested moves (installed from the console Setup page)
 CLOUD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cloud.json")   # chessmon-cloud relay config (gates web broadcast)
 
 app = FastAPI(title="chessmon server")
@@ -373,7 +373,7 @@ async def broadcast_devices():
 
 def _lan_ip():
     """The server's LAN IPv4 for the viewers 'watch on a phone' QR -- Wi-Fi/Ethernet (192.168.*/10.*) preferred,
-    matching the address serve_https prints. Returns None on failure (the client then falls back to the page host)."""
+    matching the LAN address the console shows. Returns None on failure (the client then falls back to the page host)."""
     ips = set()
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
@@ -541,7 +541,7 @@ def is_stockfish_installed():
 
 
 def download_stockfish():
-    """Fetch the latest Stockfish Windows build into STOCKFISH_EXE (mirrors setup.ps1's step 3).
+    """Fetch the latest Stockfish Windows build into STOCKFISH_EXE (the console "Get Stockfish" action).
     Blocking -> call via asyncio.to_thread. Returns (ok: bool, message: str)."""
     import urllib.request, zipfile, tempfile, shutil
     try:

@@ -4,8 +4,8 @@ Run this on the club PC; it only needs OUTBOUND access to comlos.com (no inbound
 
     set RTC_BROKER=https://comlos.com/relay/signal.php
     set RTC_ROOM=<your club/room code>
-    set RTC_TARGET=ws://localhost:8000/ws        # the local chessmon server (plain HTTP); OR wss://localhost:8000/ws for serve_https.py
-    chessmon-webrtc\\.venv\\Scripts\\python webrtc\\rtc_peer.py
+    set RTC_TARGET=ws://localhost:8000/ws        # the local chessmon server (plain HTTP)
+    .venv\\Scripts\\python webrtc\\rtc_peer.py        # (normally started by  chessmon , which sets the vars above)
 
 With RTC_TARGET set, every data channel is bridged to a fresh WebSocket on the chessmon server, so the
 device speaks the normal chessmon protocol (hello / table.join / capture.req / move.result ...) over
@@ -118,7 +118,7 @@ def _bridge(channel):
     async def _run():
         try:
             kw = {}
-            if TARGET.startswith("wss"):                  # serve_https.py uses a self-signed cert -> don't verify it (localhost)
+            if TARGET.startswith("wss"):                  # a wss target would be a self-signed localhost cert -> skip verification
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE

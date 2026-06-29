@@ -6,10 +6,9 @@ comlos.com/relay/app/ (next to signal.php). A device then opens
     https://comlos.com/relay/app/?rtc=1&room=<club>
 
 loads on comlos.com's real cert (so getUserMedia works and nothing is installed), and connects over a
-WebRTC data channel to the club's local server. The club PC just runs the two launchers:
+WebRTC data channel to the club's local server. The club PC just runs the launcher:
 
-    webrtc\\server.bat   (the local chessmon server, plain HTTP)
-    webrtc\\peer.bat     (the WebRTC bridge; the signaling room is AUTO -- shared rtc_room.txt with the server)
+    chessmon             (starts the local server + the WebRTC bridge; signaling room auto via rtc_room.txt)
 
 sw.js is intentionally LEFT OUT for now (a service worker scoped to /relay/app/ needs its shell paths
 reworked; the venue is online so the pages just load fresh). Add it in a phase-4b once paths are sorted.
@@ -58,5 +57,5 @@ for c in copied:
     print("  +", c)
 for m in missing:
     print("  ? missing:", m)
-print("\nNext: upload dist/app/ to comlos.com/relay/app/. The club PC runs webrtc\\server.bat +")
-print("webrtc\\peer.bat -- the signaling room is automatic (rtc_room.txt) and the console QR encodes it.")
+print("\nNext: upload dist/app/ to comlos.com/relay/app/. The club PC runs  chessmon  (server + bridge);")
+print("the signaling room is automatic (rtc_room.txt) and the console QR encodes it.")
