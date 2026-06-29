@@ -48,6 +48,7 @@
   .ckrow{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
   .sfstat{font-size:12.5px;color:var(--mut)}.sfstat.ok{color:var(--good)}
   #prefs .dlbtn{background:var(--cam);color:#0b1020;border:none;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
+  #prefs .dlbtn.dim{background:transparent;color:var(--mut);border:1px solid var(--line);font-weight:600}   /* installed + still valid -> de-emphasised until it expires */
 </style>
 </head>
 <body>
@@ -213,7 +214,8 @@ function applySettings(s){if(!s)return;
       stale=new Date()>=vt;fstat+=' · valid to '+fmtD(vt,s.date_format)+(stale?' (update recommended)':'');}}
   $('fide_stat').textContent=fstat;
   $('fide_stat').className='sfstat'+(fi&&!stale?' ok':'');
-  $('fide_dl').textContent=fi?'Update FIDE list':'Download FIDE list';}
+  $('fide_dl').textContent=fi?'Update FIDE list':'Download FIDE list';
+  $('fide_dl').classList.toggle('dim',fi&&!stale);}   // dim the Update button while the list is still valid; it brightens once expired
 $('set_time').onchange=()=>send({type:'settings.update',time_format:$('set_time').value});
 $('set_date').onchange=()=>send({type:'settings.update',date_format:$('set_date').value});
 $('set_suggest').onchange=()=>send({type:'settings.update',show_suggested_moves:$('set_suggest').checked});
