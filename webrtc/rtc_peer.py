@@ -181,20 +181,35 @@ async def answer(session, sdp, loop):
 
 async def main():
     loop = asyncio.get_event_loop()
+    poll = float(os.environ.get("RTC_POLL", "0.5"))      # base poll interval; backs off when comlos rate-limits
     print("chessmon peer polling", BROKER, "room", ROOM, "| target:", TARGET or "echo")
+    answered, delay = {}, poll                           # session -> time answered: comlos re-serves an offer until consumed, so answer it ONCE
     while True:
+        rate_limited = False
         try:
             def _get():
                 return json.loads(urllib.request.urlopen(
                     BROKER + "?room=" + ROOM + "&kind=offer", timeout=10).read())
-            for off in (await loop.run_in_executor(None, _get)).get("offers", []):
+            offers = (await loop.run_in_executor(None, _get)).get("offers", [])
+            now = loop.time()
+            answered = {s: t for s, t in answered.items() if now - t < 300}    # forget after 5 min (sessions are single-use, so this only bounds memory)
+            for off in offers:
+                sess = off.get("session")
+                if sess in answered:                     # already answered -> skip: re-answering storms the endpoint (-> 429) and leaks a peer connection each time
+                    continue
                 try:
                     await answer(off["session"], off["sdp"], loop)
+                    answered[sess] = now
                 except Exception as e:
-                    print("answer error", off.get("session"), ":", e)
+                    print("answer error", sess, ":", e)
+                    if "429" in str(e):
+                        rate_limited = True              # a FAILED answer isn't recorded -> it retries, but at the backoff cadence below
         except Exception as e:
             print("poll error:", e)
-        await asyncio.sleep(0.5)
+            if "429" in str(e):
+                rate_limited = True
+        delay = min(delay * 2, 8.0) if rate_limited else poll   # honour comlos's 429 (exponential backoff), else stay snappy
+        await asyncio.sleep(delay)
 
 
 if __name__ == "__main__":
