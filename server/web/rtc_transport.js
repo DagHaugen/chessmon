@@ -33,7 +33,7 @@
         const pc = new RTCPeerConnection(); this._pc = pc;
         const dc = pc.createDataChannel('chessmon'); this._dc = dc;
         dc.binaryType = 'arraybuffer';
-        dc.onopen = () => { this.readyState = 1; st('connected'); this.onopen && this.onopen({ type: 'open' }); };
+        dc.onopen = () => { this.readyState = 1; if (g.cmConnTimer) { clearTimeout(g.cmConnTimer); g.cmConnTimer = null; } st('connected'); this.onopen && this.onopen({ type: 'open' }); };   // connected -> cancel the "too old" timeout
         dc.onmessage = (e) => { this.onmessage && this.onmessage({ data: e.data }); };
         dc.onclose = () => { this._closed(); };
         pc.onconnectionstatechange = () => {
