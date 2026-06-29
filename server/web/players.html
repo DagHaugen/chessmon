@@ -20,13 +20,27 @@
   .nav .dot.on{background:var(--good)}
   h1{font-size:18px;margin:0 0 4px;font-weight:700}
   .lead{color:var(--mut);font-size:13px;margin:0 0 16px}
-  .addrow{display:flex;gap:8px;margin-bottom:16px}
+  .addwrap{position:relative;margin-bottom:16px}
+  .addrow{display:flex;gap:8px}
   .addrow input{flex:1;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:15px;font-family:inherit}
   .add{background:var(--accent);color:#0b1020;border:none;border-radius:9px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .sug{position:absolute;left:0;right:0;top:100%;margin-top:5px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-y:auto;max-height:340px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .sug:empty{display:none}
+  .sugrow{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .sugrow:last-child{border-bottom:none}
+  .sugrow:hover{background:rgba(255,255,255,.06)}
+  .sugname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .sugmeta{color:var(--mut);font-size:12px;white-space:nowrap}
+  .sugmeta.ft{color:var(--cam);font-weight:700}
+  .sugrate{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
   .plist{display:flex;flex-direction:column;gap:8px}
-  .prow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
-  .pname{width:100%;background:var(--bg);color:var(--ink);border:1px solid transparent;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;font-family:inherit}
+  .prow{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  .pname{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid transparent;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;font-family:inherit}
   .pname:focus{border-color:var(--line);outline:none}
+  .fbadge{display:inline-flex;gap:7px;align-items:center;font-size:12px;white-space:nowrap}
+  .fbadge .ft{color:var(--cam);font-weight:700}
+  .fbadge .fr{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+  .fbadge .ff{color:var(--mut)}
   .mini{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
   .mini.bad{color:var(--bad)}
   .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;font-size:13px}
@@ -47,19 +61,24 @@
   </nav>
   <h1>Players</h1>
   <p class="lead">The roster. Names show on the clock and in the console.</p>
-  <div class="addrow"><input id="newname" maxlength="40" placeholder="New player name"><button class="add" id="addbtn">+ Add</button></div>
+  <div class="addwrap">
+    <div class="addrow"><input id="newname" maxlength="40" placeholder="New player — or search FIDE by surname / ID" autocomplete="off"><button class="add" id="addbtn">+ Add</button></div>
+    <div class="sug" id="sug"></div>
+  </div>
   <div class="plist" id="list"></div>
 </div>
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
 window.name='cm_players';   // claim this tab's name so the nav's target= links reuse it
-let ws, players=[], renderPending=false;
+let ws, players=[], renderPending=false, fideOn=false, fideTimer=null;
 function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
 function connect(){
   ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
   ws.onopen=()=>{$('dot').classList.add('on');send({type:'admin.join'})};
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='devices'){players=m.players||[];render();}};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='devices'){players=m.players||[];if(m.settings)fideOn=!!m.settings.fide_installed;render();}
+    else if(m.type==='fide.results'){if(m.q===$('newname').value.trim())renderSug(m.results||[]);}};
   ws.onclose=()=>{$('dot').classList.remove('on');setTimeout(connect,1500)};
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -72,16 +91,37 @@ function render(){
   players.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(p=>{
     const row=document.createElement('div');row.className='prow';
     const inp=document.createElement('input');inp.className='pname';inp.value=p.name||'';inp.maxLength=40;
-    inp.onchange=()=>{const v=inp.value.trim();if(v)send({type:'players.save',player:{id:p.id,name:v}});else inp.value=p.name||'';};
+    inp.onchange=()=>{const v=inp.value.trim();if(v)send({type:'players.save',player:Object.assign({},p,{name:v})});else inp.value=p.name||'';};   // keep any FIDE fields on rename
     inp.onblur=()=>{if(renderPending)render()};
+    row.append(inp);
+    if(p.fide_id){const b=document.createElement('span');b.className='fbadge';
+      b.innerHTML=(p.title?'<span class="ft">'+esc(p.title)+'</span>':'')+(p.rating?'<span class="fr">'+p.rating+'</span>':'')+(p.fed?'<span class="ff">'+esc(p.fed)+'</span>':'');
+      row.append(b);}
     const del=document.createElement('button');del.className='mini bad';del.textContent='Delete';
     del.onclick=()=>{if(confirm('Remove “'+(p.name||'')+'”?'))send({type:'players.delete',id:p.id})};
-    row.append(inp,del);L.appendChild(row);
+    row.append(del);L.appendChild(row);
   });
 }
 function addPlayer(){const v=$('newname').value.trim();if(!v)return;send({type:'players.save',player:{id:uid(),name:v}});$('newname').value='';$('newname').focus();}
 $('addbtn').onclick=addPlayer;
-$('newname').onkeydown=e=>{if(e.key==='Enter'){e.stopPropagation();addPlayer();}};   // Enter adds + keeps focus (bypass the global blur)
+$('newname').onkeydown=e=>{if(e.key==='Enter'){e.stopPropagation();addPlayer();}else if(e.key==='Escape')clearSug();};   // Enter adds + keeps focus (bypass the global blur)
+// --- FIDE lookup (live, as you type; needs the FIDE list downloaded on the Setup page) ---
+function clearSug(){$('sug').innerHTML='';}
+function renderSug(rs){const S=$('sug');S.innerHTML='';
+  rs.forEach(r=>{const row=document.createElement('div');row.className='sugrow';
+    row.innerHTML='<span class="sugname">'+esc(r.name)+'</span>'
+      +(r.title?'<span class="sugmeta ft">'+esc(r.title)+'</span>':'')
+      +(r.rating?'<span class="sugrate">'+r.rating+'</span>':'')
+      +'<span class="sugmeta">'+esc(r.country||'')+'</span>';
+    row.onmousedown=e=>{e.preventDefault();addFromFide(r);};   // mousedown fires before the input's blur, so the pick isn't lost
+    S.append(row);});
+}
+function addFromFide(r){send({type:'players.save',player:{id:uid(),name:r.name,fide_id:r.fideid,title:r.title||'',rating:r.rating||null,fed:r.country||''}});
+  $('newname').value='';clearSug();$('newname').focus();}
+$('newname').oninput=()=>{const v=$('newname').value.trim();clearTimeout(fideTimer);
+  if(!fideOn||v.length<2){clearSug();return;}
+  fideTimer=setTimeout(()=>send({type:'fide.lookup',q:v}),250);};
+$('newname').addEventListener('blur',()=>setTimeout(clearSug,200));
 connect();
 </script>
 </body>

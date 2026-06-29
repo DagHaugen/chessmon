@@ -37,6 +37,10 @@ chessmon.log
 cloud.json
 broadcast.bat
 
+# Local FIDE rating-list index (downloaded + built from the console Setup page; ~100 MB)
+fide.db
+fide.db.new
+
 # WebRTC phase-4 device PWA bundle (output of webrtc/build_app.py)
 /webrtc/dist/
 

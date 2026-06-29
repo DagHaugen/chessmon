@@ -60,6 +60,7 @@ SETTINGS_FILE = os.environ.get("CHESSMON_SETTINGS",
                                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.json"))
 ENGINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines")
 STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe")   # bundled engine for suggested moves (installed from the console Setup page)
+FIDE_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fide.db")   # local FIDE rating-list index (SQLite), built by the console "Download FIDE list" action
 CLOUD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cloud.json")   # chessmon-cloud relay config (gates web broadcast)
 
 app = FastAPI(title="chessmon server")
@@ -583,6 +584,110 @@ def download_stockfish():
         return False, str(e)
 
 
+def is_fide_installed():
+    return os.path.exists(FIDE_DB) and os.path.getsize(FIDE_DB) > 0
+
+
+def fide_count():
+    import sqlite3
+    try:
+        db = sqlite3.connect(FIDE_DB)
+        row = db.execute("SELECT v FROM meta WHERE k='count'").fetchone()
+        db.close()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def _build_fide_db(xpath, dbpath):
+    """Stream-parse the FIDE rating-list XML (~hundreds of MB) into a fresh SQLite index. Returns the count."""
+    import sqlite3
+    import xml.etree.ElementTree as ET
+    if os.path.exists(dbpath):
+        os.remove(dbpath)
+    db = sqlite3.connect(dbpath)
+    db.execute("CREATE TABLE p(fideid INTEGER PRIMARY KEY, name TEXT, lname TEXT, country TEXT, title TEXT,"
+               " rating INTEGER, rapid INTEGER, blitz INTEGER, born INTEGER)")
+    db.execute("CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT)")
+
+    def num(s):
+        s = (s or "").strip()
+        return int(s) if s.isdigit() else None
+
+    n, batch = 0, []
+    for _ev, el in ET.iterparse(xpath, events=("end",)):
+        if el.tag != "player":
+            continue
+        fid = num(el.findtext("fideid"))
+        if fid is not None:
+            name = (el.findtext("name") or "").strip()
+            batch.append((fid, name, name.lower(), (el.findtext("country") or "").strip(),
+                          (el.findtext("title") or "").strip(), num(el.findtext("rating")),
+                          num(el.findtext("rapid_rating")), num(el.findtext("blitz_rating")), num(el.findtext("birthday"))))
+            n += 1
+            if len(batch) >= 5000:
+                db.executemany("INSERT OR REPLACE INTO p VALUES(?,?,?,?,?,?,?,?,?)", batch)
+                batch = []
+        el.clear()
+    if batch:
+        db.executemany("INSERT OR REPLACE INTO p VALUES(?,?,?,?,?,?,?,?,?)", batch)
+    db.execute("INSERT OR REPLACE INTO meta VALUES('count', ?)", (str(n),))
+    db.execute("INSERT OR REPLACE INTO meta VALUES('date', ?)", (time.strftime("%Y-%m-%d"),))
+    db.commit()
+    db.close()
+    return n
+
+
+def download_fide():
+    """Download the FIDE combined rating list (~47 MB) and rebuild the local SQLite index. Blocking ->
+    asyncio.to_thread. Returns (ok, message); a 0-count parse is reported as an error (XML format changed)."""
+    import urllib.request
+    import zipfile
+    import tempfile
+    import shutil
+    tmp = tempfile.mkdtemp(prefix="cm_fide_")
+    try:
+        zpath = os.path.join(tmp, "players.zip")
+        urllib.request.urlretrieve("https://ratings.fide.com/download/players_list_xml.zip", zpath)
+        with zipfile.ZipFile(zpath) as z:
+            xname = next((nm for nm in z.namelist() if nm.lower().endswith(".xml")), None)
+            if not xname:
+                return False, "no .xml inside the FIDE download"
+            z.extract(xname, tmp)
+            xpath = os.path.join(tmp, xname)
+        newdb = FIDE_DB + ".new"
+        n = _build_fide_db(xpath, newdb)
+        if n == 0:
+            os.remove(newdb)
+            return False, "parsed 0 players -- the FIDE XML format may have changed"
+        os.replace(newdb, FIDE_DB)            # atomic swap over any previous index
+        return True, str(n) + " players indexed"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fide_lookup(q, limit=20):
+    """Search the local FIDE index by FIDE ID (numeric) or name substring, ranked by rating. List of dicts."""
+    import sqlite3
+    q = (q or "").strip()
+    if not q or not is_fide_installed():
+        return []
+    try:
+        db = sqlite3.connect(FIDE_DB)
+        db.row_factory = sqlite3.Row
+        if q.isdigit():
+            rows = db.execute("SELECT * FROM p WHERE fideid=?", (int(q),)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM p WHERE lname LIKE ? LIMIT 60", ("%" + q.lower() + "%",)).fetchall()
+        db.close()
+    except Exception:
+        return []
+    out = sorted((dict(r) for r in rows), key=lambda r: -(r.get("rating") or 0))
+    return out[:limit]
+
+
 def is_cloud_configured():
     try:
         with open(CLOUD_FILE) as f:
@@ -601,6 +706,8 @@ def load_settings():
         pass
     settings["stockfish_installed"] = is_stockfish_installed()   # auto-detected each start, not persisted
     settings["cloud_configured"] = is_cloud_configured()         # web broadcast is offered only when chessmon-cloud is set up
+    settings["fide_installed"] = is_fide_installed()             # local FIDE rating-list index present?
+    settings["fide_count"] = fide_count()
 
 
 def save_settings():
@@ -888,6 +995,16 @@ async def ws_endpoint(ws: WebSocket):
                 settings["stockfish_installed"] = is_stockfish_installed()
                 await send(ws, {"type": "stockfish.status", "state": ("done" if ok else "error"), "message": msg})
                 await broadcast_devices()                          # push the refreshed stockfish_installed flag to every console
+            elif t == "fide.install":                             # console "Download FIDE list" -> fetch + index the rating list
+                await send(ws, {"type": "fide.status", "state": "downloading"})
+                ok, msg = await asyncio.to_thread(download_fide)
+                settings["fide_installed"] = is_fide_installed()
+                settings["fide_count"] = fide_count()
+                await send(ws, {"type": "fide.status", "state": ("done" if ok else "error"), "message": msg})
+                await broadcast_devices()
+            elif t == "fide.lookup":                              # players page: search the FIDE index by id or name
+                res = await asyncio.to_thread(fide_lookup, data.get("q", ""))
+                await send(ws, {"type": "fide.results", "q": data.get("q", ""), "results": res})
             elif t == "table.create":                             # console makes a new, empty table
                 mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)
