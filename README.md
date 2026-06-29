@@ -92,9 +92,9 @@ python run_clock.py                                              # launcher; sta
 |-----|--------|------|
 | `/` | landing | links to the two devices |
 | `/board` | board / camera view | clickable board (stands in for the physical board + camera); make moves; signal end-of-game |
-| `/clock` | clock device (the tablet) | two-sided clock; tap **CONFIRM** per move; pick the promotion piece |
+| `/clock` | clock device (the tablet) | two-sided clock; tap **✓** (confirmed) per move; pick the promotion piece |
 
-Flow per move: make the move on `/board` → tap **CONFIRM** on the mover's side of
+Flow per move: make the move on `/board` → tap **✓** (confirmed) on the mover's side of
 `/clock` → the move is read through the real detector + inference and the clock
 switches. Both screens poll one shared backend, so they stay in lock-step. The
 Black half of the clock is rotated 180° to face the player across the board.
@@ -115,7 +115,7 @@ moves and castling, and inference's projection-match recovers everything — pie
 from their shuffled squares, and 960 castling (king-onto-rook) reported as `O-O`.
 
 **Promotion** is where the device earns its keep: on a pawn reaching the back
-rank, CONFIRM is replaced by piece buttons (**Queen dominant**, then Rook /
+rank, the **✓** confirm button is replaced by piece buttons (**Queen dominant**, then Rook /
 Bishop / Knight). Tapping one resolves the single thing colour-only vision cannot
 see — the promoted piece type — via `MoveInference.resolve_promotion()`.
 
@@ -143,29 +143,6 @@ camera decodes it — no button needed. The decoded result shows on both screens
 Logic is covered headlessly by `tests\test_clock.py` (confirm/commit/switch,
 capture, promotion picker incl. underpromotion, Fischer increment, flag-fall,
 and the kings-to-centre gesture + its safety against false triggers).
-
-## Hook up a webcam (later)
-
-```powershell
-.\.venv\Scripts\python.exe -m chessmon.app webcam --index 0
-```
-
-1. Show the **empty** board, press SPACE — homography is solved from the inner
-   corners (`findChessboardCorners`).
-2. Set up the **standard start** position, press SPACE — this calibrates the
-   empty/light/dark thresholds (the start position is a free labelled sample).
-3. Play. Settled moves are printed; ambiguous/illegal observations are flagged
-   for you to confirm.
-
-### Real-camera caveats (documented in code, to tune on the bench)
-- **Board registration:** `findChessboardCorners` has a rotation/reflection
-  ambiguity — disambiguate with the start position, or switch to ArUco corner
-  markers for robustness (recommended).
-- **Thresholds** are learned from your two reference frames, so they adapt to
-  your lighting — but extreme glare or coloured lighting may need the slow
-  background-adaptation loop (sketched in the design, not yet wired).
-- **Occupancy is edge-based** to reject shadows; very flat, same-colour pieces
-  under flat lighting are the case to watch.
 
 ## Requirements
 

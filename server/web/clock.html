@@ -306,9 +306,16 @@ function renderBoard(fen){
   const b=$('board');b.innerHTML='';
   const rows=(fen||'8/8/8/8/8/8/8/8').split(' ')[0].split('/');
   const flips=(curMagnus&&curMagnus.length)?new Set(curMagnus):null;   // Magnus mode: queenside-knight squares to mirror
+  // Mode 2 turns the black pieces 180deg, which reverses a baked-in mirror -> the black b-knight would point
+  // AWAY from its king. So in mode 2 mirror the OTHER black knight (the g-knight) instead, so both black
+  // knights face the king again from the black player's side ("swap b/g for black").
+  let bFlips=flips;
+  if(rotMode===2&&flips){bFlips=new Set();
+    rows.forEach((row,r)=>{let c=0;for(const ch of row){if(/\d/.test(ch)){c+=+ch;}
+      else{if(ch==='n'){const sq=String.fromCharCode(97+c)+(8-r);if(!flips.has(sq))bFlips.add(sq);}c++;}}});}
   rows.forEach((row,r)=>{let c=0;for(const ch of row){
     if(/\d/.test(ch)){for(let i=0;i<+ch;i++){b.appendChild(mkSq(r,c++,''))}}
-    else{const flip=flips&&(ch==='N'||ch==='n')&&flips.has(String.fromCharCode(97+c)+(8-r));b.appendChild(mkSq(r,c,ch,flip));c++;}}});
+    else{const set=(ch==='n')?bFlips:flips;const flip=set&&(ch==='N'||ch==='n')&&set.has(String.fromCharCode(97+c)+(8-r));b.appendChild(mkSq(r,c,ch,flip));c++;}}});
   layoutBoard();
 }
 function sqRC(s){return [8-(+s[1]),s.charCodeAt(0)-97]}     // 'e2' -> [row,col] (row 0 = rank 8)

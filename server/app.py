@@ -258,7 +258,10 @@ def dev_public(d):
 
 def _magnus_squares(board):
     """Where the two queenside ('b-file') knights are now -- replay the move stack from b1/b8, so 'Magnus
-    mode' can keep just those knights mirrored as they roam. Returns square names; a captured one drops out."""
+    mode' can keep just those knights mirrored as they roam. Returns square names; a captured one drops out.
+    Off for Chess960 -- the b1/b8 start no longer holds, so the tracking would be meaningless."""
+    if getattr(board, "chess960", False):
+        return []
     wm, bm = chess.B1, chess.B8
     for mv in board.move_stack:
         if mv.to_square == wm:
