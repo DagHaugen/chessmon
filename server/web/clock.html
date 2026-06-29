@@ -308,7 +308,7 @@ let curFen=null;                                           // last position rend
 function applyRot(){$('board').className='board m'+rotMode;if(curFen!=null)renderBoard(curFen)}   // rotate must RE-RENDER: the mode-2 magnus b/g knight choice depends on rotMode, not just CSS
 
 function $(id){return document.getElementById(id)}
-const CM_VER='1.20';   // BUMP on every clock.html change so the phone shows which build it actually loaded
+const CM_VER='1.21';   // BUMP on every clock.html change so the phone shows which build it actually loaded
 (function(){const v=()=>document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;left:5px;bottom:3px;font:10px monospace;color:#999;opacity:.55;z-index:99999;pointer-events:none">v'+CM_VER+'</div>');document.body?v():addEventListener('DOMContentLoaded',v)})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
@@ -795,8 +795,10 @@ window.addEventListener('resize',layoutBoard);
 
 async function keepAwake(){try{if('wakeLock'in navigator)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){keepAwake();if(!ws||ws.readyState>1)connect()}});
+window.addEventListener('online',()=>{if(!ws||ws.readyState>1)connect()});            // network came back -> reconnect right away
+window.addEventListener('pageshow',()=>{keepAwake();if(!ws||ws.readyState>1)connect()});   // iOS restored the tab (incl. from cache) -> re-assert wake-lock + reconnect
 document.addEventListener('click',keepAwake);
-setInterval(()=>send({type:'ping'}),20000);            // heartbeat keeps the socket alive when idle
+setInterval(()=>send({type:'ping'}),5000);             // heartbeat keeps the data channel alive when idle (iOS Safari drops an idle WebRTC fast); a running game also ticks every 1s
 </script>
 </body>
 </html>
