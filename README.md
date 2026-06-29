@@ -27,7 +27,7 @@ link. Works on **Windows, macOS and Linux**.
 
 > **Old devices are fine — just not ancient.** The clock and camera use WebRTC, so the rough
 > floor is **iOS 11+** (2017) and **Android 7+** (2016), or any reasonably current
-> Chrome / Safari / Edge / Firefox. On older kit (iOS 10 or Android 5 and earlier) the page may
+> Chrome / Safari / Edge / Firefox. On older kit (iOS 10 or Android 6 and earlier) the page may
 > still load, but pairing just times out.
 
 ### 2 · Install
