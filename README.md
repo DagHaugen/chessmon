@@ -112,6 +112,20 @@ console, and — if you enabled it — spectators can watch online.
 
 *(macOS / Linux: prefix each with `./chessmon.sh`; PowerShell: with `.\`.)*
 
+### Updating
+You installed with `git clone`, so update **in place** — don't re-clone (a fresh clone would
+lose your settings, players, games and FIDE list, which live only in your folder, not on
+GitHub). From the chessmon folder:
+
+```bash
+git pull
+chessmon setup     # only if dependencies changed — harmless to run either way
+chessmon restart
+```
+
+(`./chessmon.sh setup` / `restart` on macOS/Linux.) The console **Setup** page shows your
+version and flags when a newer one is available on GitHub.
+
 ---
 
 The rest of this README explains **how the vision engine works** — the part that reads moves

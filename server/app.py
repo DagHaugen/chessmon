@@ -61,6 +61,13 @@ SETTINGS_FILE = os.environ.get("CHESSMON_SETTINGS",
 ENGINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines")
 STOCKFISH_EXE = os.path.join(ENGINES_DIR, "stockfish.exe" if os.name == "nt" else "stockfish")   # bundled engine for suggested moves (installed from the console Setup page); .exe on Windows, no extension on macOS/Linux
 FIDE_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fide.db")   # local FIDE rating-list index (SQLite), built by the console "Download FIDE list" action
+
+VERSION_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")   # repo-root VERSION (semver): shown in the console + checked against GitHub
+try:
+    APP_VERSION = open(VERSION_FILE, encoding="utf-8").read().strip()[:20] or "0.0.0"
+except Exception:
+    APP_VERSION = "0.0.0"
+GITHUB_VERSION_URL = "https://raw.githubusercontent.com/DagHaugen/chessmon/main/VERSION"   # the latest published VERSION (default branch)
 CLOUD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cloud.json")   # chessmon-cloud relay config (gates web broadcast)
 
 app = FastAPI(title="chessmon server")
@@ -734,6 +741,26 @@ def is_cloud_configured():
         return False
 
 
+def _vtuple(v):
+    out = []
+    for part in str(v or "").replace("-", ".").split("."):
+        digits = "".join(c for c in part if c.isdigit())
+        if digits:
+            out.append(int(digits))
+    return tuple(out)
+
+
+def latest_version():
+    """The VERSION published on the repo's main branch, for an 'update available?' check. None on any error."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(GITHUB_VERSION_URL, headers={"User-Agent": "chessmon"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return r.read().decode("utf-8").strip()[:20] or None
+    except Exception:
+        return None
+
+
 def load_settings():
     settings.update(DEFAULT_SETTINGS)
     try:
@@ -746,6 +773,7 @@ def load_settings():
     settings["fide_installed"] = is_fide_installed()             # local FIDE rating-list index present?
     settings["fide_count"] = fide_count()
     settings["fide_date"] = fide_date()                          # YYYY-MM-DD it was downloaded (FIDE refreshes the list monthly)
+    settings["version"] = APP_VERSION                            # repo VERSION -> shown in the console Setup footer
 
 
 def save_settings():
@@ -1044,6 +1072,10 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "fide.lookup":                              # players page: search the FIDE index by id or name
                 res = await asyncio.to_thread(fide_lookup, data.get("q", ""))
                 await send(ws, {"type": "fide.results", "q": data.get("q", ""), "results": res})
+            elif t == "version.check":                            # console: is a newer chessmon published on GitHub?
+                latest = await asyncio.to_thread(latest_version)
+                await send(ws, {"type": "version.result", "current": APP_VERSION, "latest": latest,
+                                "update": bool(latest and _vtuple(latest) > _vtuple(APP_VERSION))})
             elif t == "table.create":                             # console makes a new, empty table
                 mgr.create_table("White", "Black", "standard", name=(data.get("name") or "").strip())
                 mgr.save(SESSIONS_FILE)

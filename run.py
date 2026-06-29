@@ -111,6 +111,14 @@ def _write_state(d):
         json.dump(d, f)
 
 
+def _version():
+    try:
+        with open(os.path.join(ROOT, "VERSION")) as f:
+            return f.read().strip() or "?"
+    except Exception:
+        return "?"
+
+
 def _find_stockfish():
     return next((p for p in glob.glob(os.path.join(ROOT, "server", "engines", "stockfish*"))
                  if os.path.isfile(p)), None)
@@ -243,6 +251,7 @@ def cmd_restart(args):
 def cmd_status(args):
     st = _read_state()
     port = st.get("port", args.port)
+    say(f"chessmon  : v{_version()}")
     say(f"server    : {'UP on :' + str(port) if _port_open(port) else 'down'}")
     say(f"supervisor: {'running (pid ' + str(st.get('supervisor')) + ')' if _alive(st.get('supervisor')) else '-'}")
     say(f"bridge    : {'running' if _alive(st.get('bridge')) else '-'}")
