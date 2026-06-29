@@ -51,6 +51,12 @@ git --version
 git clone https://github.com/DagHaugen/chessmon.git
 cd chessmon
 ```
+
+> **Put it wherever you like** — any folder you can write to (your home / user area is ideal,
+> not Program Files). Everything chessmon creates — its `.venv`, the Stockfish engine, your
+> games — lives inside this one folder, so avoid cloud-synced folders (OneDrive / Dropbox /
+> iCloud Drive), and don't move it after `chessmon setup` (the `.venv` remembers its path).
+
 Create the environment and install dependencies (once):
 
 | | command |
