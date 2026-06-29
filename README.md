@@ -25,6 +25,11 @@ link. Works on **Windows, macOS and Linux**.
 - The operator's machine needs **outbound** internet so those devices can reach it through
   `comlos.com` (real HTTPS — no certificates, no firewall rules, no inbound ports).
 
+> **Old devices are fine — just not ancient.** The clock and camera use WebRTC, so the rough
+> floor is **iOS 11+** (2017) and **Android 7+** (2016), or any reasonably current
+> Chrome / Safari / Edge / Firefox. On older kit (iOS 10 or Android 5 and earlier) the page may
+> still load, but pairing just times out.
+
 ### 2 · Install
 ```bash
 git clone https://github.com/DagHaugen/chessmon.git
