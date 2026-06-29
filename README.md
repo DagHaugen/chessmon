@@ -12,7 +12,7 @@ and infers the move from how that 8x8 grid changes between settled positions,
 starting from the known standard setup.
 
 chessmon is also a complete, self-hosted system you run for your club: phone & tablet
-**chess clocks**, optional **camera move-detection**, **live broadcast** for spectators, and
+**chess clocks**, **camera move-detection** (a second phone watches each board), **live broadcast** for spectators, and
 **player + tournament** management. One person runs it on a laptop; everyone else just opens a
 link. Works on **Windows, macOS and Linux**.
 
@@ -20,10 +20,10 @@ link. Works on **Windows, macOS and Linux**.
 
 ### 1 · What you need
 - **Python 3.10+** and **git** on the operator's computer (Windows, macOS or Linux).
-- Players' **phones or tablets** as the clocks — any modern browser, nothing to install.
+- **Two phones or tablets per board** — one is the **clock**, the other is the **camera**,
+  propped over the board to read the moves. Any modern browser; nothing to install, no webcam.
 - The operator's machine needs **outbound** internet so phones can reach it through
   `comlos.com` (real HTTPS — no certificates, no firewall rules, no inbound ports).
-- *(optional)* a **webcam** over each board for automatic move detection.
 
 ### 2 · Install
 ```bash
@@ -62,12 +62,12 @@ Open **Setup** and configure what you want — it's all optional except adding p
 - **chessmon cloud** — broadcast games to online spectators (opt-in, involves an account).
 - **Players** — add them, then assign two players + a time control to each table.
 
-### 5 · Connect the clocks (and cameras)
+### 5 · Connect the clock and camera
 Each table in the console shows a pairing **QR code**:
 1. On the player's phone, **scan the console QR** → the clock opens (served from `comlos.com`,
    so screen/camera permissions just work — nothing to install).
-2. *(optional camera)* on a second phone, **scan the clock's QR** → the camera page opens; point
-   it at the board and capture the empty board + start position.
+2. On the **second** phone, **scan the clock's QR** → the camera page opens; point it at the
+   board and capture the empty board + start position.
 
 Names and the running clock now follow on the table's device, every move appears live in the
 console, and — if you enabled it — spectators can watch online.
