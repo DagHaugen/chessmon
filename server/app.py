@@ -139,9 +139,15 @@ async def send(ws, obj):
         pass                               # client went away mid-broadcast (1001/1006); its disconnect handler drops it from the lists
 
 
+def _state_msg(s):
+    """A 'state' snapshot carrying the Magnus squares (gated; null when off), so a reconnecting / refreshed
+    clock gets them too -- snapshot() lives in game_session and can't see the app's settings."""
+    return {"type": "state", **s.snapshot(),
+            "magnus": _magnus_squares(s.game.board) if settings.get("magnus_mode") else None}
+
+
 async def broadcast_state(s):
-    snap = {"type": "state", **s.snapshot()}
-    snap["magnus"] = _magnus_squares(s.game.board) if settings.get("magnus_mode") else None   # Magnus mode (easter egg): queenside-knight squares so the clock mirrors them too (null = off)
+    snap = _state_msg(s)
     h = hub(s.table_token)
     for ws in [h["clock"], *list(h["spectators"])]:
         await send(ws, snap)
@@ -758,7 +764,7 @@ async def ws_endpoint(ws: WebSocket):
                                 "cameraLinked": hub(s.table_token)["camera"] is not None,
                                 "cameraAssigned": s.camera_dev is not None,
                                 **s.session_info()})
-                await send(ws, {"type": "state", **s.snapshot()})  # restore view on reconnect
+                await send(ws, _state_msg(s))  # restore view on reconnect (incl. Magnus squares)
             elif t == "pair.join":
                 s, role = mgr.by_pair(data["pairToken"]), "camera"
                 if s is None:
@@ -779,7 +785,7 @@ async def ws_endpoint(ws: WebSocket):
                     await send(ws, {"type": "error", "reason": "unknown table"})
                     continue
                 hub(s.table_token)["spectators"].add(ws)
-                await send(ws, {"type": "state", **s.snapshot()})
+                await send(ws, _state_msg(s))
             elif t == "ping":                                     # heartbeat — keep the socket alive
                 pass
             elif t == "hello":                                    # device registers itself (landing / clock / camera)
@@ -961,7 +967,7 @@ async def ws_endpoint(ws: WebSocket):
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
                     hub(sess.table_token)["spectators"].add(ws)
-                    await send(ws, {"type": "state", **sess.snapshot()})
+                    await send(ws, _state_msg(sess))
             elif t == "admin.unwatch":
                 sess = mgr.by_table(data.get("table"))
                 if sess is not None:
