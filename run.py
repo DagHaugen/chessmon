@@ -97,6 +97,27 @@ def _kill(pid):
         pass
 
 
+def _sweep():
+    """Best-effort kill of STRAY chessmon python the pidfile never tracked -- e.g. a venv launcher's real
+    interpreter that outlived its tracked shim pid, or an orphan from a prior run. Without this, stop/restart
+    can leave bridges polling comlos and they pile up into 429s. Returns the number killed."""
+    me, killed = os.getpid(), 0
+    pat = r"rtc_peer\.py|uvicorn server\.app|run\.py start"
+    try:
+        if IS_WIN:
+            ps = ("Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+                  "Where-Object { $_.CommandLine -match '" + pat + "' } | ForEach-Object { $_.ProcessId }")
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, timeout=20).stdout
+        else:
+            out = subprocess.run(["pgrep", "-f", pat], capture_output=True, text=True, timeout=20).stdout
+        for tok in out.split():
+            if tok.strip().isdigit() and int(tok) != me:
+                _kill(int(tok)); killed += 1
+    except Exception:
+        pass
+    return killed
+
+
 def _read_state():
     try:
         with open(STATE) as f:
@@ -235,11 +256,12 @@ def cmd_stop(_args=None):
     had = any(_alive(p) for p in pids if p)
     for p in pids:                                          # supervisor first so it can't respawn the bridge
         _kill(p)
+    swept = _sweep()                                        # also clear strays/orphans the pidfile never tracked (venv-launcher children, dupes)
     try:
         os.remove(STATE)
     except OSError:
         pass
-    say("stopped." if had else "nothing was running.")
+    say("stopped." if (had or swept) else "nothing was running.")
 
 
 def cmd_restart(args):
