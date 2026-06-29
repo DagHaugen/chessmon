@@ -75,6 +75,9 @@
   .dimbtn img{width:100%;height:100%;display:block;opacity:.4;transition:opacity .15s;-webkit-user-drag:none;-webkit-touch-callout:none}
   .dimbtn.lit img{opacity:1}                                             /* full colour when toggled on */
   .fsbtn{top:10px}                                                       /* re-enter fullscreen, above the dim button (shown only off-fullscreen, on devices where the API exists) */
+  .sndbtn{top:142px;background:rgba(20,22,28,.85)}                        /* sound on/off toggle, below the join QR button */
+  .sndbtn svg{opacity:.38;transition:opacity .15s}                       /* dim = muted */
+  .sndbtn.lit svg{opacity:1}                                             /* lit = sound on */
   .qrjoin{position:fixed;left:0;top:0;right:0;bottom:0;z-index:60;background:rgba(8,10,14,.92);display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:14px;padding:24px}
   .qrjoin .qrlbl{color:var(--ink);font-size:16px;font-weight:700}
@@ -236,6 +239,7 @@
         <button class="startov hidden" id="startov"><span>START</span></button>
         <button class="rotbtn hidden" id="rotbtn" title="Rotate the board (lock in at start)">⟳</button>
         <button class="qrjoinbtn dimbtn" id="dimbtn" title="Toggle"><img src="icon.svg" alt="" draggable="false"></button>
+        <button class="qrjoinbtn sndbtn" id="sndbtn" title="Sound on/off"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
         <button class="qrjoinbtn hidden" id="qrjoinbtn" title="Show the join QR — add another device"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M17 21h.01M21 17v4"/></svg></button>
         <button class="qrjoinbtn fsbtn hidden" id="fsbtn" title="Fullscreen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
       </div>
@@ -297,11 +301,25 @@ let curFen=null;                                           // last position rend
 function applyRot(){$('board').className='board m'+rotMode;if(curFen!=null)renderBoard(curFen)}   // rotate must RE-RENDER: the mode-2 magnus b/g knight choice depends on rotMode, not just CSS
 
 function $(id){return document.getElementById(id)}
-const CM_VER='1.16';   // BUMP on every clock.html change so the phone shows which build it actually loaded
+const CM_VER='1.17';   // BUMP on every clock.html change so the phone shows which build it actually loaded
 (function(){const v=()=>document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;left:5px;bottom:3px;font:10px monospace;color:#999;opacity:.55;z-index:99999;pointer-events:none">v'+CM_VER+'</div>');document.body?v():addEventListener('DOMContentLoaded',v)})();
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});   // Enter in any input -> drop focus / dismiss keyboard
 function show(id,on){$(id).classList.toggle('hidden',!on)}
 function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+// --- sound effects (synthesised via Web Audio) -- per-device opt-in (cm_snd), default OFF so a hall isn't a beeping cacophony ---
+let sndOn=localStorage.getItem('cm_snd')==='1', _ac=null, _lowSec=null;
+function _audio(){try{if(!_ac)_ac=new (window.AudioContext||window.webkitAudioContext)();if(_ac.state==='suspended')_ac.resume();}catch(e){}return _ac;}
+function _beep(freq,at,dur,type,peak){if(!_ac)return;const o=_ac.createOscillator(),g=_ac.createGain();o.type=type;o.frequency.value=freq;
+  o.connect(g);g.connect(_ac.destination);const t=_ac.currentTime+at;g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(peak,t+0.008);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.start(t);o.stop(t+dur+0.03);}
+function sfx(kind){if(!sndOn||!_audio())return;
+  if(kind==='click')_beep(1150,0,0.05,'triangle',0.25);                                  // move accepted: soft click
+  else if(kind==='err'){_beep(196,0,0.16,'square',0.20);_beep(150,0.11,0.20,'square',0.18);}  // bad read: low double buzz
+  else if(kind==='tick')_beep(880,0,0.03,'sine',0.13);                                    // low-time: quiet tick
+  else if(kind==='flag')_beep(130,0,0.55,'sawtooth',0.30);                                // flag fall: buzz
+  else if(kind==='salute')[0,4,7,12].forEach((s,i)=>_beep(523.25*Math.pow(2,s/12),i*0.13,0.55,'triangle',0.22));}  // game over: rising C major arpeggio
+function _unlock(){_audio();document.removeEventListener('pointerdown',_unlock);document.removeEventListener('touchend',_unlock);}  // iOS won't play before a user gesture
+document.addEventListener('pointerdown',_unlock,{passive:true});document.addEventListener('touchend',_unlock,{passive:true});
 
 function renderBoard(fen){
   curFen=fen;
@@ -341,11 +359,15 @@ function renderClocks(){
   $('s-black').classList.toggle('active',clk.active==='black'&&clk.running);
 }
 setInterval(()=>{const now=Date.now();
-  if(clk.running&&!PREVIEW){clk[clk.active]-=now-clk.last;if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}}
+  if(clk.running&&!PREVIEW){clk[clk.active]-=now-clk.last;
+    if(clk[clk.active]<=0){clk[clk.active]=0;onFlag()}
+    else if(clk[clk.active]<10000){const s=Math.ceil(clk[clk.active]/1000);if(s!==_lowSec){_lowSec=s;sfx('tick');}}   // last 10s: a tick each second
+    else _lowSec=null;
+  } else _lowSec=null;
   clk.last=now;renderClocks()},100);
 setInterval(()=>{if(!PREVIEW&&(phase==='run'||phase==='paused'))   // push the live clock to viewers once a second (the server relays + caches it)
   send({type:'clock.tick',white_ms:Math.round(clk.white),black_ms:Math.round(clk.black),active:clk.active,running:clk.running})},1000);
-function onFlag(){phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
+function onFlag(){phase='over';clk.running=false;sfx('flag');showCtrls(false);show('resetbtn',true);showUndo(false);const loser=clk.active,winner=loser==='white'?'black':'white';
   $('s-'+winner).classList.add('win');gameResult=winner==='white'?'1-0':'0-1';$('report').className='report over';
   $('report').textContent=(winner[0].toUpperCase()+winner.slice(1))+' wins on time';paint();
   send({type:'flag',side:loser});}                       // loss on time -> server ends the game
@@ -404,6 +426,8 @@ function refreshCam(){                                         // (re)grab the r
   send({type:'preview.req',table});                                                          // latest cached frame -> preview.image (no grab, no move-read race)
 }
 $('dimbtn').onclick=()=>{const on=$('dimbtn').classList.toggle('lit');show('camoverlay',on);if(on)refreshCam();};   // toggle overlay; turning it on grabs a fresh frame
+$('sndbtn').onclick=()=>{sndOn=!sndOn;localStorage.setItem('cm_snd',sndOn?'1':'0');$('sndbtn').classList.toggle('lit',sndOn);if(sndOn){_audio();sfx('click');}};   // toggle sound; turning on unlocks audio + a confirming click
+$('sndbtn').classList.toggle('lit',sndOn);   // reflect the saved state on load
 $('camoverlay').onclick=refreshCam;                           // tap the overlay to refresh it
 function hideCam(){if(camOn()){$('dimbtn').classList.remove('lit');show('camoverlay',false);}}   // dismiss the overlay (e.g. after a move)
 function clearCands(){for(const s of ['white','black']){$('cands-'+s).innerHTML='';$('act-'+s).classList.remove('resolving')}}
@@ -642,7 +666,7 @@ function handle(m){
       break;
     case 'settling': settling=true;reading=true;paint();break;   // server is re-grabbing an obscured board -> show the ✋
     case 'move.result':
-      started=true;clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
+      started=true;sfx('click');clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();
       if(m.uci)lastMove={from:m.uci.slice(0,2),to:m.uci.slice(2,4)};
       if(m.fen)renderBoard(m.fen);
       showUndo(true);                     // a legal move landed -> clear illegal flag, allow undo
@@ -654,15 +678,15 @@ function handle(m){
       if(lastShown){$('report').className='report';$('report').textContent=lastShown.san+'  ·  '+turnName(lastShown.turn)+' to move';}
       paint();break;
     case 'move.reverted':                 // double-check failed (board was moving) -> undo the guess, ask to re-confirm
-      verifying=false;reading=false;
+      sfx('err');verifying=false;reading=false;
       if(m.fen)renderBoard(m.fen);
       if(m.turn)clk.active=m.turn.toLowerCase();clk.running=true;clk.last=Date.now();lastMove=null;
       $('report').className='report warn';$('report').textContent='move not confirmed — confirm again';
       clearCands();paint();break;
-    case 'move.ambiguous': warnMsg="⚠ Couldn't read it — pick your move:";reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up — a misread is not the player's time to lose
-    case 'move.unseen': warnMsg='⚠ No change seen — pick your move:';reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up
+    case 'move.ambiguous': sfx('err');warnMsg="⚠ Couldn't read it — pick your move:";reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up — a misread is not the player's time to lose
+    case 'move.unseen': sfx('err');warnMsg='⚠ No change seen — pick your move:';reading=false;clk.running=false;showCands(m.candidates);paint();break;   // pause the clock while a pick prompt is up
     case 'move.unclear': case 'move.nochange':
-      clk.running=true;clk.last=Date.now();reading=false;
+      sfx('err');clk.running=true;clk.last=Date.now();reading=false;
       if(m.fen)renderBoard(m.fen);                                 // show the moved piece where the camera sees it, not where it was
       if(m.squares&&m.squares.length){markBad(m.squares);warnMsg='ILLEGAL MOVE\nTRY AGAIN';   // illegal: red squares + button text (two lines)
         $('report').className='report warn';$('report').textContent='illegal move';}
@@ -670,7 +694,7 @@ function handle(m){
         $('report').className='report warn';$('report').textContent=(m.reason||'not recognized');}
       paint();break;
     case 'game.end':
-      phase='over';clk.running=false;showCtrls(false);show('resetbtn',true);showUndo(false);gameResult=m.result;clearCands();paint();
+      phase='over';clk.running=false;sfx('salute');showCtrls(false);show('resetbtn',true);showUndo(false);gameResult=m.result;clearCands();paint();
       $('report').textContent='game over · '+m.result;$('report').className='report over';
       const win=m.result==='1-0'?'white':(m.result==='0-1'?'black':null);
       if(win)$('s-'+win).classList.add('win');break;
