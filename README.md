@@ -11,6 +11,85 @@ EMPTY   |   LIGHT (a white piece)   |   DARK (a black piece)
 and infers the move from how that 8x8 grid changes between settled positions,
 starting from the known standard setup.
 
+chessmon is also a complete, self-hosted system you run for your club: phone & tablet
+**chess clocks**, optional **camera move-detection**, **live broadcast** for spectators, and
+**player + tournament** management. One person runs it on a laptop; everyone else just opens a
+link. Works on **Windows, macOS and Linux**.
+
+## Get started
+
+### 1 · What you need
+- **Python 3.10+** and **git** on the operator's computer (Windows, macOS or Linux).
+- Players' **phones or tablets** as the clocks — any modern browser, nothing to install.
+- The operator's machine needs **outbound** internet so phones can reach it through
+  `comlos.com` (real HTTPS — no certificates, no firewall rules, no inbound ports).
+- *(optional)* a **webcam** over each board for automatic move detection.
+
+### 2 · Install
+```bash
+git clone https://github.com/DagHaugen/chessmon.git
+cd chessmon
+```
+Create the environment and install dependencies (once):
+
+| | command |
+|--|--|
+| **Windows** | `chessmon setup` |
+| **macOS / Linux** | `./chessmon.sh setup` |
+
+### 3 · Run it
+
+| | command |
+|--|--|
+| **Windows** | `chessmon` |
+| **macOS / Linux** | `./chessmon.sh` |
+
+That starts the local server **and** the phone-bridge; press **Ctrl+C** to stop both. Now open
+the operator console:
+
+```
+http://localhost:8000/app/admin.html
+```
+
+> **PowerShell users:** run the wrapper as `.\chessmon` (e.g. `.\chessmon setup`).
+
+### 4 · Set things up (the console **Setup** page)
+Open **Setup** and configure what you want — it's all optional except adding players:
+- **Club / event name** — shown to spectators.
+- **Get Stockfish** — engine for live suggested moves. Downloads the right build for your OS
+  automatically (Windows, Intel **or** Apple-Silicon Mac, Linux).
+- **Download FIDE list** — search players by surname / FIDE ID and autofill their ratings.
+- **chessmon cloud** — broadcast games to online spectators (opt-in, involves an account).
+- **Players** — add them, then assign two players + a time control to each table.
+
+### 5 · Connect the clocks (and cameras)
+Each table in the console shows a pairing **QR code**:
+1. On the player's phone, **scan the console QR** → the clock opens (served from `comlos.com`,
+   so screen/camera permissions just work — nothing to install).
+2. *(optional camera)* on a second phone, **scan the clock's QR** → the camera page opens; point
+   it at the board and capture the empty board + start position.
+
+Names and the running clock now follow on the table's device, every move appears live in the
+console, and — if you enabled it — spectators can watch online.
+
+### Everyday commands
+| command | what it does |
+|---------|--------------|
+| `chessmon` | run server + phone-bridge in this window (Ctrl+C stops both) |
+| `chessmon start -d` | run in the background (logs to `chessmon.log`) |
+| `chessmon stop` | stop a backgrounded instance |
+| `chessmon restart` | stop, then start again |
+| `chessmon status` | is the server up? port, bridge, Stockfish, cloud |
+| `chessmon --no-bridge` | server only — local testing with no phones |
+| `chessmon --port 9000` | run on a different port |
+
+*(macOS / Linux: prefix each with `./chessmon.sh`; PowerShell: with `.\`.)*
+
+---
+
+The rest of this README explains **how the vision engine works** — the part that reads moves
+off the board.
+
 ## Why three states, not two
 
 Pure occupied/empty sensing cannot see a capture: the captured piece is replaced
@@ -59,7 +138,7 @@ Special handling:
 - **Missed ply** — if no single move matches, it tries a unique two-half-move
   decomposition before giving up.
 
-## Run it (no hardware)
+## Run the vision engine directly (no hardware)
 
 ```powershell
 # from the repo root
