@@ -30,6 +30,22 @@ link. Works on **Windows, macOS and Linux**.
 > Chrome / Safari / Edge / Firefox. On older kit (iOS 10 or Android 6 and earlier) the page may
 > still load, but pairing just times out.
 
+**Not sure you have Python and git?** Open a terminal — **PowerShell** on Windows, **Terminal**
+on macOS/Linux — and check:
+
+```
+python --version
+git --version
+```
+
+(try `python3` on macOS/Linux). If either says "not found", install it, then re-open the terminal:
+
+| OS | Python | git |
+|----|--------|-----|
+| **Windows** | [python.org](https://www.python.org/downloads/) — tick **"Add Python to PATH"** in the installer | [git-scm.com](https://git-scm.com/download/win) |
+| **macOS** | [python.org](https://www.python.org/downloads/macos/), or `brew install python` | run `git --version` once → macOS offers to install it |
+| **Linux** (Debian/Ubuntu) | `sudo apt install python3 python3-venv` | `sudo apt install git` |
+
 ### 2 · Install
 ```bash
 git clone https://github.com/DagHaugen/chessmon.git
