@@ -394,8 +394,11 @@ function paint(){                                          // big ✓ for the si
   if(camOn())warpBoardCam();        // keep the overlay aligned through renders / board-rotation changes
 }
 let joinRendered=false;
-function renderJoinQR(){if(joinRendered)return;                         // the idle "add a device" QR -> the /app landing page
-  if(typeof QRCode!=='undefined'){new QRCode($('qrjoinqr'),{text:location.origin+'/app/',width:200,height:200});joinRendered=true}}
+function renderJoinQR(){if(joinRendered)return;                         // the idle "add a device" QR -> the /app landing page, carrying THIS club's room (like the console QR)
+  if(typeof QRCode==='undefined')return;
+  const base=location.origin+location.pathname.replace(/[^/]*$/,'');    // this page's dir: /relay/app/ on comlos, /app/ locally
+  const room=params.get('room'),url=base+(room?'?room='+encodeURIComponent(room):'');   // room (carried in by cmNav) -> the new device joins the same club
+  new QRCode($('qrjoinqr'),{text:url,width:200,height:200});joinRendered=true}
 function showJoinQR(on){if(on)renderJoinQR();show('qrjoin',on);if(on)clk.running=false;else updateWait();}   // pause the game while the QR is up
 function updateQrBtn(){show('qrjoinbtn',true)}                          // available any time (gated by the board being visible), incl. during a game
 $('qrjoinbtn').onclick=()=>showJoinQR(true);
