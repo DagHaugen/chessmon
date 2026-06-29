@@ -12,7 +12,7 @@ and infers the move from how that 8x8 grid changes between settled positions,
 starting from the known standard setup.
 
 chessmon is also a complete, self-hosted system you run for your club: phone & tablet
-**chess clocks**, **camera move-detection** (a second phone watches each board), **live broadcast** for spectators, and
+**chess clocks**, **camera move-detection** (a second device watches each board), **live broadcast** for spectators, and
 **player + tournament** management. One person runs it on a laptop; everyone else just opens a
 link. Works on **Windows, macOS and Linux**.
 
@@ -22,7 +22,7 @@ link. Works on **Windows, macOS and Linux**.
 - **Python 3.10+** and **git** on the operator's computer (Windows, macOS or Linux).
 - **Two phones or tablets per board** — one is the **clock**, the other is the **camera**,
   propped over the board to read the moves. Any modern browser; nothing to install, no webcam.
-- The operator's machine needs **outbound** internet so phones can reach it through
+- The operator's machine needs **outbound** internet so those devices can reach it through
   `comlos.com` (real HTTPS — no certificates, no firewall rules, no inbound ports).
 
 ### 2 · Install
@@ -44,7 +44,7 @@ Create the environment and install dependencies (once):
 | **Windows** | `chessmon` |
 | **macOS / Linux** | `./chessmon.sh` |
 
-That starts the local server **and** the phone-bridge; press **Ctrl+C** to stop both. Now open
+That starts the local server **and** the device bridge; press **Ctrl+C** to stop both. Now open
 the operator console:
 
 ```
@@ -64,9 +64,9 @@ Open **Setup** and configure what you want — it's all optional except adding p
 
 ### 5 · Connect the clock and camera
 Each table in the console shows a pairing **QR code**:
-1. On the player's phone, **scan the console QR** → the clock opens (served from `comlos.com`,
+1. On the **first** device (phone or tablet), **scan the console QR** → the clock opens (served from `comlos.com`,
    so screen/camera permissions just work — nothing to install).
-2. On the **second** phone, **scan the clock's QR** → the camera page opens; point it at the
+2. On the **second** device (phone or tablet), **scan the clock's QR** → the camera page opens; point it at the
    board and capture the empty board + start position.
 
 Names and the running clock now follow on the table's device, every move appears live in the
@@ -75,12 +75,12 @@ console, and — if you enabled it — spectators can watch online.
 ### Everyday commands
 | command | what it does |
 |---------|--------------|
-| `chessmon` | run server + phone-bridge in this window (Ctrl+C stops both) |
+| `chessmon` | run server + device bridge in this window (Ctrl+C stops both) |
 | `chessmon start -d` | run in the background (logs to `chessmon.log`) |
 | `chessmon stop` | stop a backgrounded instance |
 | `chessmon restart` | stop, then start again |
 | `chessmon status` | is the server up? port, bridge, Stockfish, cloud |
-| `chessmon --no-bridge` | server only — local testing with no phones |
+| `chessmon --no-bridge` | server only — local testing with no devices |
 | `chessmon --port 9000` | run on a different port |
 
 *(macOS / Linux: prefix each with `./chessmon.sh`; PowerShell: with `.\`.)*
