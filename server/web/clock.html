@@ -293,7 +293,8 @@ let ws,started=false,wakeLock=null,camLinked=false,gotState=false,serverDown=fal
 const PREVIEW=/[?&]preview\b/.test(location.search);       // /app/clock.html?preview=1 -> driven by intern.html via postMessage; no WS, no SW, clocks don't tick
 let rotMode=(+localStorage.getItem('cm_rot')||0)%3;        // 0 = normal · 1 = board -90 · 2 = black pieces 180
 let curMagnus=null;                                        // Magnus mode (easter egg): queenside-knight squares the server says to mirror (null = off)
-function applyRot(){$('board').className='board m'+rotMode}
+let curFen=null;                                           // last position rendered, so a rotate can re-render it
+function applyRot(){$('board').className='board m'+rotMode;if(curFen!=null)renderBoard(curFen)}   // rotate must RE-RENDER: the mode-2 magnus b/g knight choice depends on rotMode, not just CSS
 
 function $(id){return document.getElementById(id)}
 const CM_VER='1.16';   // BUMP on every clock.html change so the phone shows which build it actually loaded
@@ -303,6 +304,7 @@ function show(id,on){$(id).classList.toggle('hidden',!on)}
 function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 
 function renderBoard(fen){
+  curFen=fen;
   const b=$('board');b.innerHTML='';
   const rows=(fen||'8/8/8/8/8/8/8/8').split(' ')[0].split('/');
   const flips=(curMagnus&&curMagnus.length)?new Set(curMagnus):null;   // Magnus mode: queenside-knight squares to mirror
