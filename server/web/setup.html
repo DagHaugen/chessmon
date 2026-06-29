@@ -204,8 +204,11 @@ function applySettings(s){if(!s)return;
   $('sf_stat').className='sfstat'+(inst?' ok':'');
   $('set_suggest').disabled=!inst; show('sf_dl',!inst);
   const fi=!!s.fide_installed,fc=s.fide_count||0;
-  $('fide_stat').textContent=fi?('✓ FIDE list · '+fc.toLocaleString()+' players'):'FIDE list not downloaded';
-  $('fide_stat').className='sfstat'+(fi?' ok':'');
+  let fstat=fi?('✓ FIDE list · '+fc.toLocaleString()+' players'):'FIDE list not downloaded',stale=false;
+  if(fi&&s.fide_date){const vt=new Date(s.fide_date+'T00:00:00');vt.setMonth(vt.getMonth()+1);   // FIDE updates monthly -> good ~1 month from download
+    if(!isNaN(vt)){stale=new Date()>vt;fstat+=' · valid to '+vt.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})+(stale?' (update recommended)':'');}}
+  $('fide_stat').textContent=fstat;
+  $('fide_stat').className='sfstat'+(fi&&!stale?' ok':'');
   $('fide_dl').textContent=fi?'Update FIDE list':'Download FIDE list';}
 $('set_time').onchange=()=>send({type:'settings.update',time_format:$('set_time').value});
 $('set_date').onchange=()=>send({type:'settings.update',date_format:$('set_date').value});

@@ -599,6 +599,17 @@ def fide_count():
         return 0
 
 
+def fide_date():
+    import sqlite3
+    try:
+        db = sqlite3.connect(FIDE_DB)
+        row = db.execute("SELECT v FROM meta WHERE k='date'").fetchone()
+        db.close()
+        return row[0] if row else ""
+    except Exception:
+        return ""
+
+
 def _build_fide_db(xpath, dbpath):
     """Stream-parse the FIDE rating-list XML (~hundreds of MB) into a fresh SQLite index. Returns the count."""
     import sqlite3
@@ -708,6 +719,7 @@ def load_settings():
     settings["cloud_configured"] = is_cloud_configured()         # web broadcast is offered only when chessmon-cloud is set up
     settings["fide_installed"] = is_fide_installed()             # local FIDE rating-list index present?
     settings["fide_count"] = fide_count()
+    settings["fide_date"] = fide_date()                          # YYYY-MM-DD it was downloaded (FIDE refreshes the list monthly)
 
 
 def save_settings():
@@ -1000,6 +1012,7 @@ async def ws_endpoint(ws: WebSocket):
                 ok, msg = await asyncio.to_thread(download_fide)
                 settings["fide_installed"] = is_fide_installed()
                 settings["fide_count"] = fide_count()
+                settings["fide_date"] = fide_date()
                 await send(ws, {"type": "fide.status", "state": ("done" if ok else "error"), "message": msg})
                 await broadcast_devices()
             elif t == "fide.lookup":                              # players page: search the FIDE index by id or name

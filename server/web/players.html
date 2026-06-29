@@ -34,15 +34,30 @@
   .sugmeta.ft{color:var(--cam);font-weight:700}
   .sugrate{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
   .plist{display:flex;flex-direction:column;gap:8px}
-  .prow{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  .prow{display:flex;flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+  .ptop{display:flex;gap:10px;align-items:center}
   .pname{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid transparent;border-radius:8px;padding:8px 10px;font-size:15px;font-weight:600;font-family:inherit}
   .pname:focus{border-color:var(--line);outline:none}
+  .pfull{background:var(--bg);color:var(--mut);border:1px solid transparent;border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit}
+  .pfull:focus{border-color:var(--line);outline:none;color:var(--ink)}
+  .iinfo{flex:0 0 auto;background:none;border:none;color:var(--accent);font-size:17px;line-height:1;cursor:pointer;padding:0 2px}
+  .iinfo:hover{color:var(--ink)}
   .fbadge{display:inline-flex;gap:7px;align-items:center;font-size:12px;white-space:nowrap}
   .fbadge .ft{color:var(--cam);font-weight:700}
   .fbadge .fr{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
   .fbadge .ff{color:var(--mut)}
   .mini{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 11px;font-size:12px;cursor:pointer}
   .mini.bad{color:var(--bad)}
+  .fmodal{position:fixed;inset:0;background:rgba(8,10,14,.82);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .fmodal.hidden{display:none}
+  .fbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:320px;width:100%}
+  .fttl{font-size:16px;font-weight:700;margin-bottom:12px}
+  .frow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .frow:last-of-type{border-bottom:none}
+  .frow span{color:var(--mut)}
+  .frow b{font-variant-numeric:tabular-nums}
+  .flink{display:inline-block;margin-top:14px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}
+  .fclose{display:block;width:100%;margin-top:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px;font-size:14px;cursor:pointer}
   .empty{color:var(--mut);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;font-size:13px}
 </style>
 </head>
@@ -67,6 +82,7 @@
   </div>
   <div class="plist" id="list"></div>
 </div>
+<div class="fmodal hidden" id="fmodal"><div class="fbox" id="fbox"></div></div>
 <script>
 function $(id){return document.getElementById(id)}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT')e.target.blur();});
@@ -84,25 +100,32 @@ function connect(){
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function uid(){return crypto.randomUUID?crypto.randomUUID():('p_'+Math.random().toString(36).slice(2)+Date.now())}
 function render(){
-  if(document.activeElement&&document.activeElement.classList&&document.activeElement.classList.contains('pname')){renderPending=true;return}
+  if(document.activeElement&&document.activeElement.classList&&(document.activeElement.classList.contains('pname')||document.activeElement.classList.contains('pfull'))){renderPending=true;return}
   renderPending=false;
   const L=$('list');L.innerHTML='';
   if(!players.length){L.innerHTML='<div class="empty">No players yet — add some above.</div>';return}
   players.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(p=>{
     const row=document.createElement('div');row.className='prow';
-    const inp=document.createElement('input');inp.className='pname';inp.value=p.name||'';inp.maxLength=40;
-    inp.onchange=()=>{const v=inp.value.trim();if(v)send({type:'players.save',player:Object.assign({},p,{name:v})});else inp.value=p.name||'';};   // keep any FIDE fields on rename
+    const top=document.createElement('div');top.className='ptop';
+    const inp=document.createElement('input');inp.className='pname';inp.value=p.name||'';inp.maxLength=40;inp.placeholder='Display name';
+    inp.onchange=()=>{const v=inp.value.trim();if(v)send({type:'players.save',player:Object.assign({},p,{name:v})});else inp.value=p.name||'';};   // display name (shown on the clock / console)
     inp.onblur=()=>{if(renderPending)render()};
-    row.append(inp);
+    top.append(inp);
     if(p.fide_id){const b=document.createElement('span');b.className='fbadge';
       b.innerHTML=(p.title?'<span class="ft">'+esc(p.title)+'</span>':'')+(p.rating?'<span class="fr">'+p.rating+'</span>':'')+(p.fed?'<span class="ff">'+esc(p.fed)+'</span>':'');
-      row.append(b);}
+      top.append(b);
+      const info=document.createElement('button');info.className='iinfo';info.title='FIDE details';info.textContent='ⓘ';info.onclick=()=>showFide(p);
+      top.append(info);}
     const del=document.createElement('button');del.className='mini bad';del.textContent='Delete';
     del.onclick=()=>{if(confirm('Remove “'+(p.name||'')+'”?'))send({type:'players.delete',id:p.id})};
-    row.append(del);L.appendChild(row);
+    top.append(del);row.append(top);
+    const full=document.createElement('input');full.className='pfull';full.value=p.full_name||'';full.maxLength=60;full.placeholder='Full name (formal · for PGN)';
+    full.onchange=()=>{send({type:'players.save',player:Object.assign({},p,{full_name:full.value.trim()})});};
+    full.onblur=()=>{if(renderPending)render()};
+    row.append(full);L.appendChild(row);
   });
 }
-function addPlayer(){const v=$('newname').value.trim();if(!v)return;send({type:'players.save',player:{id:uid(),name:v}});$('newname').value='';$('newname').focus();}
+function addPlayer(){const v=$('newname').value.trim();if(!v)return;send({type:'players.save',player:{id:uid(),name:v,full_name:v}});$('newname').value='';$('newname').focus();}
 $('addbtn').onclick=addPlayer;
 $('newname').onkeydown=e=>{if(e.key==='Enter'){e.stopPropagation();addPlayer();}else if(e.key==='Escape')clearSug();};   // Enter adds + keeps focus (bypass the global blur)
 // --- FIDE lookup (live, as you type; needs the FIDE list downloaded on the Setup page) ---
@@ -116,12 +139,29 @@ function renderSug(rs){const S=$('sug');S.innerHTML='';
     row.onmousedown=e=>{e.preventDefault();addFromFide(r);};   // mousedown fires before the input's blur, so the pick isn't lost
     S.append(row);});
 }
-function addFromFide(r){send({type:'players.save',player:{id:uid(),name:r.name,fide_id:r.fideid,title:r.title||'',rating:r.rating||null,fed:r.country||''}});
+function addFromFide(r){var disp=r.name||'',c=disp.indexOf(', ');if(c>0)disp=disp.slice(c+2)+' '+disp.slice(0,c);   // "Last, First" -> "First Last" for the display name; full name keeps the FIDE form
+  send({type:'players.save',player:{id:uid(),name:disp,full_name:r.name,fide_id:r.fideid,title:r.title||'',rating:r.rating||null,rapid:r.rapid||null,blitz:r.blitz||null,fed:r.country||'',born:r.born||null}});
   $('newname').value='';clearSug();$('newname').focus();}
 $('newname').oninput=()=>{const v=$('newname').value.trim();clearTimeout(fideTimer);
   if(!fideOn||v.length<2){clearSug();return;}
   fideTimer=setTimeout(()=>send({type:'fide.lookup',q:v}),250);};
 $('newname').addEventListener('blur',()=>setTimeout(clearSug,200));
+// --- FIDE details popover (ⓘ on a row with a FIDE id; uses the snapshot stored when the player was added) ---
+function showFide(p){
+  $('fbox').innerHTML='<div class="fttl">'+esc(p.full_name||p.name||'')+'</div>'
+    +'<div class="frow"><span>FIDE ID</span><b>'+esc(p.fide_id)+'</b></div>'
+    +(p.title?'<div class="frow"><span>Title</span><b>'+esc(p.title)+'</b></div>':'')
+    +'<div class="frow"><span>Federation</span><b>'+esc(p.fed||'—')+'</b></div>'
+    +'<div class="frow"><span>Standard</span><b>'+(p.rating||'—')+'</b></div>'
+    +'<div class="frow"><span>Rapid</span><b>'+(p.rapid||'—')+'</b></div>'
+    +'<div class="frow"><span>Blitz</span><b>'+(p.blitz||'—')+'</b></div>'
+    +(p.born?'<div class="frow"><span>Born</span><b>'+esc(p.born)+'</b></div>':'')
+    +'<a class="flink" href="https://ratings.fide.com/profile/'+encodeURIComponent(p.fide_id)+'" target="_blank" rel="noopener">View on FIDE ↗</a>'
+    +'<button class="fclose" id="fclose">Close</button>';
+  $('fclose').onclick=closeFide;$('fmodal').classList.remove('hidden');
+}
+function closeFide(){$('fmodal').classList.add('hidden');}
+$('fmodal').onclick=e=>{if(e.target===$('fmodal'))closeFide();};
 connect();
 </script>
 </body>
